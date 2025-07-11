@@ -26,6 +26,7 @@ let selectedWaterType = null;
 
 // DOM Elements
 const locationBtn = document.getElementById('locationBtn');
+const themeToggleBtn = document.getElementById('themeToggleBtn');
 const installBanner = document.getElementById('installBanner');
 const installBtn = document.getElementById('installBtn');
 const bannerClose = document.getElementById('bannerClose');
@@ -113,11 +114,15 @@ function initializeApp() {
     
     // Update moon phase
     updateMoonPhase();
+    
+    // Initialize theme
+    initializeTheme();
 }
 
 // Event Listeners
 function setupEventListeners() {
     locationBtn.addEventListener('click', getLocation);
+    themeToggleBtn.addEventListener('click', toggleTheme);
     installBtn.addEventListener('click', installApp);
     bannerClose.addEventListener('click', closeBanner);
     
@@ -176,6 +181,55 @@ function setupEventListeners() {
         // Hide banner if visible
         installBanner.classList.remove('show');
     });
+}
+
+// Theme Management
+function initializeTheme() {
+    // Check for saved theme preference or default to system preference
+    const savedTheme = loadFromStorage('theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    
+    if (savedTheme === 'dark' || (savedTheme === null && prefersDark)) {
+        enableDarkMode();
+    } else {
+        disableDarkMode();
+    }
+    
+    // Listen for system theme changes
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        const savedTheme = loadFromStorage('theme');
+        if (savedTheme === null) { // Only auto-switch if user hasn't manually set a preference
+            if (e.matches) {
+                enableDarkMode();
+            } else {
+                disableDarkMode();
+            }
+        }
+    });
+}
+
+function toggleTheme() {
+    const isDark = document.body.classList.contains('dark-mode');
+    
+    if (isDark) {
+        disableDarkMode();
+    } else {
+        enableDarkMode();
+    }
+}
+
+function enableDarkMode() {
+    document.body.classList.add('dark-mode');
+    themeToggleBtn.classList.add('dark-active');
+    themeToggleBtn.querySelector('.theme-icon').textContent = 'light_mode';
+    saveToStorage('theme', 'dark');
+}
+
+function disableDarkMode() {
+    document.body.classList.remove('dark-mode');
+    themeToggleBtn.classList.remove('dark-active');
+    themeToggleBtn.querySelector('.theme-icon').textContent = 'dark_mode';
+    saveToStorage('theme', 'light');
 }
 
 // State Detection and Management
