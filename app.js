@@ -925,27 +925,27 @@ function calculateFishingScore() {
     const airTemp = current.main.temp;
     if (airTemp >= 65 && airTemp <= 75) {
         breakdown.airTemperature.score = 15;
-        breakdown.airTemperature.details = `${airTemp.toFixed(1)}°F (Optimal: 65-75°F)`;
+        breakdown.airTemperature.details = `${airTemp.toFixed(1)}°F (Ideal comfort range)`;
         breakdown.airTemperature.rating = 'excellent';
         score += 15;
     } else if (airTemp >= 60 && airTemp <= 80) {
         breakdown.airTemperature.score = 12;
-        breakdown.airTemperature.details = `${airTemp.toFixed(1)}°F (Very Good: 60-80°F)`;
+        breakdown.airTemperature.details = `${airTemp.toFixed(1)}°F (Very comfortable)`;
         breakdown.airTemperature.rating = 'good';
         score += 12;
     } else if (airTemp >= 55 && airTemp <= 85) {
         breakdown.airTemperature.score = 8;
-        breakdown.airTemperature.details = `${airTemp.toFixed(1)}°F (Good: 55-85°F)`;
+        breakdown.airTemperature.details = `${airTemp.toFixed(1)}°F (Good fishing weather)`;
         breakdown.airTemperature.rating = 'good';
         score += 8;
     } else if (airTemp >= 45 && airTemp <= 95) {
         breakdown.airTemperature.score = 4;
-        breakdown.airTemperature.details = `${airTemp.toFixed(1)}°F (Fair: 45-95°F)`;
+        breakdown.airTemperature.details = `${airTemp.toFixed(1)}°F (Manageable conditions)`;
         breakdown.airTemperature.rating = 'fair';
         score += 4;
     } else {
         breakdown.airTemperature.score = 0;
-        breakdown.airTemperature.details = `${airTemp.toFixed(1)}°F (Poor: outside range)`;
+        breakdown.airTemperature.details = `${airTemp.toFixed(1)}°F (Extreme temperature)`;
         breakdown.airTemperature.rating = 'poor';
     }
     
@@ -965,32 +965,32 @@ function calculateFishingScore() {
     
     if (waterTemp >= 65 && waterTemp <= 75) {
         breakdown.waterTemperature.score = 20;
-        breakdown.waterTemperature.details = `${waterTemp.toFixed(1)}°F (Optimal: 65-75°F)${isEstimated ? ' - estimated' : ''}`;
+        breakdown.waterTemperature.details = `${waterTemp.toFixed(1)}°F (Excellent range - peak around 70°F)${isEstimated ? ' - estimated' : ''}`;
         breakdown.waterTemperature.rating = 'excellent';
         score += 20;
     } else if (waterTemp >= 58 && waterTemp <= 78) {
         breakdown.waterTemperature.score = 16;
-        breakdown.waterTemperature.details = `${waterTemp.toFixed(1)}°F (Very Good: 58-78°F)${isEstimated ? ' - estimated' : ''}`;
+        breakdown.waterTemperature.details = `${waterTemp.toFixed(1)}°F (Very good for most fish)${isEstimated ? ' - estimated' : ''}`;
         breakdown.waterTemperature.rating = 'good';
         score += 16;
     } else if (waterTemp >= 50 && waterTemp <= 85) {
         breakdown.waterTemperature.score = 12;
-        breakdown.waterTemperature.details = `${waterTemp.toFixed(1)}°F (Good: 50-85°F)${isEstimated ? ' - estimated' : ''}`;
+        breakdown.waterTemperature.details = `${waterTemp.toFixed(1)}°F (Good range - fish active)${isEstimated ? ' - estimated' : ''}`;
         breakdown.waterTemperature.rating = 'good';
         score += 12;
     } else if (waterTemp >= 45 && waterTemp <= 90) {
         breakdown.waterTemperature.score = 6;
-        breakdown.waterTemperature.details = `${waterTemp.toFixed(1)}°F (Fair: 45-90°F)${isEstimated ? ' - estimated' : ''}`;
+        breakdown.waterTemperature.details = `${waterTemp.toFixed(1)}°F (Fair - fish less active)${isEstimated ? ' - estimated' : ''}`;
         breakdown.waterTemperature.rating = 'fair';
         score += 6;
     } else if (waterTemp >= 40 && waterTemp <= 95) {
         breakdown.waterTemperature.score = 2;
-        breakdown.waterTemperature.details = `${waterTemp.toFixed(1)}°F (Poor: 40-95°F)${isEstimated ? ' - estimated' : ''}`;
+        breakdown.waterTemperature.details = `${waterTemp.toFixed(1)}°F (Poor - fish sluggish)${isEstimated ? ' - estimated' : ''}`;
         breakdown.waterTemperature.rating = 'poor';
         score += 2;
     } else {
         breakdown.waterTemperature.score = 0;
-        breakdown.waterTemperature.details = `${waterTemp.toFixed(1)}°F (Very Poor: outside range)${isEstimated ? ' - estimated' : ''}`;
+        breakdown.waterTemperature.details = `${waterTemp.toFixed(1)}°F (Very poor - fish inactive)${isEstimated ? ' - estimated' : ''}`;
         breakdown.waterTemperature.rating = 'poor';
     }
     
@@ -998,27 +998,27 @@ function calculateFishingScore() {
     const pressure = current.main.pressure * 0.02953;
     if (pressure >= 30.00 && pressure <= 30.20) {
         breakdown.pressure.score = 18;
-        breakdown.pressure.details = `${pressure.toFixed(2)} inHg (Optimal: 30.00-30.20)`;
+        breakdown.pressure.details = `${pressure.toFixed(2)} inHg (Stable - fish feeding actively)`;
         breakdown.pressure.rating = 'excellent';
         score += 18;
     } else if (pressure >= 29.90 && pressure <= 30.30) {
         breakdown.pressure.score = 14;
-        breakdown.pressure.details = `${pressure.toFixed(2)} inHg (Very Good: 29.90-30.30)`;
+        breakdown.pressure.details = `${pressure.toFixed(2)} inHg (Good stability - fish active)`;
         breakdown.pressure.rating = 'good';
         score += 14;
     } else if (pressure >= 29.80 && pressure <= 30.40) {
         breakdown.pressure.score = 9;
-        breakdown.pressure.details = `${pressure.toFixed(2)} inHg (Good: 29.80-30.40)`;
+        breakdown.pressure.details = `${pressure.toFixed(2)} inHg (Moderate - decent fishing)`;
         breakdown.pressure.rating = 'good';
         score += 9;
     } else if (pressure >= 29.50 && pressure <= 30.70) {
         breakdown.pressure.score = 4;
-        breakdown.pressure.details = `${pressure.toFixed(2)} inHg (Fair: 29.50-30.70)`;
+        breakdown.pressure.details = `${pressure.toFixed(2)} inHg (Changing - fish cautious)`;
         breakdown.pressure.rating = 'fair';
         score += 4;
     } else {
         breakdown.pressure.score = 0;
-        breakdown.pressure.details = `${pressure.toFixed(2)} inHg (Poor: outside range)`;
+        breakdown.pressure.details = `${pressure.toFixed(2)} inHg (Unstable - fish inactive)`;
         breakdown.pressure.rating = 'poor';
     }
     
@@ -1026,27 +1026,27 @@ function calculateFishingScore() {
     const windSpeed = current.wind.speed;
     if (windSpeed >= 8 && windSpeed <= 12) {
         breakdown.wind.score = 17;
-        breakdown.wind.details = `${windSpeed.toFixed(1)} mph (Optimal: 8-12 mph)`;
+        breakdown.wind.details = `${windSpeed.toFixed(1)} mph (Perfect - good surface action)`;
         breakdown.wind.rating = 'excellent';
         score += 17;
     } else if (windSpeed >= 5 && windSpeed <= 15) {
         breakdown.wind.score = 13;
-        breakdown.wind.details = `${windSpeed.toFixed(1)} mph (Very Good: 5-15 mph)`;
+        breakdown.wind.details = `${windSpeed.toFixed(1)} mph (Good - surface movement)`;
         breakdown.wind.rating = 'good';
         score += 13;
     } else if (windSpeed >= 3 && windSpeed <= 20) {
         breakdown.wind.score = 8;
-        breakdown.wind.details = `${windSpeed.toFixed(1)} mph (Good: 3-20 mph)`;
+        breakdown.wind.details = `${windSpeed.toFixed(1)} mph (Decent - manageable conditions)`;
         breakdown.wind.rating = 'good';
         score += 8;
     } else if ((windSpeed >= 1 && windSpeed < 3) || (windSpeed > 20 && windSpeed <= 25)) {
         breakdown.wind.score = 4;
-        breakdown.wind.details = `${windSpeed.toFixed(1)} mph (Fair: light or strong winds)`;
+        breakdown.wind.details = `${windSpeed.toFixed(1)} mph (${windSpeed < 3 ? 'Too calm - fish see lines' : 'Strong - tough casting'})`;
         breakdown.wind.rating = 'fair';
         score += 4;
     } else {
         breakdown.wind.score = 0;
-        breakdown.wind.details = `${windSpeed.toFixed(1)} mph (Poor: too calm or too windy)`;
+        breakdown.wind.details = `${windSpeed.toFixed(1)} mph (${windSpeed <= 1 ? 'Dead calm - spooky fish' : 'Too windy - unsafe'})`;
         breakdown.wind.rating = 'poor';
     }
     
