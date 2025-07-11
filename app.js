@@ -23,6 +23,7 @@ let nearbyWaterBodies = [];
 let currentWaterBody = null;
 let selectedState = null;
 let selectedWaterType = null;
+let isWaterDataLoading = false;
 
 // DOM Elements
 const locationBtn = document.getElementById('locationBtn');
@@ -85,6 +86,7 @@ function initializeApp() {
                 fetchWeatherData();
                 
                 // Find nearest USGS water temperature data
+                showWaterDataLoading();
                 findNearestUSGSWaterData(position.coords.latitude, position.coords.longitude);
             },
             (error) => {
@@ -98,6 +100,7 @@ function initializeApp() {
                 fetchWeatherData();
                 
                 // Find nearest USGS water temperature data for default location
+                showWaterDataLoading();
                 findNearestUSGSWaterData(41.8781, -87.6298);
             }
         );
@@ -230,6 +233,41 @@ function disableDarkMode() {
     themeToggleBtn.classList.remove('dark-active');
     themeToggleBtn.querySelector('.theme-icon').textContent = 'dark_mode';
     saveToStorage('theme', 'light');
+}
+
+// Loading Indicators
+function showWaterDataLoading() {
+    isWaterDataLoading = true;
+    
+    const waterTempElement = document.getElementById('waterTemp');
+    const fishingScoreElement = document.getElementById('fishingScore');
+    const scoreDescriptionElement = document.getElementById('scoreDescription');
+    
+    // Show loading in water temperature
+    waterTempElement.textContent = 'Loading...';
+    waterTempElement.title = 'Fetching water temperature data...';
+    waterTempElement.style.color = '#64748b';
+    waterTempElement.style.fontWeight = 'normal';
+    waterTempElement.classList.add('loading-pulse');
+    
+    // Show loading in fishing score
+    fishingScoreElement.textContent = '--';
+    scoreDescriptionElement.textContent = 'Recalculating...';
+    
+    // Show loading in breakdown
+    const breakdownContent = document.getElementById('breakdownContent');
+    breakdownContent.innerHTML = '<div class="breakdown-loading">Updating with new water data...</div>';
+}
+
+function hideWaterDataLoading() {
+    // Clear loading state
+    isWaterDataLoading = false;
+    
+    // Re-enable water type selector
+    if (waterTypeSelector) {
+        waterTypeSelector.disabled = false;
+        waterTypeSelector.style.opacity = '1';
+    }
 }
 
 // State Detection and Management
@@ -367,6 +405,20 @@ function handleWaterTypeChange() {
     saveToStorage('selectedWaterType', selectedWaterType);
     
     console.log(`Water type filter changed to: ${selectedWaterType || 'All'}`);
+    
+    // Re-fetch nearby water bodies with the new filter if we have a current location
+    if (currentLocation && currentLocation.lat && currentLocation.lon) {
+        console.log('Re-fetching nearby water bodies with new water type filter...');
+        
+            // Show loading indicators
+    showWaterDataLoading();
+    
+    // Add loading indicator to water type selector
+    waterTypeSelector.disabled = true;
+    waterTypeSelector.style.opacity = '0.7';
+        
+        findNearestUSGSWaterData(currentLocation.lat, currentLocation.lon);
+    }
 }
 
 function getStateName(stateCode) {
@@ -411,6 +463,7 @@ function getLocation() {
                 fetchWeatherData();
                 
                 // Find nearest USGS water temperature data
+                showWaterDataLoading();
                 findNearestUSGSWaterData(position.coords.latitude, position.coords.longitude);
             },
             (error) => {
@@ -474,7 +527,7 @@ async function fetchWeatherData() {
         );
         const currentWeather = await currentWeatherResponse.json();
         
-        // Forecast
+        // Forecast (5 days in 3-hour intervals)
         const forecastResponse = await fetch(
             `${API_BASE_URL}/forecast?lat=${currentLocation.lat}&lon=${currentLocation.lon}&appid=${CONFIG.WEATHER_API_KEY}&units=imperial`
         );
@@ -484,7 +537,10 @@ async function fetchWeatherData() {
         updateMoonPhase();
         updateWeatherUI();
         updateForecastUI();
-        updatePressureData();
+        
+        // Process forecast data for trend charts
+        processForecastDataForCharts();
+        
         calculateFishingScore();
         
     } catch (error) {
@@ -495,12 +551,34 @@ async function fetchWeatherData() {
 }
 
 function loadDemoData() {
-    // Demo data for testing without API key
+    // Demo data for testing without API key - simulate 5 days of 3-hour interval data
+    const demoForecastList = [];
+    const baseTime = Date.now() / 1000;
+    
+    for (let i = 0; i < 40; i++) { // 5 days * 8 intervals per day
+        const timeOffset = i * 3 * 60 * 60; // 3 hours in seconds
+        const dayOffset = Math.floor(i / 8);
+        
+        // Simulate realistic temperature and pressure variations
+        const baseTemp = 72 + Math.sin(i * Math.PI / 8) * 5 + Math.random() * 4 - 2;
+        const basePressure = 1013 + Math.sin(i * Math.PI / 16) * 15 + Math.random() * 10 - 5;
+        
+        demoForecastList.push({
+            dt: baseTime + timeOffset,
+            main: {
+                temp: baseTemp,
+                pressure: basePressure,
+                humidity: 65 + Math.random() * 20 - 10
+            },
+            weather: [{ main: i % 12 < 8 ? 'Clear' : (i % 12 < 10 ? 'Clouds' : 'Rain') }]
+        });
+    }
+    
     weatherData = {
         current: {
             main: {
                 temp: 72,
-                pressure: 30.15,
+                pressure: 1013,
                 humidity: 65
             },
             wind: {
@@ -512,11 +590,7 @@ function loadDemoData() {
             }]
         },
         forecast: {
-            list: [
-                { dt: Date.now() / 1000, main: { temp: 74 }, weather: [{ main: 'Sunny' }] },
-                { dt: (Date.now() / 1000) + 86400, main: { temp: 76 }, weather: [{ main: 'Cloudy' }] },
-                { dt: (Date.now() / 1000) + 172800, main: { temp: 71 }, weather: [{ main: 'Rain' }] }
-            ]
+            list: demoForecastList
         }
     };
     
@@ -534,7 +608,13 @@ function loadDemoData() {
     updateMoonPhase();
     updateWeatherUI();
     updateForecastUI();
-    updatePressureData();
+    
+    // Process forecast data for trend charts
+    processForecastDataForCharts();
+    
+    // Generate demo water temperature historical data
+    generateDemoWaterTemperatureHistory();
+    
     calculateFishingScore();
     
     // Also try to fetch USGS water temperature data
@@ -559,21 +639,84 @@ function updateForecastUI() {
     if (!weatherData) return;
     
     const forecastContainer = document.getElementById('forecastContainer');
-    const forecast = weatherData.forecast.list.slice(0, 5);
     
-    forecastContainer.innerHTML = forecast.map(item => {
+    // Group forecasts by day to calculate high/low temperatures
+    const dailyData = {};
+    
+    weatherData.forecast.list.forEach(item => {
         const date = new Date(item.dt * 1000);
-        const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
-        const weatherIcon = getWeatherIcon(item.weather[0].main);
+        const dateKey = date.toDateString(); // "Fri Dec 15 2023" format
+        
+        if (!dailyData[dateKey]) {
+            dailyData[dateKey] = {
+                date: date,
+                temps: [],
+                weatherConditions: [],
+                items: []
+            };
+        }
+        
+        dailyData[dateKey].temps.push(item.main.temp);
+        dailyData[dateKey].weatherConditions.push(item.weather[0]);
+        dailyData[dateKey].items.push(item);
+    });
+    
+    // Convert to array and take first 5 days
+    const dailyForecasts = Object.values(dailyData).slice(0, 5).map(dayData => {
+        const minTemp = Math.min(...dayData.temps);
+        const maxTemp = Math.max(...dayData.temps);
+        
+        // Find the most common weather condition for the day
+        const weatherCounts = {};
+        dayData.weatherConditions.forEach(weather => {
+            const key = weather.main;
+            weatherCounts[key] = (weatherCounts[key] || 0) + 1;
+        });
+        
+        const mostCommonWeather = Object.keys(weatherCounts).reduce((a, b) => 
+            weatherCounts[a] > weatherCounts[b] ? a : b
+        );
+        
+        return {
+            date: dayData.date,
+            minTemp: minTemp,
+            maxTemp: maxTemp,
+            weather: mostCommonWeather,
+            dayName: dayData.date.toLocaleDateString('en-US', { weekday: 'short' })
+        };
+    });
+    
+    console.log('Daily forecasts with high/low:', dailyForecasts.map(day => ({
+        dayName: day.dayName,
+        date: day.date.toLocaleDateString(),
+        high: Math.round(day.maxTemp),
+        low: Math.round(day.minTemp),
+        weather: day.weather
+    })));
+    
+    console.log('About to render forecast HTML...');
+    
+    const forecastHTML = dailyForecasts.map(day => {
+        const weatherIcon = getWeatherIcon(day.weather);
+        const high = Math.round(day.maxTemp);
+        const low = Math.round(day.minTemp);
+        
+        console.log(`Rendering day: ${day.dayName}, high: ${high}°, low: ${low}°`);
         
         return `
             <div class="forecast-item">
-                <div class="forecast-day">${dayName}</div>
+                <div class="forecast-day">${day.dayName}</div>
                 <div class="forecast-icon">${weatherIcon}</div>
-                <div class="forecast-temp">${Math.round(item.main.temp)}°F</div>
+                <div class="forecast-temps">
+                    <div class="forecast-high">${high}°</div>
+                    <div class="forecast-low">${low}°</div>
+                </div>
             </div>
         `;
     }).join('');
+    
+    console.log('Final forecast HTML:', forecastHTML);
+    forecastContainer.innerHTML = forecastHTML;
 }
 
 function getWeatherIcon(weatherType) {
@@ -591,20 +734,177 @@ function getWeatherIcon(weatherType) {
     return icons[weatherType] || '🌤️';
 }
 
+function processForecastDataForCharts() {
+    if (!weatherData || !weatherData.forecast) return;
+    
+    // Clear existing data
+    pressureHistory = [];
+    temperatureHistory = [];
+    
+    // Process forecast data (5 days in 3-hour intervals)
+    const forecastList = weatherData.forecast.list;
+    
+    console.log('Processing forecast data for charts:', forecastList.length, 'data points');
+    
+    // For pressure: sample every 6 hours (every 2nd forecast point)
+    // For temperature: sample every 6 hours and calculate daily highs/lows
+    const dailyTempData = {};
+    
+    forecastList.forEach((item, index) => {
+        const timestamp = new Date(item.dt * 1000);
+        const dateKey = timestamp.toDateString();
+        
+        // Pressure data every 6 hours (every 2nd point)
+        if (index % 2 === 0) {
+            const pressureInHg = item.main.pressure * 0.02953;
+            pressureHistory.push({
+                time: timestamp,
+                value: pressureInHg
+            });
+        }
+        
+        // Collect temperature data by day
+        if (!dailyTempData[dateKey]) {
+            dailyTempData[dateKey] = {
+                date: timestamp,
+                temps: [],
+                times: []
+            };
+        }
+        
+        dailyTempData[dateKey].temps.push(item.main.temp);
+        dailyTempData[dateKey].times.push(timestamp);
+    });
+    
+    // Create temperature history with daily high/low averages
+    Object.values(dailyTempData).forEach(dayData => {
+        const avgTemp = dayData.temps.reduce((a, b) => a + b, 0) / dayData.temps.length;
+        const maxTemp = Math.max(...dayData.temps);
+        const minTemp = Math.min(...dayData.temps);
+        
+        // Use average of high and low as the main temperature point
+        const dailyTemp = (maxTemp + minTemp) / 2;
+        
+        // Use the midday time for the day
+        const midDayTime = new Date(dayData.date);
+        midDayTime.setHours(12, 0, 0, 0);
+        
+        temperatureHistory.push({
+            time: midDayTime,
+            value: dailyTemp,
+            high: maxTemp,
+            low: minTemp
+        });
+    });
+    
+    // Sort by time
+    pressureHistory.sort((a, b) => a.time - b.time);
+    temperatureHistory.sort((a, b) => a.time - b.time);
+    
+    console.log('Pressure history:', pressureHistory.length, 'points');
+    console.log('Temperature history:', temperatureHistory.length, 'points');
+    
+    // Update charts
+    updatePressureChart();
+    updateTemperatureChart();
+    
+    // Save to storage
+    saveToStorage('pressureHistory', pressureHistory);
+    saveToStorage('temperatureHistory', temperatureHistory);
+}
+
+function generateDemoWaterTemperatureHistory() {
+    // Generate realistic 5-day water temperature history
+    waterTemperatureHistory = [];
+    const baseTime = Date.now();
+    
+    for (let i = 0; i < 5; i++) {
+        const dayOffset = i * 24 * 60 * 60 * 1000; // Days in milliseconds
+        const timestamp = new Date(baseTime - (4 - i) * 24 * 60 * 60 * 1000); // 5 days ago to today
+        
+        // Set to noon for each day
+        timestamp.setHours(12, 0, 0, 0);
+        
+        // Generate realistic water temperature (typically 5-10°F cooler than air temp)
+        // Base around 65°F with some variation
+        const baseWaterTemp = 65 + Math.sin(i * Math.PI / 4) * 3 + Math.random() * 4 - 2;
+        
+        // Water temperature changes more slowly than air temperature
+        // Add some seasonal and daily variation
+        const waterTemp = baseWaterTemp + Math.sin(i * Math.PI / 6) * 2;
+        
+        waterTemperatureHistory.push({
+            time: timestamp,
+            value: waterTemp,
+            temperature_f: waterTemp,
+            temperature_c: (waterTemp - 32) * 5 / 9,
+            datetime: timestamp.toISOString()
+        });
+    }
+    
+    console.log(`Generated ${waterTemperatureHistory.length} demo water temperature readings`);
+    
+    // Update the chart
+    updateWaterTemperatureChart();
+    
+    // Save to storage
+    saveToStorage('waterTemperatureHistory', waterTemperatureHistory);
+}
+
 function updatePressureData() {
+    // This function is now replaced by processForecastDataForCharts()
+    // Keep for backward compatibility but don't use
     if (!weatherData) return;
     
     const pressure = weatherData.current.main.pressure * 0.02953;
+    
+    // Check if we already have recent data to avoid duplicates
+    if (pressureHistory.length > 0) {
+        const lastEntry = pressureHistory[pressureHistory.length - 1];
+        const timeDiff = new Date() - lastEntry.time;
+        if (timeDiff < 2 * 60 * 60 * 1000) { // Less than 2 hours
+            return;
+        }
+    }
+    
     pressureHistory.push({
         time: new Date(),
         value: pressure
     });
     
-    // Keep only last 24 hours
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    pressureHistory = pressureHistory.filter(item => item.time > twentyFourHoursAgo);
+    // Keep only last 5 days
+    const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    pressureHistory = pressureHistory.filter(item => item.time > fiveDaysAgo);
     
     updatePressureChart();
+}
+
+function updateTemperatureData() {
+    // This function is now replaced by processForecastDataForCharts()
+    // Keep for backward compatibility but don't use
+    if (!weatherData) return;
+    
+    const temperature = weatherData.current.main.temp;
+    
+    // Check if we already have recent data to avoid duplicates
+    if (temperatureHistory.length > 0) {
+        const lastEntry = temperatureHistory[temperatureHistory.length - 1];
+        const timeDiff = new Date() - lastEntry.time;
+        if (timeDiff < 2 * 60 * 60 * 1000) { // Less than 2 hours
+            return;
+        }
+    }
+    
+    temperatureHistory.push({
+        time: new Date(),
+        value: temperature
+    });
+    
+    // Keep only last 5 days
+    const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    temperatureHistory = temperatureHistory.filter(item => item.time > fiveDaysAgo);
+    
+    updateTemperatureChart();
 }
 
 function calculateFishingScore() {
@@ -831,14 +1131,26 @@ async function fetchUSGSWaterData() {
         // If we have nearby sites, try to get water temperature data
         if (nearbyWaterSites.length > 0) {
             const closestSite = nearbyWaterSites[0];
-            const waterTempData = await fetchWaterTemperatureData(closestSite.site_no);
+            const waterTempData = await fetchWaterTemperatureHistoricalData(closestSite.site_no);
             
             if (waterTempData) {
                 usgsWaterData = {
                     site: closestSite,
-                    temperature: waterTempData
+                    temperature: waterTempData.current
                 };
                 currentWaterBody = closestSite;
+                
+                // Update water temperature history with historical data
+                if (waterTempData.historical && waterTempData.historical.length > 0) {
+                    waterTemperatureHistory = waterTempData.historical;
+                    console.log(`Updated water temperature history with ${waterTemperatureHistory.length} historical readings`);
+                    
+                    // Update the chart
+                    updateWaterTemperatureChart();
+                    
+                    // Save to storage
+                    saveToStorage('waterTemperatureHistory', waterTemperatureHistory);
+                }
                 
                 // Update the UI to use USGS data
                 updateWaterTemperatureDisplay();
@@ -856,6 +1168,7 @@ async function fetchUSGSWaterData() {
 async function findNearestUSGSWaterData(lat, lon) {
     try {
         console.log(`Finding nearest USGS water data for location: ${lat}, ${lon}`);
+        console.log(`Current state: ${selectedState}, Current water type filter: ${selectedWaterType || 'All'}`);
         
         // Find nearby water monitoring sites
         const nearbyWaterSites = await findNearbyWaterSites(lat, lon);
@@ -879,17 +1192,29 @@ async function findNearestUSGSWaterData(lat, lon) {
             console.log(`Trying water temp site ${i + 1}: ${site.site_name} (${site.distance.toFixed(1)} km away)`);
             
             try {
-                const waterTempData = await fetchWaterTemperatureData(site.site_no);
+                const waterTempData = await fetchWaterTemperatureHistoricalData(site.site_no);
                 
                 if (waterTempData) {
-                    console.log(`Successfully got water temperature data from ${site.site_name}: ${waterTempData.temperature_f}°F`);
+                    console.log(`Successfully got water temperature data from ${site.site_name}: ${waterTempData.current.temperature_f}°F`);
                     
                     // Update global water data
                     usgsWaterData = {
                         site: site,
-                        temperature: waterTempData
+                        temperature: waterTempData.current
                     };
                     currentWaterBody = site;
+                    
+                    // Update water temperature history with historical data
+                    if (waterTempData.historical && waterTempData.historical.length > 0) {
+                        waterTemperatureHistory = waterTempData.historical;
+                        console.log(`Updated water temperature history with ${waterTemperatureHistory.length} historical readings`);
+                        
+                        // Update the chart
+                        updateWaterTemperatureChart();
+                        
+                        // Save to storage
+                        saveToStorage('waterTemperatureHistory', waterTemperatureHistory);
+                    }
                     
                     // Update the water temperature display
                     updateWaterTemperatureDisplay();
@@ -897,6 +1222,9 @@ async function findNearestUSGSWaterData(lat, lon) {
                     // Update nearby water bodies list to include this site
                     nearbyWaterBodies = nearbyWaterSites;
                     updateNearbyWaterBodiesDisplay();
+                    
+                    // Recalculate fishing score with new water temperature data
+                    calculateFishingScore();
                     
                     return; // Success, stop trying other sites
                 }
@@ -913,17 +1241,29 @@ async function findNearestUSGSWaterData(lat, lon) {
             console.log(`Trying other site ${i + 1}: ${site.site_name} (${site.distance.toFixed(1)} km away, ${site.parameter_type})`);
             
             try {
-                const waterTempData = await fetchWaterTemperatureData(site.site_no);
+                const waterTempData = await fetchWaterTemperatureHistoricalData(site.site_no);
                 
                 if (waterTempData) {
-                    console.log(`Unexpectedly found water temperature data from ${site.site_name}: ${waterTempData.temperature_f}°F`);
+                    console.log(`Unexpectedly found water temperature data from ${site.site_name}: ${waterTempData.current.temperature_f}°F`);
                     
                     // Update global water data
                     usgsWaterData = {
                         site: site,
-                        temperature: waterTempData
+                        temperature: waterTempData.current
                     };
                     currentWaterBody = site;
+                    
+                    // Update water temperature history with historical data
+                    if (waterTempData.historical && waterTempData.historical.length > 0) {
+                        waterTemperatureHistory = waterTempData.historical;
+                        console.log(`Updated water temperature history with ${waterTemperatureHistory.length} historical readings`);
+                        
+                        // Update the chart
+                        updateWaterTemperatureChart();
+                        
+                        // Save to storage
+                        saveToStorage('waterTemperatureHistory', waterTemperatureHistory);
+                    }
                     
                     // Update the water temperature display
                     updateWaterTemperatureDisplay();
@@ -931,6 +1271,9 @@ async function findNearestUSGSWaterData(lat, lon) {
                     // Update nearby water bodies list to include this site
                     nearbyWaterBodies = nearbyWaterSites;
                     updateNearbyWaterBodiesDisplay();
+                    
+                    // Recalculate fishing score with new water temperature data
+                    calculateFishingScore();
                     
                     return; // Success, stop trying other sites
                 }
@@ -946,14 +1289,24 @@ async function findNearestUSGSWaterData(lat, lon) {
         nearbyWaterBodies = nearbyWaterSites;
         updateNearbyWaterBodiesDisplay();
         
+        // Clear loading state and show estimated temperature
+        hideWaterDataLoading();
+        updateWaterTemperatureDisplay();
+        calculateFishingScore();
+        
     } catch (error) {
         console.error('Error finding nearest USGS water data:', error);
+        // Clear loading state on error
+        hideWaterDataLoading();
+        updateWaterTemperatureDisplay();
+        calculateFishingScore();
     }
 }
 
 async function findNearbyWaterSites(lat, lon, radiusKm = 150) {
     try {
         console.log(`Searching for water sites within ${radiusKm}km of ${lat}, ${lon}`);
+        console.log(`Water type filter: ${selectedWaterType || 'All'}`);
         
         // Get the primary state and nearby states
         const primaryState = selectedState || detectStateFromCoordinates(lat, lon) || 'NC';
@@ -974,18 +1327,20 @@ async function findNearbyWaterSites(lat, lon, radiusKm = 150) {
                 } else if (selectedWaterType === 'ST') {
                     return 'ST'; // Streams/rivers only
                 } else {
-                    return 'LK,ST,ES'; // All water bodies
+                    return 'LK,ST,ES'; // All water bodies (when no filter selected)
                 }
             };
             
             const baseSiteTypes = getSiteTypes();
+            console.log(`Using site types filter: ${baseSiteTypes} for water type: ${selectedWaterType || 'All'}`);
             
             // Try multiple search strategies for each state
             const searchStrategies = [
                 // Water temperature sensors (highest priority)
                 { parameterCd: WATER_TEMP_PARAM_CODE_F, siteType: baseSiteTypes, description: 'water temp (F)' },
                 { parameterCd: WATER_TEMP_PARAM_CODE, siteType: baseSiteTypes, description: 'water temp (C)' },
-                { parameterCd: WATER_TEMP_PARAM_CODE_F, siteType: '', description: 'water temp (F) all sites' },
+                // Only search all sites if no specific water type is selected
+                ...(selectedWaterType ? [] : [{ parameterCd: WATER_TEMP_PARAM_CODE_F, siteType: '', description: 'water temp (F) all sites' }]),
                 
                 // Other water quality parameters that often include temperature
                 { parameterCd: '00300,00010,00011', siteType: baseSiteTypes, description: 'water quality params' },
@@ -1059,10 +1414,25 @@ async function findNearbyWaterSites(lat, lon, radiusKm = 150) {
             index === self.findIndex(s => s.site_no === site.site_no)
         );
         
-        console.log(`Found ${uniqueSites.length} unique sites total within ${radiusKm}km`);
+        // Apply final water type filter to ensure only correct types are returned
+        let filteredSites = uniqueSites;
+        if (selectedWaterType) {
+            filteredSites = uniqueSites.filter(site => {
+                if (selectedWaterType === 'LK') {
+                    return site.site_type === 'LK';
+                } else if (selectedWaterType === 'ST') {
+                    return site.site_type === 'ST';
+                }
+                return true; // If selectedWaterType is somehow invalid, include all
+            });
+            
+            console.log(`Found ${uniqueSites.length} unique sites total, ${filteredSites.length} matching water type filter (${selectedWaterType})`);
+        } else {
+            console.log(`Found ${uniqueSites.length} unique sites total within ${radiusKm}km (no water type filter)`);
+        }
         
         // Sort by distance and prioritize water temperature sites
-        const sortedSites = uniqueSites.sort((a, b) => {
+        const sortedSites = filteredSites.sort((a, b) => {
             // Prioritize water temperature sites
             if (a.has_water_temp && !b.has_water_temp) return -1;
             if (!a.has_water_temp && b.has_water_temp) return 1;
@@ -1071,7 +1441,16 @@ async function findNearbyWaterSites(lat, lon, radiusKm = 150) {
         });
         
         // Return top 20 sites
-        return sortedSites.slice(0, 20);
+        const finalSites = sortedSites.slice(0, 20);
+        
+        if (finalSites.length > 0) {
+            console.log(`Returning ${finalSites.length} filtered sites:`);
+            finalSites.forEach((site, index) => {
+                console.log(`  ${index + 1}. ${site.site_name} (${site.site_type}) - ${site.distance.toFixed(1)}km`);
+            });
+        }
+        
+        return finalSites;
         
     } catch (error) {
         console.error('Error finding nearby water sites:', error);
@@ -1135,7 +1514,7 @@ function getNearbyStates(lat, lon, primaryState) {
     return stateNeighbors[primaryState] || [];
 }
 
-async function fetchWaterTemperatureData(siteNo) {
+async function fetchWaterTemperatureHistoricalData(siteNo) {
     try {
         // Try multiple parameter codes for water temperature
         const tempParameters = [
@@ -1146,17 +1525,18 @@ async function fetchWaterTemperatureData(siteNo) {
         ];
         
         for (const param of tempParameters) {
-    try {
-        const response = await fetch(
-                    `${USGS_IV_API_URL}?format=json&sites=${siteNo}&parameterCd=${param.code}&period=P1D`
-        );
-        
-        if (!response.ok) {
+            try {
+                // Fetch 5 days of historical data
+                const response = await fetch(
+                    `${USGS_IV_API_URL}?format=json&sites=${siteNo}&parameterCd=${param.code}&period=P5D`
+                );
+                
+                if (!response.ok) {
                     continue; // Try next parameter
-        }
-        
-        const data = await response.json();
-        
+                }
+                
+                const data = await response.json();
+                
                 // Handle different USGS response structures
                 let timeSeriesArray = null;
                 if (data.value && data.value.timeSeries) {
@@ -1172,14 +1552,150 @@ async function fetchWaterTemperatureData(siteNo) {
                 }
                 
                 const timeSeries = timeSeriesArray[0];
-        const values = timeSeries.values[0].value;
-        
-        if (values.length === 0) {
+                const values = timeSeries.values[0].value;
+                
+                if (values.length === 0) {
                     continue; // Try next parameter
+                }
+                
+                console.log(`Found ${values.length} historical temperature readings using ${param.name}`);
+                
+                // Process all values to create historical data
+                const historicalData = [];
+                const processedDays = new Set();
+                
+                // Sample data every 6 hours to avoid too many points
+                const sampleInterval = Math.max(1, Math.floor(values.length / 20)); // Max 20 points
+                
+                for (let i = 0; i < values.length; i += sampleInterval) {
+                    const reading = values[i];
+                    const tempValue = parseFloat(reading.value);
+                    
+                    // Convert to Fahrenheit if needed
+                    let tempF, tempC;
+                    if (param.unit === 'F') {
+                        tempF = tempValue;
+                        tempC = (tempValue - 32) * 5 / 9;
+                    } else {
+                        tempC = tempValue;
+                        tempF = (tempValue * 9 / 5) + 32;
+                    }
+                    
+                    // Sanity check: water temperature should be between -5°C and 50°C (23°F to 122°F)
+                    if (tempC < -5 || tempC > 50) {
+                        continue; // Skip unrealistic values
+                    }
+                    
+                    const timestamp = new Date(reading.dateTime);
+                    
+                    // Avoid duplicate entries for the same day
+                    const dayKey = timestamp.toDateString();
+                    if (processedDays.has(dayKey)) {
+                        continue;
+                    }
+                    processedDays.add(dayKey);
+                    
+                    historicalData.push({
+                        time: timestamp,
+                        value: tempF,
+                        temperature_f: tempF,
+                        temperature_c: tempC,
+                        datetime: reading.dateTime
+                    });
+                }
+                
+                // Sort by time
+                historicalData.sort((a, b) => a.time - b.time);
+                
+                if (historicalData.length > 0) {
+                    console.log(`Processed ${historicalData.length} historical water temperature readings`);
+                    
+                    // Get the most recent value for current display
+                    const recentValue = values[values.length - 1];
+                    const recentTempValue = parseFloat(recentValue.value);
+                    
+                    let recentTempF, recentTempC;
+                    if (param.unit === 'F') {
+                        recentTempF = recentTempValue;
+                        recentTempC = (recentTempValue - 32) * 5 / 9;
+                    } else {
+                        recentTempC = recentTempValue;
+                        recentTempF = (recentTempValue * 9 / 5) + 32;
+                    }
+                    
+                    return {
+                        current: {
+                            temperature_f: recentTempF,
+                            temperature_c: recentTempC,
+                            datetime: recentValue.dateTime,
+                            site_no: siteNo,
+                            unit: timeSeries.variable.unit.unitDescription,
+                            parameter_code: param.code,
+                            parameter_name: param.name
+                        },
+                        historical: historicalData
+                    };
+                }
+                
+            } catch (paramError) {
+                console.log(`Error trying parameter ${param.code}:`, paramError);
+                continue; // Try next parameter
+            }
         }
         
-        // Get the most recent value
-        const recentValue = values[values.length - 1];
+        return null; // No temperature data found with any parameter
+        
+    } catch (error) {
+        console.error('Error fetching historical water temperature data:', error);
+        return null;
+    }
+}
+
+async function fetchWaterTemperatureData(siteNo) {
+    try {
+        // Try multiple parameter codes for water temperature
+        const tempParameters = [
+            { code: WATER_TEMP_PARAM_CODE_F, name: 'Water temperature (°F)', unit: 'F' },
+            { code: WATER_TEMP_PARAM_CODE, name: 'Water temperature (°C)', unit: 'C' },
+            { code: '00020', name: 'Air temperature (°C)', unit: 'C' }, // Sometimes used for water temp
+            { code: '00021', name: 'Air temperature (°F)', unit: 'F' }  // Sometimes used for water temp
+        ];
+        
+        for (const param of tempParameters) {
+            try {
+                const response = await fetch(
+                    `${USGS_IV_API_URL}?format=json&sites=${siteNo}&parameterCd=${param.code}&period=P1D`
+                );
+                
+                if (!response.ok) {
+                    continue; // Try next parameter
+                }
+                
+                const data = await response.json();
+                
+                // Handle different USGS response structures
+                let timeSeriesArray = null;
+                if (data.value && data.value.timeSeries) {
+                    timeSeriesArray = data.value.timeSeries;
+                } else if (data.value && data.value.value && data.value.value.timeSeries) {
+                    timeSeriesArray = data.value.value.timeSeries;
+                } else if (data.timeSeries) {
+                    timeSeriesArray = data.timeSeries;
+                }
+                
+                if (!timeSeriesArray || timeSeriesArray.length === 0) {
+                    continue; // Try next parameter
+                }
+                
+                const timeSeries = timeSeriesArray[0];
+                const values = timeSeries.values[0].value;
+                
+                if (values.length === 0) {
+                    continue; // Try next parameter
+                }
+                
+                // Get the most recent value
+                const recentValue = values[values.length - 1];
                 const tempValue = parseFloat(recentValue.value);
                 
                 // Convert to Fahrenheit if needed
@@ -1199,12 +1715,12 @@ async function fetchWaterTemperatureData(siteNo) {
                 }
                 
                 console.log(`Found temperature data using ${param.name}: ${tempF.toFixed(1)}°F`);
-        
-        return {
+                
+                return {
                     temperature_f: tempF,
                     temperature_c: tempC,
-            datetime: recentValue.dateTime,
-            site_no: siteNo,
+                    datetime: recentValue.dateTime,
+                    site_no: siteNo,
                     unit: timeSeries.variable.unit.unitDescription,
                     parameter_code: param.code,
                     parameter_name: param.name
@@ -1306,18 +1822,23 @@ function updateWaterTemperatureDisplay() {
         // Add indicator that this is real USGS data
         waterTempElement.style.color = '#10b981';
         waterTempElement.style.fontWeight = 'bold';
+        waterTempElement.classList.remove('loading-pulse');
+        
+        // Clear loading state
+        hideWaterDataLoading();
         
         // Update water temperature history
         updateWaterTemperatureHistory(temp.temperature_f);
         
         console.log(`Water temperature updated: ${tempText} from ${usgsWaterData.site.site_name}${distance > 0 ? ` (${distance.toFixed(1)} km away)` : ''}`);
-    } else if (weatherData) {
-        // Fallback to estimated temperature
+    } else if (weatherData && !isWaterDataLoading) {
+        // Only show estimated temperature if we're not currently loading USGS data
         const estimatedTemp = Math.round(weatherData.current.main.temp - 5);
         waterTempElement.textContent = `${estimatedTemp}°F`;
         waterTempElement.title = 'Estimated from air temperature (no nearby water temperature sensors found)';
         waterTempElement.style.color = '#64748b';
         waterTempElement.style.fontWeight = 'normal';
+        waterTempElement.classList.remove('loading-pulse');
         
         // Update water temperature history with estimated value
         updateWaterTemperatureHistory(estimatedTemp);
@@ -1374,6 +1895,9 @@ function updateNearbyWaterBodiesDisplay() {
                     // Update current location to this water body
                     currentWaterBody = site;
                     
+                    // Show loading indicators
+                    showWaterDataLoading();
+                    
                     // Fetch water temperature data for this site
                     const waterTempData = await fetchWaterTemperatureData(site.site_no);
                     
@@ -1386,6 +1910,9 @@ function updateNearbyWaterBodiesDisplay() {
                         // Update displays
                         updateWaterTemperatureDisplay();
                         updateNearbyWaterBodiesDisplay();
+                    } else {
+                        // Clear loading state if no data found
+                        hideWaterDataLoading();
                     }
                 }
             });
@@ -1523,8 +2050,16 @@ function updateTemperatureChart() {
         return;
     }
     
-    // Draw temperature trend line
-    drawLineChart(ctx, temperatureHistory, canvas.width, canvas.height, '#10b981');
+    // Check if we have high/low data
+    const hasHighLowData = temperatureHistory.some(item => item.high !== undefined && item.low !== undefined);
+    
+    if (hasHighLowData) {
+        // Draw temperature range chart with high/low
+        drawTemperatureRangeChart(ctx, temperatureHistory, canvas.width, canvas.height, '#10b981');
+    } else {
+        // Draw simple temperature trend line
+        drawLineChart(ctx, temperatureHistory, canvas.width, canvas.height, '#10b981');
+    }
 }
 
 function updateWaterTemperatureHistory(tempF) {
@@ -1585,34 +2120,108 @@ function updateWaterTemperatureChart() {
     drawLineChart(ctx, waterTemperatureHistory, canvas.width, canvas.height, '#0ea5e9');
 }
 
-function drawLineChart(ctx, data, width, height, color) {
-    const padding = 20;
+function drawTemperatureRangeChart(ctx, data, width, height, color) {
+    const padding = 50;
     const chartWidth = width - 2 * padding;
     const chartHeight = height - 2 * padding;
     
-    // Get min and max values
-    const values = data.map(item => item.value);
-    const minValue = Math.min(...values);
-    const maxValue = Math.max(...values);
-    const valueRange = maxValue - minValue || 1;
+    // Get min and max values from high/low data
+    const allValues = [];
+    data.forEach(item => {
+        if (item.high !== undefined) allValues.push(item.high);
+        if (item.low !== undefined) allValues.push(item.low);
+        if (item.value !== undefined) allValues.push(item.value);
+    });
+    
+    const rawMin = Math.min(...allValues);
+    const rawMax = Math.max(...allValues);
+    const valueRange = rawMax - rawMin || 1;
+    const valuePadding = valueRange * 0.1;
+    const minValue = rawMin - valuePadding;
+    const maxValue = rawMax + valuePadding;
+    const adjustedRange = maxValue - minValue;
+    
+    // Clear background
+    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--bg-secondary') || '#f3f4f6';
+    ctx.fillRect(0, 0, width, height);
+    
+    // Draw grid lines
+    ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--border-color') || '#e5e7eb';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 2]);
+    
+    for (let i = 0; i <= 4; i++) {
+        const y = padding + (i / 4) * chartHeight;
+        ctx.beginPath();
+        ctx.moveTo(padding, y);
+        ctx.lineTo(width - padding, y);
+        ctx.stroke();
+    }
+    
+    for (let i = 1; i < 4; i++) {
+        const x = padding + (i / 4) * chartWidth;
+        ctx.beginPath();
+        ctx.moveTo(x, padding);
+        ctx.lineTo(x, height - padding);
+        ctx.stroke();
+    }
+    
+    ctx.setLineDash([]);
     
     // Draw axes
-    ctx.strokeStyle = '#e2e8f0';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--text-secondary') || '#64748b';
+    ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(padding, padding);
     ctx.lineTo(padding, height - padding);
     ctx.lineTo(width - padding, height - padding);
     ctx.stroke();
     
-    // Draw data line
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
+    // Draw value labels (Y-axis)
+    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-primary') || '#1f2937';
+    ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    
+    for (let i = 0; i <= 4; i++) {
+        const y = padding + (i / 4) * chartHeight;
+        const value = maxValue - (i / 4) * adjustedRange;
+        const label = Math.round(value) + '°F';
+        ctx.fillText(label, padding - 10, y);
+    }
+    
+    // Draw time labels (X-axis)
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    
+    if (data.length > 1) {
+        const indices = [0, Math.floor(data.length / 2), data.length - 1];
+        indices.forEach(index => {
+            if (data[index] && data[index].time) {
+                const x = padding + (index / (data.length - 1)) * chartWidth;
+                const time = new Date(data[index].time);
+                const timeLabel = time.toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric' 
+                });
+                ctx.fillText(timeLabel, x, height - padding + 10);
+            }
+        });
+    }
+    
+    // Draw temperature range area
+    const gradient = ctx.createLinearGradient(0, padding, 0, height - padding);
+    gradient.addColorStop(0, color + '30');
+    gradient.addColorStop(1, color + '10');
+    
+    ctx.fillStyle = gradient;
     ctx.beginPath();
     
+    // Draw top line (highs)
     data.forEach((item, index) => {
         const x = padding + (index / (data.length - 1)) * chartWidth;
-        const y = height - padding - ((item.value - minValue) / valueRange) * chartHeight;
+        const y = height - padding - ((item.high - minValue) / adjustedRange) * chartHeight;
         
         if (index === 0) {
             ctx.moveTo(x, y);
@@ -1621,18 +2230,292 @@ function drawLineChart(ctx, data, width, height, color) {
         }
     });
     
+    // Draw bottom line (lows) in reverse
+    for (let i = data.length - 1; i >= 0; i--) {
+        const item = data[i];
+        const x = padding + (i / (data.length - 1)) * chartWidth;
+        const y = height - padding - ((item.low - minValue) / adjustedRange) * chartHeight;
+        ctx.lineTo(x, y);
+    }
+    
+    ctx.closePath();
+    ctx.fill();
+    
+    // Draw high temperature line
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 3;
+    
+    ctx.beginPath();
+    data.forEach((item, index) => {
+        const x = padding + (index / (data.length - 1)) * chartWidth;
+        const y = height - padding - ((item.high - minValue) / adjustedRange) * chartHeight;
+        
+        if (index === 0) {
+            ctx.moveTo(x, y);
+        } else {
+            ctx.lineTo(x, y);
+        }
+    });
     ctx.stroke();
+    
+    // Draw low temperature line
+    ctx.strokeStyle = color + 'AA'; // Slightly transparent
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 2;
+    
+    ctx.beginPath();
+    data.forEach((item, index) => {
+        const x = padding + (index / (data.length - 1)) * chartWidth;
+        const y = height - padding - ((item.low - minValue) / adjustedRange) * chartHeight;
+        
+        if (index === 0) {
+            ctx.moveTo(x, y);
+        } else {
+            ctx.lineTo(x, y);
+        }
+    });
+    ctx.stroke();
+    
+    ctx.shadowBlur = 0;
+    
+    // Draw data points for highs
+    ctx.fillStyle = color;
+    data.forEach((item, index) => {
+        const x = padding + (index / (data.length - 1)) * chartWidth;
+        const yHigh = height - padding - ((item.high - minValue) / adjustedRange) * chartHeight;
+        const yLow = height - padding - ((item.low - minValue) / adjustedRange) * chartHeight;
+        
+        // High point
+        ctx.beginPath();
+        ctx.arc(x, yHigh, 4, 0, 2 * Math.PI);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Low point
+        ctx.beginPath();
+        ctx.arc(x, yLow, 3, 0, 2 * Math.PI);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.strokeStyle = color + 'AA';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        ctx.fillStyle = color;
+    });
+    
+    // Show current values (last point)
+    if (data.length > 0) {
+        const lastItem = data[data.length - 1];
+        const x = padding + chartWidth;
+        const yHigh = height - padding - ((lastItem.high - minValue) / adjustedRange) * chartHeight;
+        const yLow = height - padding - ((lastItem.low - minValue) / adjustedRange) * chartHeight;
+        
+        // Labels
+        ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-primary') || '#1f2937';
+        ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(Math.round(lastItem.high) + '°', x + 15, yHigh);
+        ctx.fillText(Math.round(lastItem.low) + '°', x + 15, yLow);
+    }
+}
+
+function drawLineChart(ctx, data, width, height, color) {
+    const padding = 50; // Increased padding for labels
+    const chartWidth = width - 2 * padding;
+    const chartHeight = height - 2 * padding;
+    
+    // Get min and max values with some padding
+    const values = data.map(item => item.value);
+    const rawMin = Math.min(...values);
+    const rawMax = Math.max(...values);
+    const valueRange = rawMax - rawMin || 1;
+    const valuePadding = valueRange * 0.1; // 10% padding
+    const minValue = rawMin - valuePadding;
+    const maxValue = rawMax + valuePadding;
+    const adjustedRange = maxValue - minValue;
+    
+    // Clear background
+    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--bg-secondary') || '#f3f4f6';
+    ctx.fillRect(0, 0, width, height);
+    
+    // Draw grid lines
+    ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--border-color') || '#e5e7eb';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 2]);
+    
+    // Horizontal grid lines (5 lines)
+    for (let i = 0; i <= 4; i++) {
+        const y = padding + (i / 4) * chartHeight;
+        ctx.beginPath();
+        ctx.moveTo(padding, y);
+        ctx.lineTo(width - padding, y);
+        ctx.stroke();
+    }
+    
+    // Vertical grid lines (4 lines)
+    for (let i = 1; i < 4; i++) {
+        const x = padding + (i / 4) * chartWidth;
+        ctx.beginPath();
+        ctx.moveTo(x, padding);
+        ctx.lineTo(x, height - padding);
+        ctx.stroke();
+    }
+    
+    ctx.setLineDash([]); // Reset line dash
+    
+    // Draw axes with thicker lines
+    ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--text-secondary') || '#64748b';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(padding, padding);
+    ctx.lineTo(padding, height - padding);
+    ctx.lineTo(width - padding, height - padding);
+    ctx.stroke();
+    
+    // Draw value labels (Y-axis)
+    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-primary') || '#1f2937';
+    ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    
+    for (let i = 0; i <= 4; i++) {
+        const y = padding + (i / 4) * chartHeight;
+        const value = maxValue - (i / 4) * adjustedRange;
+        const label = value.toFixed(2);
+        ctx.fillText(label, padding - 10, y);
+    }
+    
+    // Draw time labels (X-axis)
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    
+    if (data.length > 1) {
+        // For pressure data, show time labels; for daily data, show date labels
+        const showDates = data.length <= 7; // Daily data
+        
+        const indices = [0, Math.floor(data.length / 2), data.length - 1];
+        indices.forEach(index => {
+            if (data[index] && data[index].time) {
+                const x = padding + (index / (data.length - 1)) * chartWidth;
+                const time = new Date(data[index].time);
+                let timeLabel;
+                
+                if (showDates) {
+                    timeLabel = time.toLocaleDateString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric' 
+                    });
+                } else {
+                    timeLabel = time.toLocaleTimeString('en-US', { 
+                        hour: 'numeric', 
+                        minute: '2-digit',
+                        hour12: true 
+                    });
+                }
+                
+                ctx.fillText(timeLabel, x, height - padding + 10);
+            }
+        });
+    }
+    
+    // Draw gradient fill under line
+    const gradient = ctx.createLinearGradient(0, padding, 0, height - padding);
+    gradient.addColorStop(0, color + '40'); // 25% opacity
+    gradient.addColorStop(1, color + '10'); // 6% opacity
+    
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.moveTo(padding, height - padding);
+    
+    data.forEach((item, index) => {
+        const x = padding + (index / (data.length - 1)) * chartWidth;
+        const y = height - padding - ((item.value - minValue) / adjustedRange) * chartHeight;
+        
+        if (index === 0) {
+            ctx.lineTo(x, y);
+        } else {
+            ctx.lineTo(x, y);
+        }
+    });
+    
+    ctx.lineTo(width - padding, height - padding);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Draw data line with glow effect
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    
+    // Add glow effect
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 4;
+    
+    ctx.beginPath();
+    data.forEach((item, index) => {
+        const x = padding + (index / (data.length - 1)) * chartWidth;
+        const y = height - padding - ((item.value - minValue) / adjustedRange) * chartHeight;
+        
+        if (index === 0) {
+            ctx.moveTo(x, y);
+        } else {
+            ctx.lineTo(x, y);
+        }
+    });
+    ctx.stroke();
+    
+    // Reset shadow
+    ctx.shadowBlur = 0;
     
     // Draw data points
     ctx.fillStyle = color;
     data.forEach((item, index) => {
         const x = padding + (index / (data.length - 1)) * chartWidth;
-        const y = height - padding - ((item.value - minValue) / valueRange) * chartHeight;
+        const y = height - padding - ((item.value - minValue) / adjustedRange) * chartHeight;
         
+        // Draw point with white border
         ctx.beginPath();
-        ctx.arc(x, y, 3, 0, 2 * Math.PI);
+        ctx.arc(x, y, 5, 0, 2 * Math.PI);
+        ctx.fillStyle = '#ffffff';
         ctx.fill();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.fillStyle = color;
     });
+    
+    // Highlight current value (last point)
+    if (data.length > 0) {
+        const lastItem = data[data.length - 1];
+        const x = padding + chartWidth;
+        const y = height - padding - ((lastItem.value - minValue) / adjustedRange) * chartHeight;
+        
+        // Draw larger highlighted point
+        ctx.beginPath();
+        ctx.arc(x, y, 8, 0, 2 * Math.PI);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        
+        // Add current value label
+        ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-primary') || '#1f2937';
+        ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(lastItem.value.toFixed(2), x + 15, y);
+    }
 }
 
 // Navigation
@@ -2192,9 +3075,18 @@ function hideSearchResults() {
 }
 
 function selectLocation(lat, lon, name) {
+    console.log(`Selecting location: ${name} (${lat}, ${lon}) with water type filter: ${selectedWaterType || 'All'}`);
+    
     currentLocation = { lat, lon, name };
     locationSearch.value = '';
     hideSearchResults();
+    
+    // Detect and set the state for this location to ensure proper filtering
+    const detectedState = detectStateFromCoordinates(lat, lon);
+    if (detectedState && detectedState !== selectedState) {
+        console.log(`Updating state from ${selectedState} to ${detectedState} for location selection`);
+        setSelectedState(detectedState);
+    }
     
     // Add to recent locations
     addToRecentLocations(currentLocation);
@@ -2203,8 +3095,14 @@ function selectLocation(lat, lon, name) {
     updateLocationDisplay();
     fetchWeatherData();
     
-    // Find nearest USGS water temperature data
-    findNearestUSGSWaterData(lat, lon);
+    // Find nearest USGS water temperature data with a small delay to ensure state is set
+    showWaterDataLoading();
+    
+    // Add a small delay to ensure state detection is complete
+    setTimeout(() => {
+        console.log(`About to fetch water data for ${name} with state: ${selectedState}, water type: ${selectedWaterType || 'All'}`);
+        findNearestUSGSWaterData(lat, lon);
+    }, 100);
 }
 
 async function selectWaterBody(lat, lon, name, siteNo, siteType) {
@@ -2231,20 +3129,41 @@ async function selectWaterBody(lat, lon, name, siteNo, siteType) {
     fetchWeatherData();
     
     // Fetch water temperature data specifically for this site
+    showWaterDataLoading();
     try {
-        const waterTempData = await fetchWaterTemperatureData(siteNo);
+        const waterTempData = await fetchWaterTemperatureHistoricalData(siteNo);
         if (waterTempData) {
             usgsWaterData = {
                 site: currentWaterBody,
-                temperature: waterTempData
+                temperature: waterTempData.current
             };
+            
+            // Update water temperature history with historical data
+            if (waterTempData.historical && waterTempData.historical.length > 0) {
+                waterTemperatureHistory = waterTempData.historical;
+                console.log(`Updated water temperature history with ${waterTemperatureHistory.length} historical readings`);
+                
+                // Update the chart
+                updateWaterTemperatureChart();
+                
+                // Save to storage
+                saveToStorage('waterTemperatureHistory', waterTemperatureHistory);
+            }
             
             // Update displays
             updateWaterTemperatureDisplay();
             updateNearbyWaterBodiesDisplay();
+            
+            // Recalculate fishing score with new water temperature data
+            calculateFishingScore();
+        } else {
+            // Clear loading state if no data found
+            hideWaterDataLoading();
         }
     } catch (error) {
         console.error('Error fetching water temperature for selected site:', error);
+        // Clear loading state on error
+        hideWaterDataLoading();
     }
 }
 
@@ -2263,8 +3182,10 @@ function addToRecentLocations(location) {
     // Save to storage
     saveToStorage('recentLocations', recentLocations);
     
-    // Update UI
-    displayRecentLocations();
+    // Update UI with a small delay to avoid interfering with ongoing location selection
+    setTimeout(() => {
+        displayRecentLocations();
+    }, 200);
 }
 
 function displayRecentLocations() {
@@ -2293,6 +3214,7 @@ function displayRecentLocations() {
             const lon = parseFloat(item.dataset.lon);
             const name = item.dataset.name;
             
+            console.log(`Recent location clicked: ${name}, current water type filter: ${selectedWaterType || 'All'}`);
             selectLocation(lat, lon, name);
         });
     });
@@ -2436,6 +3358,7 @@ function loadStoredData() {
         
         // Find nearest USGS water temperature data for stored location
         if (currentLocation.lat && currentLocation.lon) {
+            showWaterDataLoading();
             findNearestUSGSWaterData(currentLocation.lat, currentLocation.lon);
         }
     }
