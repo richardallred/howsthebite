@@ -1848,13 +1848,14 @@ function updateWaterTemperatureDisplay() {
 }
 
 function updateNearbyWaterBodiesDisplay() {
+    const waterBodySelection = document.getElementById('waterBodySelection');
     const mapContainer = document.querySelector('.map-container');
     
     if (nearbyWaterBodies.length > 0) {
         const waterBodiesHTML = `
             <div class="water-bodies-list">
-                <h3>Nearby Water Bodies with Temperature Data</h3>
-                ${nearbyWaterBodies.slice(0, 5).map(site => {
+                <h3>Water Temperature Data Source</h3>
+                ${nearbyWaterBodies.slice(0, 3).map(site => {
                     const distance = site.distance.toFixed(1);
                     const isActive = currentWaterBody && currentWaterBody.site_no === site.site_no;
                     
@@ -1868,12 +1869,12 @@ function updateNearbyWaterBodiesDisplay() {
                                 <div class="water-body-name">${site.site_name}</div>
                                 <div class="water-body-details">
                                     ${site.site_type} • ${distance} km away
-                                    ${isActive ? ' • <span class="active-indicator">Active</span>' : ''}
+                                    ${isActive ? ' • <span class="active-indicator">Current Source</span>' : ''}
                                 </div>
                             </div>
                             <div class="water-body-actions">
                                 <button class="select-water-body-btn" data-site-no="${site.site_no}">
-                                    ${isActive ? 'Current' : 'Select'}
+                                    ${isActive ? 'Active' : 'Use This'}
                                 </button>
                             </div>
                         </div>
@@ -1882,10 +1883,19 @@ function updateNearbyWaterBodiesDisplay() {
             </div>
         `;
         
-        mapContainer.innerHTML = waterBodiesHTML;
+        waterBodySelection.innerHTML = waterBodiesHTML;
+        
+        // Clear the map container and show a simple map placeholder
+        mapContainer.innerHTML = `
+            <div class="map-placeholder">
+                <div class="map-icon">🗺️</div>
+                <div class="map-text">Interactive map coming soon</div>
+                <div class="map-subtext">Currently showing nearest USGS monitoring stations above</div>
+            </div>
+        `;
         
         // Add click handlers for water body selection
-        const selectButtons = mapContainer.querySelectorAll('.select-water-body-btn');
+        const selectButtons = waterBodySelection.querySelectorAll('.select-water-body-btn');
         selectButtons.forEach(button => {
             button.addEventListener('click', async (e) => {
                 const siteNo = e.target.dataset.siteNo;
@@ -1899,17 +1909,30 @@ function updateNearbyWaterBodiesDisplay() {
                     showWaterDataLoading();
                     
                     // Fetch water temperature data for this site
-                    const waterTempData = await fetchWaterTemperatureData(site.site_no);
+                    const waterTempData = await fetchWaterTemperatureHistoricalData(site.site_no);
                     
                     if (waterTempData) {
                         usgsWaterData = {
                             site: site,
-                            temperature: waterTempData
+                            temperature: waterTempData.current
                         };
+                        
+                        // Update water temperature history with historical data
+                        if (waterTempData.historical && waterTempData.historical.length > 0) {
+                            waterTemperatureHistory = waterTempData.historical;
+                            console.log(`Updated water temperature history with ${waterTemperatureHistory.length} historical readings`);
+                            
+                            // Update the chart
+                            updateWaterTemperatureChart();
+                            
+                            // Save to storage
+                            saveToStorage('waterTemperatureHistory', waterTemperatureHistory);
+                        }
                         
                         // Update displays
                         updateWaterTemperatureDisplay();
                         updateNearbyWaterBodiesDisplay();
+                        calculateFishingScore();
                     } else {
                         // Clear loading state if no data found
                         hideWaterDataLoading();
@@ -1919,7 +1942,7 @@ function updateNearbyWaterBodiesDisplay() {
         });
         
         // Add click handlers for water body items
-        const waterBodyItems = mapContainer.querySelectorAll('.water-body-item');
+        const waterBodyItems = waterBodySelection.querySelectorAll('.water-body-item');
         waterBodyItems.forEach(item => {
             item.addEventListener('click', (e) => {
                 if (e.target.classList.contains('select-water-body-btn')) return;
@@ -1934,11 +1957,20 @@ function updateNearbyWaterBodiesDisplay() {
             });
         });
     } else {
-        mapContainer.innerHTML = `
+        waterBodySelection.innerHTML = `
             <div class="no-water-bodies">
                 <div class="no-water-bodies-icon">🌊</div>
-                <div class="no-water-bodies-text">No USGS water temperature monitoring sites found in this area</div>
+                <div class="no-water-bodies-text">No USGS monitoring sites found nearby</div>
                 <div class="no-water-bodies-subtext">Water temperature will be estimated from air temperature</div>
+            </div>
+        `;
+        
+        // Clear the map container and show a simple map placeholder
+        mapContainer.innerHTML = `
+            <div class="map-placeholder">
+                <div class="map-icon">🗺️</div>
+                <div class="map-text">Interactive map coming soon</div>
+                <div class="map-subtext">No nearby monitoring stations to display</div>
             </div>
         `;
     }
