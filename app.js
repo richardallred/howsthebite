@@ -949,9 +949,9 @@ async function findNearbyWaterSites(lat, lon, radiusKm = 150) {
                     
                     const response = await fetch(apiUrl);
                     if (!response.ok) continue;
-                    
-                    const data = await response.json();
-                    
+        
+        const data = await response.json();
+        
                     // Parse response
                     let timeSeries = null;
                     if (data.value && data.value.timeSeries) {
@@ -969,16 +969,16 @@ async function findNearbyWaterSites(lat, lon, radiusKm = 150) {
                     // Process sites and filter by distance
                     const sites = timeSeries.map(timeSeriesItem => {
                         const siteInfo = timeSeriesItem.sourceInfo;
-                        const siteLatLon = siteInfo.geoLocation.geogLocation;
-                        const distance = calculateDistance(lat, lon, parseFloat(siteLatLon.latitude), parseFloat(siteLatLon.longitude));
-                        
-                        return {
-                            site_no: siteInfo.siteCode[0].value,
-                            site_name: siteInfo.siteName,
-                            latitude: parseFloat(siteLatLon.latitude),
-                            longitude: parseFloat(siteLatLon.longitude),
-                            distance: distance,
-                            site_type: siteInfo.siteProperty.find(prop => prop.name === 'siteTypeCd')?.value || 'Unknown',
+            const siteLatLon = siteInfo.geoLocation.geogLocation;
+            const distance = calculateDistance(lat, lon, parseFloat(siteLatLon.latitude), parseFloat(siteLatLon.longitude));
+            
+            return {
+                site_no: siteInfo.siteCode[0].value,
+                site_name: siteInfo.siteName,
+                latitude: parseFloat(siteLatLon.latitude),
+                longitude: parseFloat(siteLatLon.longitude),
+                distance: distance,
+                site_type: siteInfo.siteProperty.find(prop => prop.name === 'siteTypeCd')?.value || 'Unknown',
                             has_water_temp: strategy.parameterCd.includes('00010') || strategy.parameterCd.includes('00011'),
                             parameter_type: strategy.description,
                             state: stateCd
@@ -1092,17 +1092,17 @@ async function fetchWaterTemperatureData(siteNo) {
         ];
         
         for (const param of tempParameters) {
-            try {
-                const response = await fetch(
+    try {
+        const response = await fetch(
                     `${USGS_IV_API_URL}?format=json&sites=${siteNo}&parameterCd=${param.code}&period=P1D`
-                );
-                
-                if (!response.ok) {
+        );
+        
+        if (!response.ok) {
                     continue; // Try next parameter
-                }
-                
-                const data = await response.json();
-                
+        }
+        
+        const data = await response.json();
+        
                 // Handle different USGS response structures
                 let timeSeriesArray = null;
                 if (data.value && data.value.timeSeries) {
@@ -1118,14 +1118,14 @@ async function fetchWaterTemperatureData(siteNo) {
                 }
                 
                 const timeSeries = timeSeriesArray[0];
-                const values = timeSeries.values[0].value;
-                
-                if (values.length === 0) {
+        const values = timeSeries.values[0].value;
+        
+        if (values.length === 0) {
                     continue; // Try next parameter
-                }
-                
-                // Get the most recent value
-                const recentValue = values[values.length - 1];
+        }
+        
+        // Get the most recent value
+        const recentValue = values[values.length - 1];
                 const tempValue = parseFloat(recentValue.value);
                 
                 // Convert to Fahrenheit if needed
@@ -1145,12 +1145,12 @@ async function fetchWaterTemperatureData(siteNo) {
                 }
                 
                 console.log(`Found temperature data using ${param.name}: ${tempF.toFixed(1)}°F`);
-                
-                return {
+        
+        return {
                     temperature_f: tempF,
                     temperature_c: tempC,
-                    datetime: recentValue.dateTime,
-                    site_no: siteNo,
+            datetime: recentValue.dateTime,
+            site_no: siteNo,
                     unit: timeSeries.variable.unit.unitDescription,
                     parameter_code: param.code,
                     parameter_name: param.name
@@ -1649,9 +1649,9 @@ function showInstallBanner() {
     const bannerText = document.querySelector('.banner-text');
     if (bannerText) {
         if (installData.promptCount === 4) {
-            bannerText.textContent = 'Last chance! Install Hows the Bite for the best experience!';
+            bannerText.textContent = 'Last chance! Install How\'s the Bite for the best experience!';
         } else {
-            bannerText.textContent = 'Install Hows the Bite for the best experience!';
+            bannerText.textContent = 'Install How\'s the Bite for the best experience!';
         }
     }
     
@@ -2021,30 +2021,30 @@ async function searchUSGSWaterBodies(query) {
             }
             
             console.log(`Found ${matchingSites.length} matching sites for query: "${query}"`);
-            
-            // Add matching sites to results
+                
+                // Add matching sites to results
             const waterBodies = matchingSites.map(timeSeriesItem => {
                 const siteInfo = timeSeriesItem.sourceInfo;
-                const siteLatLon = siteInfo.geoLocation.geogLocation;
-                
+                    const siteLatLon = siteInfo.geoLocation.geogLocation;
+                    
                 const waterBody = {
-                    lat: parseFloat(siteLatLon.latitude),
-                    lon: parseFloat(siteLatLon.longitude),
-                    name: siteInfo.siteName,
-                    site_no: siteInfo.siteCode[0].value,
-                    site_type: siteInfo.siteProperty.find(prop => prop.name === 'siteTypeCd')?.value || 'Water Body',
-                    has_water_temp: true,
-                    is_water_body: true,
+                        lat: parseFloat(siteLatLon.latitude),
+                        lon: parseFloat(siteLatLon.longitude),
+                        name: siteInfo.siteName,
+                        site_no: siteInfo.siteCode[0].value,
+                        site_type: siteInfo.siteProperty.find(prop => prop.name === 'siteTypeCd')?.value || 'Water Body',
+                        has_water_temp: true,
+                        is_water_body: true,
                     state: selectedState
-                };
+                    };
                 
                 console.log('Created water body result:', waterBody);
                 return waterBody;
-            });
-            
-            allWaterBodies.push(...waterBodies);
-            
-        } catch (stateError) {
+                });
+                
+                allWaterBodies.push(...waterBodies);
+                
+            } catch (stateError) {
             console.log(`Error searching state ${selectedState}:`, stateError);
         }
         

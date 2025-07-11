@@ -113,7 +113,7 @@ self.addEventListener('push', (event) => {
   };
   
   event.waitUntil(
-            self.registration.showNotification('Hows the Bite', options)
+            self.registration.showNotification('How\'s the Bite', options)
   );
 });
 
