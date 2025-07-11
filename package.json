@@ -1,0 +1,34 @@
+{
+  "name": "hows-the-bite-pwa",
+  "version": "1.0.0",
+  "description": "A Progressive Web App for checking fishing conditions and finding out how the bite is on local water bodies",
+  "main": "index.html",
+  "scripts": {
+    "start": "http-server -p 8000 -o",
+    "dev": "http-server -p 8000 -o -c-1",
+    "build": "echo 'No build step required for this vanilla PWA'",
+    "test": "echo 'No tests specified'"
+  },
+  "keywords": [
+    "fishing",
+    "weather",
+    "pwa",
+    "progressive-web-app",
+    "barometric-pressure",
+    "water-temperature",
+    "fishing-conditions"
+  ],
+  "author": "Hows the Bite Developer",
+  "license": "MIT",
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-username/hows-the-bite-pwa.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/hows-the-bite-pwa/issues"
+  },
+  "homepage": "https://github.com/your-username/hows-the-bite-pwa#readme"
+} 

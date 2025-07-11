@@ -1,0 +1,35 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="256" fill="#1e40af"/>
+  
+  <!-- Water waves -->
+  <path d="M0 350 Q128 320 256 350 T512 350 V512 H0 Z" fill="#3b82f6"/>
+  <path d="M0 380 Q128 350 256 380 T512 380 V512 H0 Z" fill="#60a5fa"/>
+  
+  <!-- Fish body -->
+  <ellipse cx="256" cy="200" rx="80" ry="40" fill="#f59e0b" stroke="#d97706" stroke-width="3"/>
+  
+  <!-- Fish tail -->
+  <path d="M176 200 L140 180 L140 220 Z" fill="#f59e0b" stroke="#d97706" stroke-width="2"/>
+  
+  <!-- Fish eye -->
+  <circle cx="280" cy="190" r="8" fill="white"/>
+  <circle cx="283" cy="188" r="4" fill="black"/>
+  
+  <!-- Fish fins -->
+  <path d="M240 170 Q230 150 240 140" stroke="#d97706" stroke-width="3" fill="none"/>
+  <path d="M240 230 Q230 250 240 260" stroke="#d97706" stroke-width="3" fill="none"/>
+  
+  <!-- Fishing hook -->
+  <path d="M320 120 Q340 120 340 140 Q340 160 320 160" stroke="#64748b" stroke-width="4" fill="none"/>
+  <line x1="320" y1="120" x2="320" y2="80" stroke="#64748b" stroke-width="2"/>
+  
+  <!-- Bubbles -->
+  <circle cx="300" cy="250" r="4" fill="#bfdbfe" opacity="0.8"/>
+  <circle cx="320" cy="280" r="6" fill="#bfdbfe" opacity="0.6"/>
+  <circle cx="280" cy="290" r="3" fill="#bfdbfe" opacity="0.9"/>
+  
+  <!-- App title -->
+      <text x="256" y="370" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="24" font-weight="bold">Hows the</text>
+    <text x="256" y="400" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="24" font-weight="bold">Bite</text>
+</svg>
