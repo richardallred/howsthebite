@@ -25,24 +25,10 @@ let selectedState = null;
 let selectedWaterType = null;
 let isWaterDataLoading = false;
 
-// DOM Elements
-const locationBtn = document.getElementById('locationBtn');
-const themeToggleBtn = document.getElementById('themeToggleBtn');
-const installBanner = document.getElementById('installBanner');
-const installBtn = document.getElementById('installBtn');
-const bannerClose = document.getElementById('bannerClose');
-const navBtns = document.querySelectorAll('.nav-btn');
-const locationName = document.getElementById('locationName');
-const locationCoords = document.getElementById('locationCoords');
-const locationSearch = document.getElementById('locationSearch');
-const searchBtn = document.getElementById('searchBtn');
-const searchResults = document.getElementById('searchResults');
-const recentLocationsDiv = document.getElementById('recentLocations');
-const breakdownContent = document.getElementById('breakdownContent');
-const moonPhaseElement = document.getElementById('moonPhase');
-const moonIconElement = document.getElementById('moonIcon');
-const stateSelector = document.getElementById('stateSelector');
-const waterTypeSelector = document.getElementById('waterTypeSelector');
+// DOM Elements - will be initialized when DOM is ready
+let locationBtn, themeToggleBtn, installBanner, installBtn, bannerClose, navBtns;
+let locationName, locationCoords, locationSearch, searchBtn, searchResults, recentLocationsDiv;
+let breakdownContent, moonPhaseElement, moonIconElement, stateSelector, waterTypeSelector;
 
 // Initialize App
 document.addEventListener('DOMContentLoaded', () => {
@@ -60,10 +46,35 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
     
+    initializeDOMElements();
     initializeApp();
     setupEventListeners();
     registerServiceWorker();
 });
+
+// Initialize DOM Elements
+function initializeDOMElements() {
+    locationBtn = document.getElementById('locationBtn');
+    themeToggleBtn = document.getElementById('themeToggleBtn');
+    installBanner = document.getElementById('installBanner');
+    installBtn = document.getElementById('installBtn');
+    bannerClose = document.getElementById('bannerClose');
+    navBtns = document.querySelectorAll('.nav-btn');
+    locationName = document.getElementById('locationName');
+    locationCoords = document.getElementById('locationCoords');
+    locationSearch = document.getElementById('locationSearch');
+    searchBtn = document.getElementById('searchBtn');
+    searchResults = document.getElementById('searchResults');
+    recentLocationsDiv = document.getElementById('recentLocations');
+    breakdownContent = document.getElementById('breakdownContent');
+    moonPhaseElement = document.getElementById('moonPhase');
+    moonIconElement = document.getElementById('moonIcon');
+    stateSelector = document.getElementById('stateSelector');
+    waterTypeSelector = document.getElementById('waterTypeSelector');
+    
+    // Debug: Check if theme toggle button is found
+    console.log('Theme toggle button found:', themeToggleBtn);
+}
 
 // Initialize Application
 function initializeApp() {
@@ -124,27 +135,65 @@ function initializeApp() {
 
 // Event Listeners
 function setupEventListeners() {
-    locationBtn.addEventListener('click', getLocation);
-    themeToggleBtn.addEventListener('click', toggleTheme);
-    installBtn.addEventListener('click', installApp);
-    bannerClose.addEventListener('click', closeBanner);
+    // Add null checks and logging for debugging
+    if (locationBtn) {
+        locationBtn.addEventListener('click', getLocation);
+    } else {
+        console.error('locationBtn not found');
+    }
+    
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', toggleTheme);
+        console.log('Theme toggle event listener added successfully');
+    } else {
+        console.error('themeToggleBtn not found');
+    }
+    
+    if (installBtn) {
+        installBtn.addEventListener('click', installApp);
+    } else {
+        console.error('installBtn not found');
+    }
+    
+    if (bannerClose) {
+        bannerClose.addEventListener('click', closeBanner);
+    } else {
+        console.error('bannerClose not found');
+    }
     
     // State Selector
-    stateSelector.addEventListener('change', handleStateChange);
+    if (stateSelector) {
+        stateSelector.addEventListener('change', handleStateChange);
+    } else {
+        console.error('stateSelector not found');
+    }
     
     // Water Type Selector
-    waterTypeSelector.addEventListener('change', handleWaterTypeChange);
+    if (waterTypeSelector) {
+        waterTypeSelector.addEventListener('change', handleWaterTypeChange);
+    } else {
+        console.error('waterTypeSelector not found');
+    }
     
     // Location Search
-    searchBtn.addEventListener('click', performSearch);
-    locationSearch.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            performSearch();
-        }
-    });
+    if (searchBtn) {
+        searchBtn.addEventListener('click', performSearch);
+    } else {
+        console.error('searchBtn not found');
+    }
     
-    // Location Search Input
-    locationSearch.addEventListener('input', debounce(handleSearchInput, 300));
+    if (locationSearch) {
+        locationSearch.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                performSearch();
+            }
+        });
+        
+        // Location Search Input
+        locationSearch.addEventListener('input', debounce(handleSearchInput, 300));
+    } else {
+        console.error('locationSearch not found');
+    }
     
     // Click outside to close search results
     document.addEventListener('click', (e) => {
@@ -212,27 +261,41 @@ function initializeTheme() {
 }
 
 function toggleTheme() {
-    const isDark = document.body.classList.contains('dark-mode');
+    console.log('toggleTheme called');
+    const isDark = document.documentElement.classList.contains('dark-mode');
+    console.log('Current theme is dark:', isDark);
     
     if (isDark) {
+        console.log('Switching to light mode');
         disableDarkMode();
     } else {
+        console.log('Switching to dark mode');
         enableDarkMode();
     }
 }
 
 function enableDarkMode() {
-    document.body.classList.add('dark-mode');
+    document.documentElement.classList.add('dark-mode');
     themeToggleBtn.classList.add('dark-active');
     themeToggleBtn.querySelector('.theme-icon').textContent = 'light_mode';
     saveToStorage('theme', 'dark');
+    
+    // Redraw charts with new theme colors
+    updatePressureChart();
+    updateTemperatureChart();
+    updateWaterTemperatureChart();
 }
 
 function disableDarkMode() {
-    document.body.classList.remove('dark-mode');
+    document.documentElement.classList.remove('dark-mode');
     themeToggleBtn.classList.remove('dark-active');
     themeToggleBtn.querySelector('.theme-icon').textContent = 'dark_mode';
     saveToStorage('theme', 'light');
+    
+    // Redraw charts with new theme colors
+    updatePressureChart();
+    updateTemperatureChart();
+    updateWaterTemperatureChart();
 }
 
 // Loading Indicators
@@ -380,6 +443,43 @@ function handleStateChange() {
         // Clear search input and results
         locationSearch.value = '';
         hideSearchResults();
+        
+        // Clear current water body selection data for the new state
+        currentWaterBody = null;
+        usgsWaterData = null;
+        nearbyWaterBodies = [];
+        
+        // Clear water temperature history from previous state
+        waterTemperatureHistory = [];
+        
+        // Clear the water body selection display
+        const waterBodySelection = document.getElementById('waterBodySelection');
+        if (waterBodySelection) {
+            waterBodySelection.innerHTML = `
+                <div class="no-water-bodies">
+                    <div class="no-water-bodies-icon">🌊</div>
+                    <div class="no-water-bodies-text">Select a location to find water bodies</div>
+                    <div class="no-water-bodies-subtext">Water temperature will be estimated from air temperature</div>
+                </div>
+            `;
+        }
+        
+        // If we have a current location, re-fetch water bodies for the new state
+        if (currentLocation && currentLocation.lat && currentLocation.lon) {
+            console.log(`State changed to ${newState}, re-fetching water bodies for current location...`);
+            
+            // Show loading indicators
+            showWaterDataLoading();
+            
+            // Re-fetch nearby water bodies with the new state
+            findNearestUSGSWaterData(currentLocation.lat, currentLocation.lon);
+        }
+        
+        // Update water temperature display (will show estimated temp while loading)
+        updateWaterTemperatureDisplay();
+        
+        // Recalculate fishing score
+        calculateFishingScore();
     } else {
         // Disable search when no state is selected
         selectedState = null;
@@ -388,6 +488,27 @@ function handleStateChange() {
         updateSearchPlaceholder();
         locationSearch.value = '';
         hideSearchResults();
+        
+        // Clear water body selection when no state is selected
+        currentWaterBody = null;
+        usgsWaterData = null;
+        nearbyWaterBodies = [];
+        waterTemperatureHistory = [];
+        
+        const waterBodySelection = document.getElementById('waterBodySelection');
+        if (waterBodySelection) {
+            waterBodySelection.innerHTML = `
+                <div class="no-water-bodies">
+                    <div class="no-water-bodies-icon">🌊</div>
+                    <div class="no-water-bodies-text">Select a state first</div>
+                    <div class="no-water-bodies-subtext">Water temperature will be estimated from air temperature</div>
+                </div>
+            `;
+        }
+        
+        // Update displays
+        updateWaterTemperatureDisplay();
+        calculateFishingScore();
     }
 }
 
@@ -907,6 +1028,132 @@ function updateTemperatureData() {
     updateTemperatureChart();
 }
 
+// Trend Analysis Functions
+function calculateTrend(dataArray, hoursToAnalyze = 6) {
+    if (!dataArray || dataArray.length < 2) {
+        return { trend: 'stable', rate: 0, confidence: 'low' };
+    }
+    
+    // Get recent data points (last N hours)
+    const now = new Date();
+    const cutoffTime = new Date(now.getTime() - hoursToAnalyze * 60 * 60 * 1000);
+    
+    // Filter data to recent time window
+    const recentData = dataArray.filter(item => {
+        const itemTime = new Date(item.timestamp || item.time);
+        return itemTime >= cutoffTime;
+    }).sort((a, b) => new Date(a.timestamp || a.time) - new Date(b.timestamp || b.time));
+    
+    if (recentData.length < 2) {
+        return { trend: 'stable', rate: 0, confidence: 'low' };
+    }
+    
+    // Calculate linear regression to determine trend
+    const n = recentData.length;
+    let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+    
+    recentData.forEach((item, index) => {
+        const x = index; // Time index
+        const y = item.value;
+        sumX += x;
+        sumY += y;
+        sumXY += x * y;
+        sumX2 += x * x;
+    });
+    
+    const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+    const changePerHour = slope * (n / hoursToAnalyze); // Normalize to per-hour change
+    
+    // Determine trend classification
+    const absRate = Math.abs(changePerHour);
+    let trend = 'stable';
+    let confidence = 'low';
+    
+    if (absRate > 0.1) {
+        trend = changePerHour > 0 ? 'rising' : 'falling';
+        confidence = absRate > 0.5 ? 'high' : absRate > 0.2 ? 'medium' : 'low';
+    }
+    
+    return { trend, rate: changePerHour, confidence };
+}
+
+function calculatePressureTrend() {
+    const trend = calculateTrend(pressureHistory, 6);
+    
+    // Convert rate to more meaningful pressure units (inHg per hour)
+    const pressureRateInHg = trend.rate * 0.02953;
+    
+    return {
+        ...trend,
+        rateInHg: pressureRateInHg,
+        description: getPressureTrendDescription(trend.trend, pressureRateInHg, trend.confidence)
+    };
+}
+
+function calculateTemperatureTrend() {
+    const trend = calculateTrend(temperatureHistory, 6);
+    
+    return {
+        ...trend,
+        description: getTemperatureTrendDescription(trend.trend, trend.rate, trend.confidence)
+    };
+}
+
+function calculateWaterTemperatureTrend() {
+    const trend = calculateTrend(waterTemperatureHistory, 12); // Longer window for water temp
+    
+    return {
+        ...trend,
+        description: getWaterTemperatureTrendDescription(trend.trend, trend.rate, trend.confidence)
+    };
+}
+
+function getPressureTrendDescription(trend, rate, confidence) {
+    const absRate = Math.abs(rate);
+    
+    if (trend === 'falling') {
+        if (absRate > 0.05) return 'Rapidly falling (excellent for fishing)';
+        if (absRate > 0.02) return 'Falling (very good for fishing)';
+        return 'Slowly falling (good for fishing)';
+    } else if (trend === 'rising') {
+        if (absRate > 0.05) return 'Rapidly rising (poor for fishing)';
+        if (absRate > 0.02) return 'Rising (fair for fishing)';
+        return 'Slowly rising (fair for fishing)';
+    } else {
+        return 'Stable (average for fishing)';
+    }
+}
+
+function getTemperatureTrendDescription(trend, rate, confidence) {
+    const absRate = Math.abs(rate);
+    
+    if (trend === 'rising') {
+        if (absRate > 2) return 'Rapidly warming (fish adjusting)';
+        if (absRate > 1) return 'Warming (fish becoming active)';
+        return 'Slowly warming (stable activity)';
+    } else if (trend === 'falling') {
+        if (absRate > 2) return 'Rapidly cooling (fish adjusting)';
+        if (absRate > 1) return 'Cooling (fish less active)';
+        return 'Slowly cooling (stable activity)';
+    } else {
+        return 'Stable temperature (consistent conditions)';
+    }
+}
+
+function getWaterTemperatureTrendDescription(trend, rate, confidence) {
+    const absRate = Math.abs(rate);
+    
+    if (trend === 'rising') {
+        if (absRate > 1) return 'Warming (fish may seek cooler areas)';
+        return 'Slowly warming (fish adapting)';
+    } else if (trend === 'falling') {
+        if (absRate > 1) return 'Cooling (fish may become less active)';
+        return 'Slowly cooling (fish adapting)';
+    } else {
+        return 'Stable water temperature (consistent habitat)';
+    }
+}
+
 function calculateFishingScore() {
     if (!weatherData) return;
     
@@ -921,33 +1168,64 @@ function calculateFishingScore() {
         moon: { score: 0, details: '', rating: 'poor' }
     };
     
+    // Calculate trends for temperature and pressure
+    const pressureTrend = calculatePressureTrend();
+    const tempTrend = calculateTemperatureTrend();
+    const waterTempTrend = calculateWaterTemperatureTrend();
+    
+    // Debug: Log trend information
+    console.log('🌡️ Temperature trend:', tempTrend);
+    console.log('💧 Water temperature trend:', waterTempTrend);
+    console.log('📊 Pressure trend:', pressureTrend);
+    
     // Air Temperature factors (0-15 points, reduced to make room for water temp)
     const airTemp = current.main.temp;
+    let airTempScore = 0;
+    let airTempDetails = '';
+    let airTempRating = 'poor';
+    
+    // Base score from temperature range
     if (airTemp >= 65 && airTemp <= 75) {
-        breakdown.airTemperature.score = 15;
-        breakdown.airTemperature.details = `${airTemp.toFixed(1)}°F (Ideal comfort range)`;
-        breakdown.airTemperature.rating = 'excellent';
-        score += 15;
+        airTempScore = 15;
+        airTempDetails = `${airTemp.toFixed(1)}°F (Ideal comfort range)`;
+        airTempRating = 'excellent';
     } else if (airTemp >= 60 && airTemp <= 80) {
-        breakdown.airTemperature.score = 12;
-        breakdown.airTemperature.details = `${airTemp.toFixed(1)}°F (Very comfortable)`;
-        breakdown.airTemperature.rating = 'good';
-        score += 12;
+        airTempScore = 12;
+        airTempDetails = `${airTemp.toFixed(1)}°F (Very comfortable)`;
+        airTempRating = 'good';
     } else if (airTemp >= 55 && airTemp <= 85) {
-        breakdown.airTemperature.score = 8;
-        breakdown.airTemperature.details = `${airTemp.toFixed(1)}°F (Good fishing weather)`;
-        breakdown.airTemperature.rating = 'good';
-        score += 8;
+        airTempScore = 8;
+        airTempDetails = `${airTemp.toFixed(1)}°F (Good fishing weather)`;
+        airTempRating = 'good';
     } else if (airTemp >= 45 && airTemp <= 95) {
-        breakdown.airTemperature.score = 4;
-        breakdown.airTemperature.details = `${airTemp.toFixed(1)}°F (Manageable conditions)`;
-        breakdown.airTemperature.rating = 'fair';
-        score += 4;
+        airTempScore = 4;
+        airTempDetails = `${airTemp.toFixed(1)}°F (Manageable conditions)`;
+        airTempRating = 'fair';
     } else {
-        breakdown.airTemperature.score = 0;
-        breakdown.airTemperature.details = `${airTemp.toFixed(1)}°F (Extreme temperature)`;
-        breakdown.airTemperature.rating = 'poor';
+        airTempScore = 0;
+        airTempDetails = `${airTemp.toFixed(1)}°F (Extreme temperature)`;
+        airTempRating = 'poor';
     }
+    
+    // Apply trend bonus/penalty (+/- 3 points max)
+    let trendBonus = 0;
+    if (tempTrend.trend === 'stable') {
+        trendBonus = 1; // Stable conditions are good
+    } else if (tempTrend.trend === 'rising' && airTemp < 70) {
+        trendBonus = 2; // Warming up to ideal temps
+    } else if (tempTrend.trend === 'falling' && airTemp > 75) {
+        trendBonus = 2; // Cooling down from hot temps
+    } else if (Math.abs(tempTrend.rate) > 3) {
+        trendBonus = -2; // Rapid temperature changes are disruptive
+    }
+    
+    airTempScore = Math.max(0, Math.min(15, airTempScore + trendBonus));
+    airTempDetails += ` - ${tempTrend.description}`;
+    
+    breakdown.airTemperature.score = airTempScore;
+    breakdown.airTemperature.details = airTempDetails;
+    breakdown.airTemperature.rating = airTempRating;
+    score += airTempScore;
     
     // Water Temperature factors (0-20 points, most important for fishing)
     let waterTemp = null;
@@ -963,64 +1241,128 @@ function calculateFishingScore() {
         isEstimated = true;
     }
     
+    let waterTempScore = 0;
+    let waterTempDetails = '';
+    let waterTempRating = 'poor';
+    
+    // Base score from temperature range
     if (waterTemp >= 65 && waterTemp <= 75) {
-        breakdown.waterTemperature.score = 20;
-        breakdown.waterTemperature.details = `${waterTemp.toFixed(1)}°F (Excellent range - peak around 70°F)${isEstimated ? ' - estimated' : ''}`;
-        breakdown.waterTemperature.rating = 'excellent';
-        score += 20;
+        waterTempScore = 20;
+        waterTempDetails = `${waterTemp.toFixed(1)}°F (Excellent range - peak around 70°F)`;
+        waterTempRating = 'excellent';
     } else if (waterTemp >= 58 && waterTemp <= 78) {
-        breakdown.waterTemperature.score = 16;
-        breakdown.waterTemperature.details = `${waterTemp.toFixed(1)}°F (Very good for most fish)${isEstimated ? ' - estimated' : ''}`;
-        breakdown.waterTemperature.rating = 'good';
-        score += 16;
+        waterTempScore = 16;
+        waterTempDetails = `${waterTemp.toFixed(1)}°F (Very good for most fish)`;
+        waterTempRating = 'good';
     } else if (waterTemp >= 50 && waterTemp <= 85) {
-        breakdown.waterTemperature.score = 12;
-        breakdown.waterTemperature.details = `${waterTemp.toFixed(1)}°F (Good range - fish active)${isEstimated ? ' - estimated' : ''}`;
-        breakdown.waterTemperature.rating = 'good';
-        score += 12;
+        waterTempScore = 12;
+        waterTempDetails = `${waterTemp.toFixed(1)}°F (Good range - fish active)`;
+        waterTempRating = 'good';
     } else if (waterTemp >= 45 && waterTemp <= 90) {
-        breakdown.waterTemperature.score = 6;
-        breakdown.waterTemperature.details = `${waterTemp.toFixed(1)}°F (Fair - fish less active)${isEstimated ? ' - estimated' : ''}`;
-        breakdown.waterTemperature.rating = 'fair';
-        score += 6;
+        waterTempScore = 6;
+        waterTempDetails = `${waterTemp.toFixed(1)}°F (Fair - fish less active)`;
+        waterTempRating = 'fair';
     } else if (waterTemp >= 40 && waterTemp <= 95) {
-        breakdown.waterTemperature.score = 2;
-        breakdown.waterTemperature.details = `${waterTemp.toFixed(1)}°F (Poor - fish sluggish)${isEstimated ? ' - estimated' : ''}`;
-        breakdown.waterTemperature.rating = 'poor';
-        score += 2;
+        waterTempScore = 2;
+        waterTempDetails = `${waterTemp.toFixed(1)}°F (Poor - fish sluggish)`;
+        waterTempRating = 'poor';
     } else {
-        breakdown.waterTemperature.score = 0;
-        breakdown.waterTemperature.details = `${waterTemp.toFixed(1)}°F (Very poor - fish inactive)${isEstimated ? ' - estimated' : ''}`;
-        breakdown.waterTemperature.rating = 'poor';
+        waterTempScore = 0;
+        waterTempDetails = `${waterTemp.toFixed(1)}°F (Very poor - fish inactive)`;
+        waterTempRating = 'poor';
     }
     
-    // Pressure factors (0-18 points)
-    const pressure = current.main.pressure * 0.02953;
-    if (pressure >= 30.00 && pressure <= 30.20) {
-        breakdown.pressure.score = 18;
-        breakdown.pressure.details = `${pressure.toFixed(2)} inHg (Stable - fish feeding actively)`;
-        breakdown.pressure.rating = 'excellent';
-        score += 18;
-    } else if (pressure >= 29.90 && pressure <= 30.30) {
-        breakdown.pressure.score = 14;
-        breakdown.pressure.details = `${pressure.toFixed(2)} inHg (Good stability - fish active)`;
-        breakdown.pressure.rating = 'good';
-        score += 14;
-    } else if (pressure >= 29.80 && pressure <= 30.40) {
-        breakdown.pressure.score = 9;
-        breakdown.pressure.details = `${pressure.toFixed(2)} inHg (Moderate - decent fishing)`;
-        breakdown.pressure.rating = 'good';
-        score += 9;
-    } else if (pressure >= 29.50 && pressure <= 30.70) {
-        breakdown.pressure.score = 4;
-        breakdown.pressure.details = `${pressure.toFixed(2)} inHg (Changing - fish cautious)`;
-        breakdown.pressure.rating = 'fair';
-        score += 4;
+    // Apply trend bonus/penalty for water temperature (+/- 4 points max)
+    let waterTempTrendBonus = 0;
+    if (!isEstimated) {
+        // Only apply trend analysis for real water temperature data
+        if (waterTempTrend.trend === 'stable') {
+            waterTempTrendBonus = 2; // Stable water temp is ideal
+        } else if (waterTempTrend.trend === 'rising' && waterTemp < 65) {
+            waterTempTrendBonus = 3; // Warming up to ideal range
+        } else if (waterTempTrend.trend === 'falling' && waterTemp > 75) {
+            waterTempTrendBonus = 3; // Cooling down from hot temps
+        } else if (Math.abs(waterTempTrend.rate) > 2) {
+            waterTempTrendBonus = -2; // Rapid changes disrupt fish
+        }
+        
+        waterTempScore = Math.max(0, Math.min(20, waterTempScore + waterTempTrendBonus));
+        waterTempDetails += ` - ${waterTempTrend.description}`;
     } else {
-        breakdown.pressure.score = 0;
-        breakdown.pressure.details = `${pressure.toFixed(2)} inHg (Unstable - fish inactive)`;
-        breakdown.pressure.rating = 'poor';
+        waterTempDetails += ' - estimated';
     }
+    
+    breakdown.waterTemperature.score = waterTempScore;
+    breakdown.waterTemperature.details = waterTempDetails;
+    breakdown.waterTemperature.rating = waterTempRating;
+    score += waterTempScore;
+    
+    // Pressure factors (0-22 points) - increased max for trend bonuses
+    const pressure = current.main.pressure * 0.02953;
+    let pressureScore = 0;
+    let pressureDetails = '';
+    let pressureRating = 'poor';
+    
+    // Base score from pressure range
+    if (pressure >= 30.00 && pressure <= 30.20) {
+        pressureScore = 14;
+        pressureDetails = `${pressure.toFixed(2)} inHg (Stable range)`;
+        pressureRating = 'good';
+    } else if (pressure >= 29.90 && pressure <= 30.30) {
+        pressureScore = 11;
+        pressureDetails = `${pressure.toFixed(2)} inHg (Good stability)`;
+        pressureRating = 'good';
+    } else if (pressure >= 29.80 && pressure <= 30.40) {
+        pressureScore = 8;
+        pressureDetails = `${pressure.toFixed(2)} inHg (Moderate pressure)`;
+        pressureRating = 'fair';
+    } else if (pressure >= 29.50 && pressure <= 30.70) {
+        pressureScore = 4;
+        pressureDetails = `${pressure.toFixed(2)} inHg (Variable pressure)`;
+        pressureRating = 'fair';
+    } else {
+        pressureScore = 2;
+        pressureDetails = `${pressure.toFixed(2)} inHg (Extreme pressure)`;
+        pressureRating = 'poor';
+    }
+    
+    // Apply major trend bonuses/penalties for pressure (+/- 8 points max)
+    let pressureTrendBonus = 0;
+    if (pressureTrend.trend === 'falling') {
+        // Falling pressure is excellent for fishing
+        const fallRate = Math.abs(pressureTrend.rateInHg);
+        if (fallRate > 0.05) {
+            pressureTrendBonus = 8; // Rapidly falling - excellent!
+            pressureRating = 'excellent';
+        } else if (fallRate > 0.02) {
+            pressureTrendBonus = 6; // Falling - very good
+            pressureRating = 'excellent';
+        } else {
+            pressureTrendBonus = 4; // Slowly falling - good
+            pressureRating = 'good';
+        }
+    } else if (pressureTrend.trend === 'rising') {
+        // Rising pressure is poor for fishing
+        const riseRate = Math.abs(pressureTrend.rateInHg);
+        if (riseRate > 0.05) {
+            pressureTrendBonus = -4; // Rapidly rising - poor
+        } else if (riseRate > 0.02) {
+            pressureTrendBonus = -2; // Rising - fair
+        } else {
+            pressureTrendBonus = -1; // Slowly rising - slight negative
+        }
+    } else {
+        // Stable pressure
+        pressureTrendBonus = 1; // Stable is better than rising
+    }
+    
+    pressureScore = Math.max(0, Math.min(22, pressureScore + pressureTrendBonus));
+    pressureDetails += ` - ${pressureTrend.description}`;
+    
+    breakdown.pressure.score = pressureScore;
+    breakdown.pressure.details = pressureDetails;
+    breakdown.pressure.rating = pressureRating;
+    score += pressureScore;
     
     // Wind factors (0-17 points)
     const windSpeed = current.wind.speed;
@@ -1206,7 +1548,11 @@ async function findNearestUSGSWaterData(lat, lon) {
                     
                     // Update water temperature history with historical data
                     if (waterTempData.historical && waterTempData.historical.length > 0) {
-                        waterTemperatureHistory = waterTempData.historical;
+                        // Transform historical data to match expected format (time -> timestamp)
+                        waterTemperatureHistory = waterTempData.historical.map(item => ({
+                            timestamp: item.time,
+                            value: item.value
+                        }));
                         console.log(`Updated water temperature history with ${waterTemperatureHistory.length} historical readings`);
                         
                         // Update the chart
@@ -1255,7 +1601,11 @@ async function findNearestUSGSWaterData(lat, lon) {
                     
                     // Update water temperature history with historical data
                     if (waterTempData.historical && waterTempData.historical.length > 0) {
-                        waterTemperatureHistory = waterTempData.historical;
+                        // Transform historical data to match expected format (time -> timestamp)
+                        waterTemperatureHistory = waterTempData.historical.map(item => ({
+                            timestamp: item.time,
+                            value: item.value
+                        }));
                         console.log(`Updated water temperature history with ${waterTemperatureHistory.length} historical readings`);
                         
                         // Update the chart
@@ -1562,13 +1912,10 @@ async function fetchWaterTemperatureHistoricalData(siteNo) {
                 
                 // Process all values to create historical data
                 const historicalData = [];
-                const processedDays = new Set();
+                const dailyReadings = new Map(); // Group by day
                 
-                // Sample data every 6 hours to avoid too many points
-                const sampleInterval = Math.max(1, Math.floor(values.length / 20)); // Max 20 points
-                
-                for (let i = 0; i < values.length; i += sampleInterval) {
-                    const reading = values[i];
+                // First, group all readings by day
+                for (const reading of values) {
                     const tempValue = parseFloat(reading.value);
                     
                     // Convert to Fahrenheit if needed
@@ -1587,21 +1934,48 @@ async function fetchWaterTemperatureHistoricalData(siteNo) {
                     }
                     
                     const timestamp = new Date(reading.dateTime);
-                    
-                    // Avoid duplicate entries for the same day
                     const dayKey = timestamp.toDateString();
-                    if (processedDays.has(dayKey)) {
-                        continue;
-                    }
-                    processedDays.add(dayKey);
                     
-                    historicalData.push({
+                    if (!dailyReadings.has(dayKey)) {
+                        dailyReadings.set(dayKey, []);
+                    }
+                    
+                    dailyReadings.get(dayKey).push({
                         time: timestamp,
                         value: tempF,
                         temperature_f: tempF,
                         temperature_c: tempC,
                         datetime: reading.dateTime
                     });
+                }
+                
+                // Now select 2-3 representative readings from each day (morning, afternoon, evening)
+                for (const [dayKey, dayReadings] of dailyReadings) {
+                    if (dayReadings.length === 0) continue;
+                    
+                    // Sort readings by time for this day
+                    dayReadings.sort((a, b) => a.time - b.time);
+                    
+                    if (dayReadings.length === 1) {
+                        // Only one reading for this day
+                        historicalData.push(dayReadings[0]);
+                    } else if (dayReadings.length <= 3) {
+                        // Few readings, take all
+                        historicalData.push(...dayReadings);
+                    } else {
+                        // Multiple readings, take 2-3 representative ones
+                        const indices = [
+                            0, // First reading (morning)
+                            Math.floor(dayReadings.length / 2), // Middle (afternoon)
+                            dayReadings.length - 1 // Last reading (evening)
+                        ];
+                        
+                        indices.forEach(index => {
+                            if (dayReadings[index]) {
+                                historicalData.push(dayReadings[index]);
+                            }
+                        });
+                    }
                 }
                 
                 // Sort by time
@@ -1845,6 +2219,26 @@ function updateWaterTemperatureDisplay() {
         
         console.log(`Water temperature estimated: ${estimatedTemp}°F (no USGS data available)`);
     }
+    
+    // Update the water temperature source toggle button text
+    updateWaterTempSourceToggleText();
+}
+
+// Update the water temperature source toggle button text
+function updateWaterTempSourceToggleText() {
+    const toggleTextElement = document.querySelector('.water-temp-toggle .toggle-text');
+    
+    if (currentWaterBody && currentWaterBody.site_name) {
+        // Show the current source name (truncated if too long)
+        const siteName = currentWaterBody.site_name;
+        const shortName = siteName.length > 25 ? siteName.substring(0, 25) + '...' : siteName;
+        toggleTextElement.textContent = shortName;
+        toggleTextElement.title = siteName; // Full name in tooltip
+    } else {
+        // Show default text when no specific source is selected
+        toggleTextElement.textContent = 'Water Temperature Data Source';
+        toggleTextElement.title = 'Select a water temperature data source';
+    }
 }
 
 function updateNearbyWaterBodiesDisplay() {
@@ -1919,7 +2313,11 @@ function updateNearbyWaterBodiesDisplay() {
                         
                         // Update water temperature history with historical data
                         if (waterTempData.historical && waterTempData.historical.length > 0) {
-                            waterTemperatureHistory = waterTempData.historical;
+                            // Transform historical data to match expected format (time -> timestamp)
+                            waterTemperatureHistory = waterTempData.historical.map(item => ({
+                                timestamp: item.time,
+                                value: item.value
+                            }));
                             console.log(`Updated water temperature history with ${waterTemperatureHistory.length} historical readings`);
                             
                             // Update the chart
@@ -1974,6 +2372,9 @@ function updateNearbyWaterBodiesDisplay() {
             </div>
         `;
     }
+    
+    // Update the toggle button text to reflect current state
+    updateWaterTempSourceToggleText();
 }
 
 function getTimeAgo(date) {
@@ -2063,7 +2464,7 @@ function updatePressureChart() {
     }
     
     // Draw pressure trend line
-    drawLineChart(ctx, pressureHistory, canvas.width, canvas.height, '#1e40af');
+    drawLineChart(ctx, pressureHistory, canvas.width, canvas.height, '#1e40af', 'inHg');
 }
 
 function updateTemperatureChart() {
@@ -2359,10 +2760,15 @@ function drawTemperatureRangeChart(ctx, data, width, height, color) {
     }
 }
 
-function drawLineChart(ctx, data, width, height, color) {
-    const padding = 50; // Increased padding for labels
-    const chartWidth = width - 2 * padding;
-    const chartHeight = height - 2 * padding;
+function drawLineChart(ctx, data, width, height, color, units = '°F') {
+    // Adjust padding based on units - pressure labels need more space
+    const leftPadding = units === 'inHg' ? 80 : 50;
+    const rightPadding = 50;
+    const topPadding = 50;
+    const bottomPadding = 50;
+    
+    const chartWidth = width - leftPadding - rightPadding;
+    const chartHeight = height - topPadding - bottomPadding;
     
     // Get min and max values with some padding
     const values = data.map(item => item.value);
@@ -2385,19 +2791,19 @@ function drawLineChart(ctx, data, width, height, color) {
     
     // Horizontal grid lines (5 lines)
     for (let i = 0; i <= 4; i++) {
-        const y = padding + (i / 4) * chartHeight;
+        const y = topPadding + (i / 4) * chartHeight;
         ctx.beginPath();
-        ctx.moveTo(padding, y);
-        ctx.lineTo(width - padding, y);
+        ctx.moveTo(leftPadding, y);
+        ctx.lineTo(width - rightPadding, y);
         ctx.stroke();
     }
     
     // Vertical grid lines (4 lines)
     for (let i = 1; i < 4; i++) {
-        const x = padding + (i / 4) * chartWidth;
+        const x = leftPadding + (i / 4) * chartWidth;
         ctx.beginPath();
-        ctx.moveTo(x, padding);
-        ctx.lineTo(x, height - padding);
+        ctx.moveTo(x, topPadding);
+        ctx.lineTo(x, height - bottomPadding);
         ctx.stroke();
     }
     
@@ -2407,9 +2813,9 @@ function drawLineChart(ctx, data, width, height, color) {
     ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--text-secondary') || '#64748b';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(padding, padding);
-    ctx.lineTo(padding, height - padding);
-    ctx.lineTo(width - padding, height - padding);
+    ctx.moveTo(leftPadding, topPadding);
+    ctx.lineTo(leftPadding, height - bottomPadding);
+    ctx.lineTo(width - rightPadding, height - bottomPadding);
     ctx.stroke();
     
     // Draw value labels (Y-axis)
@@ -2419,10 +2825,16 @@ function drawLineChart(ctx, data, width, height, color) {
     ctx.textBaseline = 'middle';
     
     for (let i = 0; i <= 4; i++) {
-        const y = padding + (i / 4) * chartHeight;
+        const y = topPadding + (i / 4) * chartHeight;
         const value = maxValue - (i / 4) * adjustedRange;
-        const label = value.toFixed(2);
-        ctx.fillText(label, padding - 10, y);
+        // Format values based on units
+        let label;
+        if (units === 'inHg') {
+            label = value.toFixed(2) + ' inHg';
+        } else {
+            label = Math.round(value) + units;
+        }
+        ctx.fillText(label, leftPadding - 10, y);
     }
     
     // Draw time labels (X-axis)
@@ -2432,45 +2844,81 @@ function drawLineChart(ctx, data, width, height, color) {
     
     if (data.length > 1) {
         // For pressure data, show time labels; for daily data, show date labels
-        const showDates = data.length <= 7; // Daily data
+        const showDates = data.length <= 24; // Daily data or multi-day data
         
-        const indices = [0, Math.floor(data.length / 2), data.length - 1];
-        indices.forEach(index => {
-            if (data[index] && data[index].time) {
-                const x = padding + (index / (data.length - 1)) * chartWidth;
-                const time = new Date(data[index].time);
-                let timeLabel;
+        if (showDates && data.length > 5) {
+            // For multi-day data, show up to 5 day labels evenly spaced
+            const uniqueDays = new Map();
+            data.forEach((item, index) => {
+                const timestamp = new Date(item.time || item.timestamp);
+                const dayKey = timestamp.toDateString();
+                if (!uniqueDays.has(dayKey)) {
+                    uniqueDays.set(dayKey, { timestamp, index });
+                }
+            });
+            
+            const dayEntries = Array.from(uniqueDays.values());
+            if (dayEntries.length > 1) {
+                // Show up to 5 day labels evenly distributed
+                const maxLabels = Math.min(5, dayEntries.length);
+                const labelIndices = [];
                 
-                if (showDates) {
-                    timeLabel = time.toLocaleDateString('en-US', { 
+                for (let i = 0; i < maxLabels; i++) {
+                    const dayIndex = Math.floor(i * (dayEntries.length - 1) / (maxLabels - 1));
+                    labelIndices.push(dayEntries[dayIndex].index);
+                }
+                
+                labelIndices.forEach(index => {
+                    const x = leftPadding + (index / (data.length - 1)) * chartWidth;
+                    const time = new Date(data[index].time || data[index].timestamp);
+                    const timeLabel = time.toLocaleDateString('en-US', { 
                         month: 'short', 
                         day: 'numeric' 
                     });
-                } else {
-                    timeLabel = time.toLocaleTimeString('en-US', { 
-                        hour: 'numeric', 
-                        minute: '2-digit',
-                        hour12: true 
-                    });
-                }
-                
-                ctx.fillText(timeLabel, x, height - padding + 10);
+                    
+                    ctx.fillText(timeLabel, x, height - bottomPadding + 10);
+                });
             }
-        });
+        } else {
+            // For hourly data or simple data, show 3 evenly spaced labels
+            const indices = [0, Math.floor(data.length / 2), data.length - 1];
+            indices.forEach(index => {
+                if (data[index] && (data[index].time || data[index].timestamp)) {
+                    const x = leftPadding + (index / (data.length - 1)) * chartWidth;
+                    const time = new Date(data[index].time || data[index].timestamp);
+                    let timeLabel;
+                    
+                    if (showDates) {
+                        timeLabel = time.toLocaleDateString('en-US', { 
+                            month: 'short', 
+                            day: 'numeric' 
+                        });
+                    } else {
+                        timeLabel = time.toLocaleTimeString('en-US', { 
+                            hour: 'numeric', 
+                            minute: '2-digit',
+                            hour12: true 
+                        });
+                    }
+                    
+                    ctx.fillText(timeLabel, x, height - bottomPadding + 10);
+                }
+            });
+        }
     }
     
     // Draw gradient fill under line
-    const gradient = ctx.createLinearGradient(0, padding, 0, height - padding);
+    const gradient = ctx.createLinearGradient(0, topPadding, 0, height - bottomPadding);
     gradient.addColorStop(0, color + '40'); // 25% opacity
     gradient.addColorStop(1, color + '10'); // 6% opacity
     
     ctx.fillStyle = gradient;
     ctx.beginPath();
-    ctx.moveTo(padding, height - padding);
+    ctx.moveTo(leftPadding, height - bottomPadding);
     
     data.forEach((item, index) => {
-        const x = padding + (index / (data.length - 1)) * chartWidth;
-        const y = height - padding - ((item.value - minValue) / adjustedRange) * chartHeight;
+        const x = leftPadding + (index / (data.length - 1)) * chartWidth;
+        const y = height - bottomPadding - ((item.value - minValue) / adjustedRange) * chartHeight;
         
         if (index === 0) {
             ctx.lineTo(x, y);
@@ -2479,7 +2927,7 @@ function drawLineChart(ctx, data, width, height, color) {
         }
     });
     
-    ctx.lineTo(width - padding, height - padding);
+    ctx.lineTo(width - rightPadding, height - bottomPadding);
     ctx.closePath();
     ctx.fill();
     
@@ -2495,8 +2943,8 @@ function drawLineChart(ctx, data, width, height, color) {
     
     ctx.beginPath();
     data.forEach((item, index) => {
-        const x = padding + (index / (data.length - 1)) * chartWidth;
-        const y = height - padding - ((item.value - minValue) / adjustedRange) * chartHeight;
+        const x = leftPadding + (index / (data.length - 1)) * chartWidth;
+        const y = height - bottomPadding - ((item.value - minValue) / adjustedRange) * chartHeight;
         
         if (index === 0) {
             ctx.moveTo(x, y);
@@ -2512,8 +2960,8 @@ function drawLineChart(ctx, data, width, height, color) {
     // Draw data points
     ctx.fillStyle = color;
     data.forEach((item, index) => {
-        const x = padding + (index / (data.length - 1)) * chartWidth;
-        const y = height - padding - ((item.value - minValue) / adjustedRange) * chartHeight;
+        const x = leftPadding + (index / (data.length - 1)) * chartWidth;
+        const y = height - bottomPadding - ((item.value - minValue) / adjustedRange) * chartHeight;
         
         // Draw point with white border
         ctx.beginPath();
@@ -2529,8 +2977,8 @@ function drawLineChart(ctx, data, width, height, color) {
     // Highlight current value (last point)
     if (data.length > 0) {
         const lastItem = data[data.length - 1];
-        const x = padding + chartWidth;
-        const y = height - padding - ((lastItem.value - minValue) / adjustedRange) * chartHeight;
+        const x = leftPadding + chartWidth;
+        const y = height - bottomPadding - ((lastItem.value - minValue) / adjustedRange) * chartHeight;
         
         // Draw larger highlighted point
         ctx.beginPath();
@@ -2546,7 +2994,15 @@ function drawLineChart(ctx, data, width, height, color) {
         ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText(lastItem.value.toFixed(2), x + 15, y);
+        
+        // Format current value based on units
+        let currentValueLabel;
+        if (units === 'inHg') {
+            currentValueLabel = lastItem.value.toFixed(2) + ' inHg';
+        } else {
+            currentValueLabel = Math.round(lastItem.value) + units;
+        }
+        ctx.fillText(currentValueLabel, x + 15, y);
     }
 }
 
@@ -3382,7 +3838,18 @@ function loadStoredData() {
     
     if (storedPressure) pressureHistory = storedPressure;
     if (storedTemperature) temperatureHistory = storedTemperature;
-    if (storedWaterTemperature) waterTemperatureHistory = storedWaterTemperature;
+    if (storedWaterTemperature) {
+        // Migrate old data format if needed (time -> timestamp)
+        waterTemperatureHistory = storedWaterTemperature.map(item => {
+            if (item.time && !item.timestamp) {
+                return {
+                    timestamp: item.time,
+                    value: item.value
+                };
+            }
+            return item;
+        });
+    }
     if (storedRecentLocations) recentLocations = storedRecentLocations;
     if (storedCurrentLocation) {
         currentLocation = storedCurrentLocation;
@@ -3413,6 +3880,9 @@ function loadStoredData() {
     
     // Display recent locations
     displayRecentLocations();
+    
+    // Initialize the water temperature source toggle text
+    updateWaterTempSourceToggleText();
 }
 
 // Periodic Data Updates
@@ -3438,4 +3908,4 @@ window.addEventListener('online', () => {
 
 window.addEventListener('offline', () => {
     console.log('App is offline');
-}); 
+});
