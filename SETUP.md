@@ -1,6 +1,6 @@
-# Hows the Bite Setup Guide
+# How's the Bite Setup Guide
 
-This guide will help you set up Hows the Bite locally for development or personal use.
+This guide will help you set up How's the Bite locally for development or personal use.
 
 ## Prerequisites
 

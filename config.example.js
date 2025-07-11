@@ -1,4 +1,4 @@
-// Configuration file for Hows the Bite
+// Configuration file for How's the Bite
 // Copy this file to config.js and add your actual API keys
 
 const CONFIG = {
