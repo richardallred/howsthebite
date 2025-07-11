@@ -556,8 +556,60 @@ body {
     height: 4px;
 }
 
+/* Water Temperature Data Source Section */
+.water-temp-source-section {
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+}
+
+.water-temp-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    background: var(--bg-secondary);
+    border: 1px solid var(--primary-color);
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.water-temp-toggle:hover {
+    background: var(--primary-color);
+    color: white;
+    transform: translateY(-1px);
+}
+
+.water-temp-toggle .material-icons {
+    font-size: 1.2rem;
+}
+
+.water-temp-toggle .toggle-icon {
+    margin-left: auto;
+    transition: transform 0.3s ease;
+}
+
+.water-temp-toggle[aria-expanded="true"] .toggle-icon {
+    transform: rotate(180deg);
+}
+
+.water-temp-toggle:focus {
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(59, 130, 246, 0.25);
+}
+
+/* Collapse transition */
+.collapse {
+    transition: all 0.3s ease;
+}
+
 .water-body-selection {
     margin-top: 1rem;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .water-body-selection .water-bodies-list {
@@ -565,6 +617,8 @@ body {
     border: 1px solid var(--border-color);
     border-radius: 12px;
     overflow: hidden;
+    max-height: 300px;
+    overflow-y: auto;
 }
 
 .water-body-selection .water-bodies-list h3 {
@@ -575,10 +629,13 @@ body {
     font-size: 1rem;
     font-weight: 600;
     border-bottom: 1px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
 .water-body-selection .water-body-item {
-    padding: 1rem;
+    padding: 0.75rem 1rem;
     border-bottom: 1px solid var(--border-color);
     cursor: pointer;
     transition: all 0.3s ease;
@@ -606,15 +663,19 @@ body {
     font-weight: 600;
     color: var(--text-primary);
     margin-bottom: 0.25rem;
+    font-size: 0.9rem;
 }
 
 .water-body-selection .water-body-details {
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     color: var(--text-secondary);
 }
 
 .water-body-selection .active-indicator {
     display: none;
+    font-size: 0.8rem;
+    color: var(--primary-color);
+    font-weight: 600;
 }
 
 .water-body-selection .water-body-item.active .active-indicator {
@@ -625,11 +686,12 @@ body {
     background: var(--primary-color);
     color: white;
     border: none;
-    padding: 0.5rem 1rem;
+    padding: 0.4rem 0.8rem;
     border-radius: 6px;
     cursor: pointer;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     transition: all 0.3s ease;
+    font-weight: 500;
 }
 
 .water-body-selection .select-water-body-btn:hover {
@@ -653,17 +715,17 @@ body {
 }
 
 .water-body-selection .no-water-bodies-icon {
-    font-size: 3rem;
+    font-size: 2.5rem;
     margin-bottom: 1rem;
 }
 
 .water-body-selection .no-water-bodies-text {
-    font-size: 1.1rem;
+    font-size: 1rem;
     margin-bottom: 0.5rem;
 }
 
 .water-body-selection .no-water-bodies-subtext {
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     opacity: 0.8;
 }
 
@@ -2111,4 +2173,133 @@ body {
   html, body, .app-container, .main-content, body > * {
     -webkit-overflow-scrolling: touch;
   }
+} 
+
+/* Mobile responsive adjustments for new layout */
+@media (max-width: 768px) {
+    .water-temp-source-section {
+        margin-top: 0.75rem;
+        margin-bottom: 0.75rem;
+    }
+    
+    .water-temp-toggle {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.9rem;
+    }
+    
+    .water-temp-toggle .material-icons {
+        font-size: 1.1rem;
+    }
+    
+    .water-temp-toggle .toggle-text {
+        font-size: 0.9rem;
+    }
+    
+    .water-body-selection .water-bodies-list {
+        max-height: 250px;
+    }
+    
+    .water-body-selection .water-bodies-list h3 {
+        padding: 0.75rem;
+        font-size: 0.9rem;
+    }
+    
+    .water-body-selection .water-body-item {
+        padding: 0.6rem 0.75rem;
+    }
+    
+    .water-body-selection .water-body-name {
+        font-size: 0.85rem;
+    }
+    
+    .water-body-selection .water-body-details {
+        font-size: 0.75rem;
+    }
+    
+    .water-body-selection .select-water-body-btn {
+        padding: 0.35rem 0.6rem;
+        font-size: 0.75rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .water-temp-toggle {
+        padding: 0.35rem 0.6rem;
+        font-size: 0.8rem;
+    }
+    
+    .water-temp-toggle .material-icons {
+        font-size: 1rem;
+    }
+    
+    .water-temp-toggle .toggle-text {
+        font-size: 0.8rem;
+    }
+    
+    .water-body-selection .water-bodies-list {
+        max-height: 200px;
+    }
+    
+    .water-body-selection .water-bodies-list h3 {
+        padding: 0.6rem;
+        font-size: 0.85rem;
+    }
+    
+    .water-body-selection .water-body-item {
+        padding: 0.5rem 0.6rem;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    
+    .water-body-selection .water-body-name {
+        font-size: 0.8rem;
+    }
+    
+    .water-body-selection .water-body-details {
+        font-size: 0.7rem;
+    }
+    
+    .water-body-selection .select-water-body-btn {
+        padding: 0.3rem 0.5rem;
+        font-size: 0.7rem;
+        align-self: flex-end;
+    }
+}
+
+/* Dark mode adjustments for new elements */
+.dark-mode .water-temp-toggle {
+    background: var(--bg-secondary);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.dark-mode .water-temp-toggle:hover {
+    background: var(--primary-color);
+    color: white;
+}
+
+.dark-mode .water-body-selection .water-bodies-list {
+    background: var(--card-bg);
+    border-color: var(--border-color);
+}
+
+.dark-mode .water-body-selection .water-bodies-list h3 {
+    background: var(--water-body-header-bg);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+.dark-mode .water-body-selection .water-body-item {
+    background: var(--card-bg);
+    border-color: var(--border-color);
+}
+
+.dark-mode .water-body-selection .water-body-item:hover {
+    background: var(--water-body-item-hover);
+}
+
+.dark-mode .water-body-selection .water-body-item.active {
+    background: var(--water-body-item-active);
+    border-left-color: var(--primary-color);
 } 
