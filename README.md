@@ -1,4 +1,4 @@
-# 🎣 How's the Bite - Fishing Conditions App
+# 🎣 How's the Bite? - Fishing Conditions App
 
 A Progressive Web App (PWA) designed to help anglers check fishing conditions and find out how the bite is on local freshwater bodies like lakes and rivers.
 

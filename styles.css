@@ -874,6 +874,14 @@ body {
     color: var(--active-text);
 }
 
+.water-body-selection .water-body-item.active .water-body-name {
+    color: var(--active-text);
+}
+
+.water-body-selection .water-body-item.active .water-body-details {
+    color: rgba(255, 255, 255, 0.9);
+}
+
 .water-body-selection .water-body-name {
     font-weight: 600;
     color: var(--text-primary);
@@ -1009,12 +1017,131 @@ body {
     width: 100%;
 }
 
-/* Conditions Grid */
-.conditions-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: var(--spacing-md);
+/* Score and Conditions Row */
+.score-conditions-row {
+    display: flex;
+    gap: var(--spacing-lg);
     margin-bottom: var(--spacing-lg);
+    align-items: flex-start;
+}
+
+/* Hero Fishing Score */
+.hero-score-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+    color: white;
+    position: relative;
+    min-height: 120px;
+    flex: 0 0 280px;
+    min-width: 280px;
+}
+
+.hero-score {
+    text-align: center;
+    flex: 1;
+}
+
+.hero-score-value {
+    font-size: 4rem;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: var(--spacing-xs);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.hero-score-label {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: var(--spacing-xs);
+    opacity: 0.9;
+}
+
+.hero-score-description {
+    font-size: 1rem;
+    opacity: 0.8;
+}
+
+.score-expand-btn {
+    position: absolute;
+    top: var(--spacing-md);
+    right: var(--spacing-md);
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    backdrop-filter: blur(10px);
+}
+
+.score-expand-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.1);
+}
+
+.score-expand-btn .material-icons {
+    font-size: 24px;
+    transition: transform var(--transition-normal);
+}
+
+.score-expand-btn[aria-expanded="true"] .material-icons {
+    transform: rotate(180deg);
+}
+
+/* Detailed Breakdown */
+.detailed-breakdown {
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+    border: 1px solid var(--border-primary);
+    transition: all var(--transition-normal);
+}
+
+.detailed-breakdown.show {
+    display: block;
+}
+
+.detailed-breakdown .breakdown-header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-md);
+    font-size: 1.1rem;
+}
+
+/* Conditions Section */
+.conditions-section {
+    flex: 1;
+    min-width: 0;
+}
+
+.conditions-title {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-md);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+/* Unified Conditions Grid */
+.unified-conditions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--spacing-sm);
 }
 
 .condition-item {
@@ -1026,6 +1153,90 @@ body {
     align-items: center;
     gap: var(--spacing-md);
     transition: all var(--transition-normal);
+    position: relative;
+    cursor: help;
+}
+
+.condition-item:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--card-shadow-hover);
+    border-color: var(--border-hover);
+}
+
+.condition-item.environmental {
+    border-left: 4px solid var(--primary-color);
+}
+
+.condition-item.score-factor {
+    border-left: 4px solid #f59e0b;
+    background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+}
+
+.condition-score {
+    position: absolute;
+    top: var(--spacing-xs);
+    right: var(--spacing-xs);
+    background: var(--primary-color);
+    color: white;
+    border-radius: var(--radius-sm);
+    padding: 2px 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    min-width: 24px;
+    text-align: center;
+    transition: all var(--transition-normal);
+}
+
+.condition-score.excellent {
+    background: var(--score-excellent-bg);
+}
+
+.condition-score.good {
+    background: var(--score-good-bg);
+}
+
+.condition-score.fair {
+    background: var(--score-fair-bg);
+}
+
+.condition-score.poor {
+    background: var(--score-poor-bg);
+}
+
+/* Tooltip Styles */
+.condition-item[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--text-primary);
+    color: var(--bg-secondary);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    white-space: nowrap;
+    z-index: var(--z-tooltip);
+    margin-bottom: 8px;
+    box-shadow: var(--card-shadow);
+    max-width: 300px;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.4;
+    pointer-events: none;
+}
+
+.condition-item[data-tooltip]:hover::before {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: var(--text-primary);
+    z-index: var(--z-tooltip);
+    margin-bottom: 3px;
+    pointer-events: none;
 }
 
 .condition-icon {
@@ -1161,6 +1372,59 @@ body {
     align-items: center;
     font-weight: 600;
     color: var(--text-primary);
+}
+
+/* Mobile Responsive Styles for New Layout */
+@media (max-width: 768px) {
+    .score-conditions-row {
+        flex-direction: column;
+        gap: var(--spacing-md);
+    }
+    
+    .hero-score-container {
+        flex: none;
+        min-width: unset;
+        width: 100%;
+    }
+    
+    .hero-score-value {
+        font-size: 3rem;
+    }
+    
+    .hero-score-label {
+        font-size: 1rem;
+    }
+    
+    .hero-score-description {
+        font-size: 0.9rem;
+    }
+    
+    .conditions-title {
+        font-size: 1.2rem;
+        margin-bottom: var(--spacing-sm);
+    }
+    
+    .unified-conditions-grid {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: var(--spacing-sm);
+    }
+    
+    .condition-item {
+        padding: var(--spacing-sm);
+    }
+    
+    .condition-value {
+        font-size: 1rem;
+    }
+    
+    .condition-label {
+        font-size: 0.8rem;
+    }
+    
+    .condition-score {
+        font-size: 0.7rem;
+        padding: 1px 4px;
+    }
 }
 
 /* Forecast */
@@ -2017,6 +2281,37 @@ body {
     }
 }
 
+/* Water temperature data indicators */
+.temp-data-icon {
+    font-size: 1.2rem !important;
+    margin-right: var(--spacing-sm);
+    vertical-align: middle;
+}
+
+.temp-data-icon.available {
+    color: #10b981; /* Green for available data */
+}
+
+.temp-data-icon.unavailable {
+    color: #f59e0b; /* Orange for estimated data */
+}
+
+.water-body-item.has-temp-data {
+    border-left: 4px solid #10b981;
+}
+
+.water-body-item.no-temp-data {
+    border-left: 4px solid #f59e0b;
+}
+
+.water-body-item.has-temp-data.active {
+    border-left-color: var(--active-text);
+}
+
+.water-body-item.no-temp-data.active {
+    border-left-color: var(--active-text);
+}
+
 /* Dark mode adjustments for water temperature section */
 .dark-mode .water-temp-toggle {
     background: var(--bg-secondary);
@@ -2053,4 +2348,12 @@ body {
     background: var(--primary-color);
     border-color: var(--primary-color);
     color: var(--active-text);
+}
+
+.dark-mode .water-body-selection .water-body-item.active .water-body-name {
+    color: var(--active-text);
+}
+
+.dark-mode .water-body-selection .water-body-item.active .water-body-details {
+    color: rgba(255, 255, 255, 0.9);
 } 

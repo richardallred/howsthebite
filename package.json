@@ -18,7 +18,7 @@
     "water-temperature",
     "fishing-conditions"
   ],
-  "author": "How's the Bite Developer",
+  "author": "How's the Bite? Developer",
   "license": "MIT",
   "devDependencies": {
     "http-server": "^14.1.1"
