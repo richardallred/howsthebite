@@ -1,6 +1,6 @@
 {
-  "name": "How's the Bite - Fishing Conditions App",
-  "short_name": "How's the Bite",
+  "name": "How's the Bite? - Fishing Conditions App",
+  "short_name": "How's the Bite?",
   "description": "Check fishing conditions and find out how the bite is on local water bodies with weather, pressure trends, and water data",
   "start_url": "/",
   "display": "standalone",

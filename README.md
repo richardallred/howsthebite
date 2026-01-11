@@ -1,4 +1,4 @@
-# 🎣 How's the Bite - Fishing Conditions App
+# 🎣 How's the Bite? - Fishing Conditions App
 
 A Progressive Web App (PWA) designed to help anglers check fishing conditions and find out how the bite is on local freshwater bodies like lakes and rivers.
 
@@ -98,30 +98,32 @@ hows-the-bite/
 Our intelligent algorithm considers 6 key environmental factors that affect fish activity:
 
 1. **Water Temperature (20 points)** - The most important factor
-   - Optimal: 65-75°F (20 points)
-   - Very Good: 58-78°F (16 points) 
-   - Good: 50-85°F (12 points)
-   - Fair: 45-90°F (6 points)
-   - Poor: Below 40°F or above 95°F (0-2 points)
+   - Peak performance around 70°F with excellent range 65-75°F
+   - Fish become less active as temperatures move away from optimal range
+   - Very good: 58-78°F | Good: 50-85°F | Fair: 45-90°F
 
 2. **Barometric Pressure (18 points)** - Affects fish feeding behavior
-   - Optimal: 30.00-30.20 inHg (rising pressure)
-   - Stable pressure conditions are preferred over rapidly changing pressure
+   - Stable pressure (30.00-30.20 inHg) promotes active feeding
+   - Fish become cautious during rapid pressure changes
+   - Extreme pressure fluctuations can shut down feeding
 
 3. **Wind Speed (17 points)** - Influences water surface and oxygen levels
-   - Optimal: 5-15 mph (good surface agitation)
-   - Light winds acceptable, avoid very high winds
+   - 8-12 mph provides ideal surface action and oxygen mixing
+   - Light winds (5-15 mph) create good fishing conditions
+   - Too calm: fish can see lines easily | Too windy: casting becomes difficult
 
 4. **Air Temperature (15 points)** - Overall comfort and seasonal patterns
-   - Considers optimal ranges for different seasons
+   - Ideal comfort range 65-75°F for extended fishing sessions
+   - Extreme heat or cold affects both angler and fish behavior
 
 5. **Weather Conditions (15 points)** - Sky conditions and precipitation
-   - Clear to partly cloudy preferred
-   - Light rain can be good, storms reduce score
+   - Clear to partly cloudy skies are preferred
+   - Light rain can stimulate feeding, storms shut it down
+   - Stable conditions generally outperform rapidly changing weather
 
 6. **Moon Phase (15 points)** - Lunar influence on fish activity
-   - New moon and full moon periods score highest
-   - Quarter moons score moderately
+   - New and full moons typically provide best feeding periods
+   - Quarter moons often result in reduced activity
 
 ### Smart Location System
 - **State Selection Required**: Ensures relevant and accurate search results

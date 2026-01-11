@@ -24,25 +24,12 @@ let currentWaterBody = null;
 let selectedState = null;
 let selectedWaterType = null;
 let isWaterDataLoading = false;
+let isUsingEstimatedWaterTemp = false;
 
-// DOM Elements
-const locationBtn = document.getElementById('locationBtn');
-const themeToggleBtn = document.getElementById('themeToggleBtn');
-const installBanner = document.getElementById('installBanner');
-const installBtn = document.getElementById('installBtn');
-const bannerClose = document.getElementById('bannerClose');
-const navBtns = document.querySelectorAll('.nav-btn');
-const locationName = document.getElementById('locationName');
-const locationCoords = document.getElementById('locationCoords');
-const locationSearch = document.getElementById('locationSearch');
-const searchBtn = document.getElementById('searchBtn');
-const searchResults = document.getElementById('searchResults');
-const recentLocationsDiv = document.getElementById('recentLocations');
-const breakdownContent = document.getElementById('breakdownContent');
-const moonPhaseElement = document.getElementById('moonPhase');
-const moonIconElement = document.getElementById('moonIcon');
-const stateSelector = document.getElementById('stateSelector');
-const waterTypeSelector = document.getElementById('waterTypeSelector');
+// DOM Elements - will be initialized when DOM is ready
+let locationBtn, themeToggleBtn, installBanner, installBtn, bannerClose, navBtns;
+let locationName, locationCoords, locationSearch, searchBtn, searchResults, recentLocationsDiv;
+let breakdownContent, moonPhaseElement, moonIconElement, stateSelector, waterTypeSelector;
 
 // Initialize App
 document.addEventListener('DOMContentLoaded', () => {
@@ -60,10 +47,35 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
     
+    initializeDOMElements();
     initializeApp();
     setupEventListeners();
     registerServiceWorker();
 });
+
+// Initialize DOM Elements
+function initializeDOMElements() {
+    locationBtn = document.getElementById('locationBtn');
+    themeToggleBtn = document.getElementById('themeToggleBtn');
+    installBanner = document.getElementById('installBanner');
+    installBtn = document.getElementById('installBtn');
+    bannerClose = document.getElementById('bannerClose');
+    navBtns = document.querySelectorAll('.nav-btn');
+    locationName = document.getElementById('locationName');
+    locationCoords = document.getElementById('locationCoords');
+    locationSearch = document.getElementById('locationSearch');
+    searchBtn = document.getElementById('searchBtn');
+    searchResults = document.getElementById('searchResults');
+    recentLocationsDiv = document.getElementById('recentLocations');
+    breakdownContent = document.getElementById('breakdownContent');
+    moonPhaseElement = document.getElementById('moonPhase');
+    moonIconElement = document.getElementById('moonIcon');
+    stateSelector = document.getElementById('stateSelector');
+    waterTypeSelector = document.getElementById('waterTypeSelector');
+    
+    // Debug: Check if theme toggle button is found
+    console.log('Theme toggle button found:', themeToggleBtn);
+}
 
 // Initialize Application
 function initializeApp() {
@@ -124,27 +136,65 @@ function initializeApp() {
 
 // Event Listeners
 function setupEventListeners() {
-    locationBtn.addEventListener('click', getLocation);
-    themeToggleBtn.addEventListener('click', toggleTheme);
-    installBtn.addEventListener('click', installApp);
-    bannerClose.addEventListener('click', closeBanner);
+    // Add null checks and logging for debugging
+    if (locationBtn) {
+        locationBtn.addEventListener('click', getLocation);
+    } else {
+        console.error('locationBtn not found');
+    }
+    
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', toggleTheme);
+        console.log('Theme toggle event listener added successfully');
+    } else {
+        console.error('themeToggleBtn not found');
+    }
+    
+    if (installBtn) {
+        installBtn.addEventListener('click', installApp);
+    } else {
+        console.error('installBtn not found');
+    }
+    
+    if (bannerClose) {
+        bannerClose.addEventListener('click', closeBanner);
+    } else {
+        console.error('bannerClose not found');
+    }
     
     // State Selector
-    stateSelector.addEventListener('change', handleStateChange);
+    if (stateSelector) {
+        stateSelector.addEventListener('change', handleStateChange);
+    } else {
+        console.error('stateSelector not found');
+    }
     
     // Water Type Selector
-    waterTypeSelector.addEventListener('change', handleWaterTypeChange);
+    if (waterTypeSelector) {
+        waterTypeSelector.addEventListener('change', handleWaterTypeChange);
+    } else {
+        console.error('waterTypeSelector not found');
+    }
     
     // Location Search
-    searchBtn.addEventListener('click', performSearch);
-    locationSearch.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            performSearch();
-        }
-    });
+    if (searchBtn) {
+        searchBtn.addEventListener('click', performSearch);
+    } else {
+        console.error('searchBtn not found');
+    }
     
-    // Location Search Input
-    locationSearch.addEventListener('input', debounce(handleSearchInput, 300));
+    if (locationSearch) {
+        locationSearch.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                performSearch();
+            }
+        });
+        
+        // Location Search Input
+        locationSearch.addEventListener('input', debounce(handleSearchInput, 300));
+    } else {
+        console.error('locationSearch not found');
+    }
     
     // Click outside to close search results
     document.addEventListener('click', (e) => {
@@ -184,6 +234,26 @@ function setupEventListeners() {
         // Hide banner if visible
         installBanner.classList.remove('show');
     });
+    
+    // Score expand button
+    const scoreExpandBtn = document.getElementById('scoreExpandBtn');
+    if (scoreExpandBtn) {
+        scoreExpandBtn.addEventListener('click', () => {
+            const detailedBreakdown = document.getElementById('detailedBreakdown');
+            const isExpanded = scoreExpandBtn.getAttribute('aria-expanded') === 'true';
+            
+            if (isExpanded) {
+                detailedBreakdown.classList.remove('show');
+                scoreExpandBtn.setAttribute('aria-expanded', 'false');
+            } else {
+                detailedBreakdown.classList.add('show');
+                scoreExpandBtn.setAttribute('aria-expanded', 'true');
+            }
+        });
+        
+        // Initialize expand button state
+        scoreExpandBtn.setAttribute('aria-expanded', 'false');
+    }
 }
 
 // Theme Management
@@ -212,27 +282,41 @@ function initializeTheme() {
 }
 
 function toggleTheme() {
-    const isDark = document.body.classList.contains('dark-mode');
+    console.log('toggleTheme called');
+    const isDark = document.documentElement.classList.contains('dark-mode');
+    console.log('Current theme is dark:', isDark);
     
     if (isDark) {
+        console.log('Switching to light mode');
         disableDarkMode();
     } else {
+        console.log('Switching to dark mode');
         enableDarkMode();
     }
 }
 
 function enableDarkMode() {
-    document.body.classList.add('dark-mode');
+    document.documentElement.classList.add('dark-mode');
     themeToggleBtn.classList.add('dark-active');
     themeToggleBtn.querySelector('.theme-icon').textContent = 'light_mode';
     saveToStorage('theme', 'dark');
+    
+    // Redraw charts with new theme colors
+    updatePressureChart();
+    updateTemperatureChart();
+    updateWaterTemperatureChart();
 }
 
 function disableDarkMode() {
-    document.body.classList.remove('dark-mode');
+    document.documentElement.classList.remove('dark-mode');
     themeToggleBtn.classList.remove('dark-active');
     themeToggleBtn.querySelector('.theme-icon').textContent = 'dark_mode';
     saveToStorage('theme', 'light');
+    
+    // Redraw charts with new theme colors
+    updatePressureChart();
+    updateTemperatureChart();
+    updateWaterTemperatureChart();
 }
 
 // Loading Indicators
@@ -267,6 +351,12 @@ function hideWaterDataLoading() {
     if (waterTypeSelector) {
         waterTypeSelector.disabled = false;
         waterTypeSelector.style.opacity = '1';
+    }
+    
+    // Clear loading pulse animation from water temperature element
+    const waterTempElement = document.getElementById('waterTemp');
+    if (waterTempElement) {
+        waterTempElement.classList.remove('loading-pulse');
     }
 }
 
@@ -353,22 +443,12 @@ function setSelectedState(stateCode) {
 
 function updateSearchPlaceholder() {
     if (!selectedState) {
-        locationSearch.placeholder = 'Search for lakes, rivers, or cities...';
+        locationSearch.placeholder = 'Search for cities...';
         return;
     }
     
     const stateName = getStateName(selectedState);
-    let waterTypeText = '';
-    
-    if (selectedWaterType === 'LK') {
-        waterTypeText = 'lakes';
-    } else if (selectedWaterType === 'ST') {
-        waterTypeText = 'rivers and streams';
-    } else {
-        waterTypeText = 'lakes, rivers, or cities';
-    }
-    
-    locationSearch.placeholder = `Search for ${waterTypeText} in ${stateName}...`;
+    locationSearch.placeholder = `Search for cities in ${stateName}...`;
 }
 
 function handleStateChange() {
@@ -380,6 +460,36 @@ function handleStateChange() {
         // Clear search input and results
         locationSearch.value = '';
         hideSearchResults();
+        
+        // Clear current water body selection data for the new state
+        currentWaterBody = null;
+        usgsWaterData = null;
+        nearbyWaterBodies = [];
+        
+        // Clear water temperature history from previous state
+        waterTemperatureHistory = [];
+        
+        // If we have a current location, re-fetch water bodies for the new state
+        if (currentLocation && currentLocation.lat && currentLocation.lon) {
+            console.log(`State changed to ${newState}, re-fetching water bodies for current location...`);
+            
+            // Show loading indicators
+            showWaterDataLoading();
+            
+            // Re-fetch nearby water bodies with the new state
+            findNearestUSGSWaterData(currentLocation.lat, currentLocation.lon);
+        } else {
+            // No current location set, show water bodies in the state and select closest to geographic center
+            console.log(`State selected: ${newState}, showing water bodies in state and selecting closest to center`);
+            showWaterDataLoading();
+            findDefaultWaterBodyForState(newState);
+        }
+        
+        // Update water temperature display (will show estimated temp while loading)
+        updateWaterTemperatureDisplay();
+        
+        // Recalculate fishing score
+        calculateFishingScore();
     } else {
         // Disable search when no state is selected
         selectedState = null;
@@ -388,18 +498,32 @@ function handleStateChange() {
         updateSearchPlaceholder();
         locationSearch.value = '';
         hideSearchResults();
+        
+        // Clear water body selection when no state is selected
+        currentWaterBody = null;
+        usgsWaterData = null;
+        nearbyWaterBodies = [];
+        waterTemperatureHistory = [];
+        
+        const waterBodySelection = document.getElementById('waterBodySelection');
+        if (waterBodySelection) {
+            waterBodySelection.innerHTML = `
+                <div class="no-water-bodies">
+                    <div class="no-water-bodies-icon">🌊</div>
+                    <div class="no-water-bodies-text">Select a state first</div>
+                    <div class="no-water-bodies-subtext">Water temperature will be estimated from air temperature</div>
+                </div>
+            `;
+        }
+        
+        // Update displays
+        updateWaterTemperatureDisplay();
+        calculateFishingScore();
     }
 }
 
 function handleWaterTypeChange() {
     selectedWaterType = waterTypeSelector.value;
-    
-    // Update the search placeholder
-    updateSearchPlaceholder();
-    
-    // Clear search input and results to encourage new search
-    locationSearch.value = '';
-    hideSearchResults();
     
     // Save selected water type to storage
     saveToStorage('selectedWaterType', selectedWaterType);
@@ -410,12 +534,12 @@ function handleWaterTypeChange() {
     if (currentLocation && currentLocation.lat && currentLocation.lon) {
         console.log('Re-fetching nearby water bodies with new water type filter...');
         
-            // Show loading indicators
-    showWaterDataLoading();
-    
-    // Add loading indicator to water type selector
-    waterTypeSelector.disabled = true;
-    waterTypeSelector.style.opacity = '0.7';
+        // Show loading indicators
+        showWaterDataLoading();
+        
+        // Add loading indicator to water type selector
+        waterTypeSelector.disabled = true;
+        waterTypeSelector.style.opacity = '0.7';
         
         findNearestUSGSWaterData(currentLocation.lat, currentLocation.lon);
     }
@@ -439,6 +563,301 @@ function getStateName(stateCode) {
     };
     
     return stateNames[stateCode] || stateCode;
+}
+
+function estimateWaterTemperatureFromAir() {
+    if (!weatherData || !weatherData.forecast) {
+        console.log('No weather data or forecast available for estimation');
+        return null;
+    }
+    
+    // Check if forecast is an array
+    if (!Array.isArray(weatherData.forecast)) {
+        console.log('Forecast is not an array:', typeof weatherData.forecast, weatherData.forecast);
+        
+        // Try to use current weather data as fallback
+        if (weatherData.main && weatherData.main.temp) {
+            console.log('Using current weather data for estimation');
+            const currentTemp = weatherData.main.temp;
+            const currentMonth = new Date().getMonth();
+            
+            // Apply seasonal adjustment
+            let seasonalOffset = 0;
+            if (currentMonth >= 5 && currentMonth <= 8) { // June-September (summer)
+                seasonalOffset = 2;
+            } else if (currentMonth >= 2 && currentMonth <= 4) { // March-May (spring)
+                seasonalOffset = -3;
+            } else if (currentMonth >= 9 && currentMonth <= 11) { // October-December (fall)
+                seasonalOffset = 1;
+            } else { // December-February (winter)
+                seasonalOffset = -5;
+            }
+            
+            const estimatedWaterTemp = currentTemp - 10 + seasonalOffset;
+            
+            console.log(`Estimated water temperature from current data: ${estimatedWaterTemp.toFixed(1)}°F (from current air temp ${currentTemp.toFixed(1)}°F)`);
+            
+            return {
+                temperature_f: estimatedWaterTemp,
+                temperature_c: (estimatedWaterTemp - 32) * 5 / 9,
+                source: 'estimated_from_current_air',
+                avg_air_temp_f: currentTemp,
+                seasonal_offset: seasonalOffset,
+                days_used: 0
+            };
+        }
+        
+        return null;
+    }
+    
+    // Get the last 5 days of forecast data (high and low temperatures)
+    const forecast = weatherData.forecast.slice(0, 5);
+    
+    if (forecast.length === 0) {
+        return null;
+    }
+    
+    // Calculate average high and low temperatures
+    let totalHigh = 0;
+    let totalLow = 0;
+    let validDays = 0;
+    
+    forecast.forEach(day => {
+        if (day.temp && day.temp.max !== undefined && day.temp.min !== undefined) {
+            totalHigh += day.temp.max;
+            totalLow += day.temp.min;
+            validDays++;
+        }
+    });
+    
+    if (validDays === 0) {
+        return null;
+    }
+    
+    const avgHigh = totalHigh / validDays;
+    const avgLow = totalLow / validDays;
+    const avgAirTemp = (avgHigh + avgLow) / 2;
+    
+    // Water temperature estimation:
+    // - Water is generally 5-15°F cooler than air temperature
+    // - Use 10°F difference as a reasonable middle ground
+    // - Add seasonal adjustment: warmer offset in summer, cooler in winter
+    const currentMonth = new Date().getMonth(); // 0-11
+    let seasonalOffset = 0;
+    
+    // Seasonal adjustments (water retains heat longer in winter, slower to warm in spring)
+    if (currentMonth >= 5 && currentMonth <= 8) { // June-September (summer)
+        seasonalOffset = 2; // Water closer to air temp in summer
+    } else if (currentMonth >= 2 && currentMonth <= 4) { // March-May (spring)
+        seasonalOffset = -3; // Water stays cooler in spring
+    } else if (currentMonth >= 9 && currentMonth <= 11) { // October-December (fall)
+        seasonalOffset = 1; // Water retains some summer heat
+    } else { // December-February (winter)
+        seasonalOffset = -5; // Water much cooler than air in winter
+    }
+    
+    const estimatedWaterTemp = avgAirTemp - 10 + seasonalOffset;
+    
+    console.log(`Estimated water temperature: ${estimatedWaterTemp.toFixed(1)}°F (from avg air temp ${avgAirTemp.toFixed(1)}°F with seasonal offset ${seasonalOffset}°F)`);
+    
+    return {
+        temperature_f: estimatedWaterTemp,
+        temperature_c: (estimatedWaterTemp - 32) * 5 / 9,
+        source: 'estimated_from_air',
+        avg_air_temp_f: avgAirTemp,
+        seasonal_offset: seasonalOffset,
+        days_used: validDays
+    };
+}
+
+function useEstimatedWaterTemperature(site) {
+    console.log(`Using estimated water temperature for ${site.site_name} (no real temperature data available)`);
+    
+    const estimatedTemp = estimateWaterTemperatureFromAir();
+    
+    if (estimatedTemp) {
+        usgsWaterData = {
+            site: site,
+            temperature: {
+                temperature_f: estimatedTemp.temperature_f,
+                temperature_c: estimatedTemp.temperature_c,
+                datetime: new Date().toISOString(),
+                site_no: site.site_no,
+                estimated: true,
+                estimation_details: estimatedTemp
+            }
+        };
+        isUsingEstimatedWaterTemp = true;
+        
+        // Clear water temperature history since we don't have historical data
+        waterTemperatureHistory = [];
+        
+        console.log(`Set estimated water temperature: ${estimatedTemp.temperature_f.toFixed(1)}°F for ${site.site_name}`);
+        
+        // Explicitly update the display with the estimated temperature
+        updateWaterTemperatureDisplay();
+    } else {
+        console.log('Failed to estimate water temperature - no weather data available');
+        usgsWaterData = null;
+        isUsingEstimatedWaterTemp = false;
+        
+        // Update display to show no data available
+        updateWaterTemperatureDisplay();
+    }
+}
+
+function getStateCenterCoordinates(stateCode) {
+    // Approximate geographic centers of each state
+    const stateCenters = {
+        'AL': { lat: 32.7, lon: -86.8 },
+        'AK': { lat: 64.0, lon: -153.0 },
+        'AZ': { lat: 34.2, lon: -111.5 },
+        'AR': { lat: 34.8, lon: -92.2 },
+        'CA': { lat: 37.3, lon: -119.3 },
+        'CO': { lat: 39.0, lon: -105.5 },
+        'CT': { lat: 41.6, lon: -72.7 },
+        'DE': { lat: 39.0, lon: -75.5 },
+        'FL': { lat: 27.7, lon: -81.7 },
+        'GA': { lat: 33.2, lon: -83.4 },
+        'HI': { lat: 21.3, lon: -157.8 },
+        'ID': { lat: 44.3, lon: -114.6 },
+        'IL': { lat: 40.0, lon: -89.2 },
+        'IN': { lat: 39.8, lon: -86.3 },
+        'IA': { lat: 42.0, lon: -93.6 },
+        'KS': { lat: 38.5, lon: -98.4 },
+        'KY': { lat: 37.8, lon: -84.3 },
+        'LA': { lat: 31.0, lon: -92.0 },
+        'ME': { lat: 45.2, lon: -69.2 },
+        'MD': { lat: 39.0, lon: -76.8 },
+        'MA': { lat: 42.3, lon: -71.8 },
+        'MI': { lat: 44.3, lon: -85.6 },
+        'MN': { lat: 46.4, lon: -94.7 },
+        'MS': { lat: 32.7, lon: -89.7 },
+        'MO': { lat: 38.3, lon: -92.4 },
+        'MT': { lat: 47.0, lon: -110.0 },
+        'NE': { lat: 41.5, lon: -99.9 },
+        'NV': { lat: 38.5, lon: -117.0 },
+        'NH': { lat: 43.9, lon: -71.5 },
+        'NJ': { lat: 40.2, lon: -74.7 },
+        'NM': { lat: 34.8, lon: -106.2 },
+        'NY': { lat: 43.0, lon: -75.0 },
+        'NC': { lat: 35.8, lon: -80.8 },
+        'ND': { lat: 47.5, lon: -100.3 },
+        'OH': { lat: 40.4, lon: -82.7 },
+        'OK': { lat: 35.6, lon: -96.9 },
+        'OR': { lat: 44.0, lon: -120.5 },
+        'PA': { lat: 40.3, lon: -77.2 },
+        'RI': { lat: 41.6, lon: -71.5 },
+        'SC': { lat: 33.8, lon: -80.9 },
+        'SD': { lat: 44.3, lon: -100.3 },
+        'TN': { lat: 35.7, lon: -86.0 },
+        'TX': { lat: 31.1, lon: -97.6 },
+        'UT': { lat: 39.3, lon: -111.1 },
+        'VT': { lat: 44.0, lon: -72.7 },
+        'VA': { lat: 37.8, lon: -78.2 },
+        'WA': { lat: 47.4, lon: -121.5 },
+        'WV': { lat: 38.5, lon: -80.9 },
+        'WI': { lat: 44.3, lon: -89.8 },
+        'WY': { lat: 43.1, lon: -107.6 }
+    };
+    
+    return stateCenters[stateCode] || { lat: 39.8, lon: -98.6 }; // Default to center of US
+}
+
+async function findDefaultWaterBodyForState(stateCode) {
+    try {
+        console.log(`Finding default water body for state: ${stateCode}`);
+        
+        // Get the geographic center of the state
+        const stateCenter = getStateCenterCoordinates(stateCode);
+        console.log(`State center coordinates: ${stateCenter.lat}, ${stateCenter.lon}`);
+        
+        // Find water bodies in the state
+        const waterBodies = await findNearbyWaterSites(stateCenter.lat, stateCenter.lon, 500); // Large radius to cover state
+        
+        if (waterBodies.length === 0) {
+            console.log(`No water bodies found in ${stateCode}`);
+            hideWaterDataLoading();
+            
+            const waterBodySelection = document.getElementById('waterBodySelection');
+            if (waterBodySelection) {
+                waterBodySelection.innerHTML = `
+                    <div class="no-water-bodies">
+                        <div class="no-water-bodies-icon">🌊</div>
+                        <div class="no-water-bodies-text">No water bodies found in ${getStateName(stateCode)}</div>
+                        <div class="no-water-bodies-subtext">Water temperature will be estimated from air temperature</div>
+                    </div>
+                `;
+            }
+            return;
+        }
+        
+        // Select the closest water body to the state center (first one is already closest due to sorting)
+        const selectedWaterBody = waterBodies[0];
+        console.log(`Auto-selecting water body: ${selectedWaterBody.site_name} (${selectedWaterBody.distance.toFixed(1)}km from center)`);
+        
+        // Set this as the current water body and location
+        currentWaterBody = selectedWaterBody;
+        currentLocation = {
+            lat: selectedWaterBody.latitude,
+            lon: selectedWaterBody.longitude,
+            name: selectedWaterBody.site_name
+        };
+        
+        // Store all nearby water bodies
+        nearbyWaterBodies = waterBodies;
+        
+        // Fetch water temperature data for the selected site
+        const waterTempData = await fetchWaterTemperatureHistoricalData(selectedWaterBody.site_no);
+        if (waterTempData) {
+            usgsWaterData = {
+                site: selectedWaterBody,
+                temperature: waterTempData.current
+            };
+            
+            // Update water temperature history
+            if (waterTempData.historical && waterTempData.historical.length > 0) {
+                waterTemperatureHistory = waterTempData.historical.map(item => ({
+                    timestamp: item.time,
+                    value: item.value
+                }));
+                console.log(`Updated water temperature history with ${waterTemperatureHistory.length} historical readings`);
+                
+                // Update the chart
+                updateWaterTemperatureChart();
+                
+                // Save to storage
+                saveToStorage('waterTemperatureHistory', waterTemperatureHistory);
+            }
+        }
+        
+        // Update displays
+        updateLocationDisplay();
+        fetchWeatherData();
+        updateWaterTemperatureDisplay();
+        await updateNearbyWaterBodiesDisplay();
+        updateWaterTempSourceToggleText();
+        
+        // Recalculate fishing score
+        calculateFishingScore();
+        
+        hideWaterDataLoading();
+        
+    } catch (error) {
+        console.error('Error finding default water body for state:', error);
+        hideWaterDataLoading();
+        
+        const waterBodySelection = document.getElementById('waterBodySelection');
+        if (waterBodySelection) {
+            waterBodySelection.innerHTML = `
+                <div class="no-water-bodies">
+                    <div class="no-water-bodies-icon">🌊</div>
+                    <div class="no-water-bodies-text">Error loading water bodies</div>
+                    <div class="no-water-bodies-subtext">Water temperature will be estimated from air temperature</div>
+                </div>
+            `;
+        }
+    }
 }
 
 // Location Services
@@ -907,6 +1326,132 @@ function updateTemperatureData() {
     updateTemperatureChart();
 }
 
+// Trend Analysis Functions
+function calculateTrend(dataArray, hoursToAnalyze = 6) {
+    if (!dataArray || dataArray.length < 2) {
+        return { trend: 'stable', rate: 0, confidence: 'low' };
+    }
+    
+    // Get recent data points (last N hours)
+    const now = new Date();
+    const cutoffTime = new Date(now.getTime() - hoursToAnalyze * 60 * 60 * 1000);
+    
+    // Filter data to recent time window
+    const recentData = dataArray.filter(item => {
+        const itemTime = new Date(item.timestamp || item.time);
+        return itemTime >= cutoffTime;
+    }).sort((a, b) => new Date(a.timestamp || a.time) - new Date(b.timestamp || b.time));
+    
+    if (recentData.length < 2) {
+        return { trend: 'stable', rate: 0, confidence: 'low' };
+    }
+    
+    // Calculate linear regression to determine trend
+    const n = recentData.length;
+    let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+    
+    recentData.forEach((item, index) => {
+        const x = index; // Time index
+        const y = item.value;
+        sumX += x;
+        sumY += y;
+        sumXY += x * y;
+        sumX2 += x * x;
+    });
+    
+    const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+    const changePerHour = slope * (n / hoursToAnalyze); // Normalize to per-hour change
+    
+    // Determine trend classification
+    const absRate = Math.abs(changePerHour);
+    let trend = 'stable';
+    let confidence = 'low';
+    
+    if (absRate > 0.1) {
+        trend = changePerHour > 0 ? 'rising' : 'falling';
+        confidence = absRate > 0.5 ? 'high' : absRate > 0.2 ? 'medium' : 'low';
+    }
+    
+    return { trend, rate: changePerHour, confidence };
+}
+
+function calculatePressureTrend() {
+    const trend = calculateTrend(pressureHistory, 6);
+    
+    // Convert rate to more meaningful pressure units (inHg per hour)
+    const pressureRateInHg = trend.rate * 0.02953;
+    
+    return {
+        ...trend,
+        rateInHg: pressureRateInHg,
+        description: getPressureTrendDescription(trend.trend, pressureRateInHg, trend.confidence)
+    };
+}
+
+function calculateTemperatureTrend() {
+    const trend = calculateTrend(temperatureHistory, 6);
+    
+    return {
+        ...trend,
+        description: getTemperatureTrendDescription(trend.trend, trend.rate, trend.confidence)
+    };
+}
+
+function calculateWaterTemperatureTrend() {
+    const trend = calculateTrend(waterTemperatureHistory, 12); // Longer window for water temp
+    
+    return {
+        ...trend,
+        description: getWaterTemperatureTrendDescription(trend.trend, trend.rate, trend.confidence)
+    };
+}
+
+function getPressureTrendDescription(trend, rate, confidence) {
+    const absRate = Math.abs(rate);
+    
+    if (trend === 'falling') {
+        if (absRate > 0.05) return 'Rapidly falling (excellent for fishing)';
+        if (absRate > 0.02) return 'Falling (very good for fishing)';
+        return 'Slowly falling (good for fishing)';
+    } else if (trend === 'rising') {
+        if (absRate > 0.05) return 'Rapidly rising (poor for fishing)';
+        if (absRate > 0.02) return 'Rising (fair for fishing)';
+        return 'Slowly rising (fair for fishing)';
+    } else {
+        return 'Stable (average for fishing)';
+    }
+}
+
+function getTemperatureTrendDescription(trend, rate, confidence) {
+    const absRate = Math.abs(rate);
+    
+    if (trend === 'rising') {
+        if (absRate > 2) return 'Rapidly warming (fish adjusting)';
+        if (absRate > 1) return 'Warming (fish becoming active)';
+        return 'Slowly warming (stable activity)';
+    } else if (trend === 'falling') {
+        if (absRate > 2) return 'Rapidly cooling (fish adjusting)';
+        if (absRate > 1) return 'Cooling (fish less active)';
+        return 'Slowly cooling (stable activity)';
+    } else {
+        return 'Stable temperature (consistent conditions)';
+    }
+}
+
+function getWaterTemperatureTrendDescription(trend, rate, confidence) {
+    const absRate = Math.abs(rate);
+    
+    if (trend === 'rising') {
+        if (absRate > 1) return 'Warming (fish may seek cooler areas)';
+        return 'Slowly warming (fish adapting)';
+    } else if (trend === 'falling') {
+        if (absRate > 1) return 'Cooling (fish may become less active)';
+        return 'Slowly cooling (fish adapting)';
+    } else {
+        return 'Stable water temperature (consistent habitat)';
+    }
+}
+
 function calculateFishingScore() {
     if (!weatherData) return;
     
@@ -921,33 +1466,64 @@ function calculateFishingScore() {
         moon: { score: 0, details: '', rating: 'poor' }
     };
     
+    // Calculate trends for temperature and pressure
+    const pressureTrend = calculatePressureTrend();
+    const tempTrend = calculateTemperatureTrend();
+    const waterTempTrend = calculateWaterTemperatureTrend();
+    
+    // Debug: Log trend information
+    console.log('🌡️ Temperature trend:', tempTrend);
+    console.log('💧 Water temperature trend:', waterTempTrend);
+    console.log('📊 Pressure trend:', pressureTrend);
+    
     // Air Temperature factors (0-15 points, reduced to make room for water temp)
     const airTemp = current.main.temp;
+    let airTempScore = 0;
+    let airTempDetails = '';
+    let airTempRating = 'poor';
+    
+    // Base score from temperature range
     if (airTemp >= 65 && airTemp <= 75) {
-        breakdown.airTemperature.score = 15;
-        breakdown.airTemperature.details = `${airTemp.toFixed(1)}°F (Optimal: 65-75°F)`;
-        breakdown.airTemperature.rating = 'excellent';
-        score += 15;
+        airTempScore = 15;
+        airTempDetails = `${airTemp.toFixed(1)}°F (Ideal comfort range)`;
+        airTempRating = 'excellent';
     } else if (airTemp >= 60 && airTemp <= 80) {
-        breakdown.airTemperature.score = 12;
-        breakdown.airTemperature.details = `${airTemp.toFixed(1)}°F (Very Good: 60-80°F)`;
-        breakdown.airTemperature.rating = 'good';
-        score += 12;
+        airTempScore = 12;
+        airTempDetails = `${airTemp.toFixed(1)}°F (Very comfortable)`;
+        airTempRating = 'good';
     } else if (airTemp >= 55 && airTemp <= 85) {
-        breakdown.airTemperature.score = 8;
-        breakdown.airTemperature.details = `${airTemp.toFixed(1)}°F (Good: 55-85°F)`;
-        breakdown.airTemperature.rating = 'good';
-        score += 8;
+        airTempScore = 8;
+        airTempDetails = `${airTemp.toFixed(1)}°F (Good fishing weather)`;
+        airTempRating = 'good';
     } else if (airTemp >= 45 && airTemp <= 95) {
-        breakdown.airTemperature.score = 4;
-        breakdown.airTemperature.details = `${airTemp.toFixed(1)}°F (Fair: 45-95°F)`;
-        breakdown.airTemperature.rating = 'fair';
-        score += 4;
+        airTempScore = 4;
+        airTempDetails = `${airTemp.toFixed(1)}°F (Manageable conditions)`;
+        airTempRating = 'fair';
     } else {
-        breakdown.airTemperature.score = 0;
-        breakdown.airTemperature.details = `${airTemp.toFixed(1)}°F (Poor: outside range)`;
-        breakdown.airTemperature.rating = 'poor';
+        airTempScore = 0;
+        airTempDetails = `${airTemp.toFixed(1)}°F (Extreme temperature)`;
+        airTempRating = 'poor';
     }
+    
+    // Apply trend bonus/penalty (+/- 3 points max)
+    let trendBonus = 0;
+    if (tempTrend.trend === 'stable') {
+        trendBonus = 1; // Stable conditions are good
+    } else if (tempTrend.trend === 'rising' && airTemp < 70) {
+        trendBonus = 2; // Warming up to ideal temps
+    } else if (tempTrend.trend === 'falling' && airTemp > 75) {
+        trendBonus = 2; // Cooling down from hot temps
+    } else if (Math.abs(tempTrend.rate) > 3) {
+        trendBonus = -2; // Rapid temperature changes are disruptive
+    }
+    
+    airTempScore = Math.max(0, Math.min(15, airTempScore + trendBonus));
+    airTempDetails += ` - ${tempTrend.description}`;
+    
+    breakdown.airTemperature.score = airTempScore;
+    breakdown.airTemperature.details = airTempDetails;
+    breakdown.airTemperature.rating = airTempRating;
+    score += airTempScore;
     
     // Water Temperature factors (0-20 points, most important for fishing)
     let waterTemp = null;
@@ -963,90 +1539,154 @@ function calculateFishingScore() {
         isEstimated = true;
     }
     
+    let waterTempScore = 0;
+    let waterTempDetails = '';
+    let waterTempRating = 'poor';
+    
+    // Base score from temperature range
     if (waterTemp >= 65 && waterTemp <= 75) {
-        breakdown.waterTemperature.score = 20;
-        breakdown.waterTemperature.details = `${waterTemp.toFixed(1)}°F (Optimal: 65-75°F)${isEstimated ? ' - estimated' : ''}`;
-        breakdown.waterTemperature.rating = 'excellent';
-        score += 20;
+        waterTempScore = 20;
+        waterTempDetails = `${waterTemp.toFixed(1)}°F (Excellent range - peak around 70°F)`;
+        waterTempRating = 'excellent';
     } else if (waterTemp >= 58 && waterTemp <= 78) {
-        breakdown.waterTemperature.score = 16;
-        breakdown.waterTemperature.details = `${waterTemp.toFixed(1)}°F (Very Good: 58-78°F)${isEstimated ? ' - estimated' : ''}`;
-        breakdown.waterTemperature.rating = 'good';
-        score += 16;
+        waterTempScore = 16;
+        waterTempDetails = `${waterTemp.toFixed(1)}°F (Very good for most fish)`;
+        waterTempRating = 'good';
     } else if (waterTemp >= 50 && waterTemp <= 85) {
-        breakdown.waterTemperature.score = 12;
-        breakdown.waterTemperature.details = `${waterTemp.toFixed(1)}°F (Good: 50-85°F)${isEstimated ? ' - estimated' : ''}`;
-        breakdown.waterTemperature.rating = 'good';
-        score += 12;
+        waterTempScore = 12;
+        waterTempDetails = `${waterTemp.toFixed(1)}°F (Good range - fish active)`;
+        waterTempRating = 'good';
     } else if (waterTemp >= 45 && waterTemp <= 90) {
-        breakdown.waterTemperature.score = 6;
-        breakdown.waterTemperature.details = `${waterTemp.toFixed(1)}°F (Fair: 45-90°F)${isEstimated ? ' - estimated' : ''}`;
-        breakdown.waterTemperature.rating = 'fair';
-        score += 6;
+        waterTempScore = 6;
+        waterTempDetails = `${waterTemp.toFixed(1)}°F (Fair - fish less active)`;
+        waterTempRating = 'fair';
     } else if (waterTemp >= 40 && waterTemp <= 95) {
-        breakdown.waterTemperature.score = 2;
-        breakdown.waterTemperature.details = `${waterTemp.toFixed(1)}°F (Poor: 40-95°F)${isEstimated ? ' - estimated' : ''}`;
-        breakdown.waterTemperature.rating = 'poor';
-        score += 2;
+        waterTempScore = 2;
+        waterTempDetails = `${waterTemp.toFixed(1)}°F (Poor - fish sluggish)`;
+        waterTempRating = 'poor';
     } else {
-        breakdown.waterTemperature.score = 0;
-        breakdown.waterTemperature.details = `${waterTemp.toFixed(1)}°F (Very Poor: outside range)${isEstimated ? ' - estimated' : ''}`;
-        breakdown.waterTemperature.rating = 'poor';
+        waterTempScore = 0;
+        waterTempDetails = `${waterTemp.toFixed(1)}°F (Very poor - fish inactive)`;
+        waterTempRating = 'poor';
     }
     
-    // Pressure factors (0-18 points)
-    const pressure = current.main.pressure * 0.02953;
-    if (pressure >= 30.00 && pressure <= 30.20) {
-        breakdown.pressure.score = 18;
-        breakdown.pressure.details = `${pressure.toFixed(2)} inHg (Optimal: 30.00-30.20)`;
-        breakdown.pressure.rating = 'excellent';
-        score += 18;
-    } else if (pressure >= 29.90 && pressure <= 30.30) {
-        breakdown.pressure.score = 14;
-        breakdown.pressure.details = `${pressure.toFixed(2)} inHg (Very Good: 29.90-30.30)`;
-        breakdown.pressure.rating = 'good';
-        score += 14;
-    } else if (pressure >= 29.80 && pressure <= 30.40) {
-        breakdown.pressure.score = 9;
-        breakdown.pressure.details = `${pressure.toFixed(2)} inHg (Good: 29.80-30.40)`;
-        breakdown.pressure.rating = 'good';
-        score += 9;
-    } else if (pressure >= 29.50 && pressure <= 30.70) {
-        breakdown.pressure.score = 4;
-        breakdown.pressure.details = `${pressure.toFixed(2)} inHg (Fair: 29.50-30.70)`;
-        breakdown.pressure.rating = 'fair';
-        score += 4;
+    // Apply trend bonus/penalty for water temperature (+/- 4 points max)
+    let waterTempTrendBonus = 0;
+    if (!isEstimated) {
+        // Only apply trend analysis for real water temperature data
+        if (waterTempTrend.trend === 'stable') {
+            waterTempTrendBonus = 2; // Stable water temp is ideal
+        } else if (waterTempTrend.trend === 'rising' && waterTemp < 65) {
+            waterTempTrendBonus = 3; // Warming up to ideal range
+        } else if (waterTempTrend.trend === 'falling' && waterTemp > 75) {
+            waterTempTrendBonus = 3; // Cooling down from hot temps
+        } else if (Math.abs(waterTempTrend.rate) > 2) {
+            waterTempTrendBonus = -2; // Rapid changes disrupt fish
+        }
+        
+        waterTempScore = Math.max(0, Math.min(20, waterTempScore + waterTempTrendBonus));
+        waterTempDetails += ` - ${waterTempTrend.description}`;
     } else {
-        breakdown.pressure.score = 0;
-        breakdown.pressure.details = `${pressure.toFixed(2)} inHg (Poor: outside range)`;
-        breakdown.pressure.rating = 'poor';
+        waterTempDetails += ' - estimated';
     }
+    
+    breakdown.waterTemperature.score = waterTempScore;
+    breakdown.waterTemperature.details = waterTempDetails;
+    breakdown.waterTemperature.rating = waterTempRating;
+    score += waterTempScore;
+    
+    // Pressure factors (0-22 points) - increased max for trend bonuses
+    const pressure = current.main.pressure * 0.02953;
+    let pressureScore = 0;
+    let pressureDetails = '';
+    let pressureRating = 'poor';
+    
+    // Base score from pressure range
+    if (pressure >= 30.00 && pressure <= 30.20) {
+        pressureScore = 14;
+        pressureDetails = `${pressure.toFixed(2)} inHg (Stable range)`;
+        pressureRating = 'good';
+    } else if (pressure >= 29.90 && pressure <= 30.30) {
+        pressureScore = 11;
+        pressureDetails = `${pressure.toFixed(2)} inHg (Good stability)`;
+        pressureRating = 'good';
+    } else if (pressure >= 29.80 && pressure <= 30.40) {
+        pressureScore = 8;
+        pressureDetails = `${pressure.toFixed(2)} inHg (Moderate pressure)`;
+        pressureRating = 'fair';
+    } else if (pressure >= 29.50 && pressure <= 30.70) {
+        pressureScore = 4;
+        pressureDetails = `${pressure.toFixed(2)} inHg (Variable pressure)`;
+        pressureRating = 'fair';
+    } else {
+        pressureScore = 2;
+        pressureDetails = `${pressure.toFixed(2)} inHg (Extreme pressure)`;
+        pressureRating = 'poor';
+    }
+    
+    // Apply major trend bonuses/penalties for pressure (+/- 8 points max)
+    let pressureTrendBonus = 0;
+    if (pressureTrend.trend === 'falling') {
+        // Falling pressure is excellent for fishing
+        const fallRate = Math.abs(pressureTrend.rateInHg);
+        if (fallRate > 0.05) {
+            pressureTrendBonus = 8; // Rapidly falling - excellent!
+            pressureRating = 'excellent';
+        } else if (fallRate > 0.02) {
+            pressureTrendBonus = 6; // Falling - very good
+            pressureRating = 'excellent';
+        } else {
+            pressureTrendBonus = 4; // Slowly falling - good
+            pressureRating = 'good';
+        }
+    } else if (pressureTrend.trend === 'rising') {
+        // Rising pressure is poor for fishing
+        const riseRate = Math.abs(pressureTrend.rateInHg);
+        if (riseRate > 0.05) {
+            pressureTrendBonus = -4; // Rapidly rising - poor
+        } else if (riseRate > 0.02) {
+            pressureTrendBonus = -2; // Rising - fair
+        } else {
+            pressureTrendBonus = -1; // Slowly rising - slight negative
+        }
+    } else {
+        // Stable pressure
+        pressureTrendBonus = 1; // Stable is better than rising
+    }
+    
+    pressureScore = Math.max(0, Math.min(22, pressureScore + pressureTrendBonus));
+    pressureDetails += ` - ${pressureTrend.description}`;
+    
+    breakdown.pressure.score = pressureScore;
+    breakdown.pressure.details = pressureDetails;
+    breakdown.pressure.rating = pressureRating;
+    score += pressureScore;
     
     // Wind factors (0-17 points)
     const windSpeed = current.wind.speed;
     if (windSpeed >= 8 && windSpeed <= 12) {
         breakdown.wind.score = 17;
-        breakdown.wind.details = `${windSpeed.toFixed(1)} mph (Optimal: 8-12 mph)`;
+        breakdown.wind.details = `${windSpeed.toFixed(1)} mph (Perfect - good surface action)`;
         breakdown.wind.rating = 'excellent';
         score += 17;
     } else if (windSpeed >= 5 && windSpeed <= 15) {
         breakdown.wind.score = 13;
-        breakdown.wind.details = `${windSpeed.toFixed(1)} mph (Very Good: 5-15 mph)`;
+        breakdown.wind.details = `${windSpeed.toFixed(1)} mph (Good - surface movement)`;
         breakdown.wind.rating = 'good';
         score += 13;
     } else if (windSpeed >= 3 && windSpeed <= 20) {
         breakdown.wind.score = 8;
-        breakdown.wind.details = `${windSpeed.toFixed(1)} mph (Good: 3-20 mph)`;
+        breakdown.wind.details = `${windSpeed.toFixed(1)} mph (Decent - manageable conditions)`;
         breakdown.wind.rating = 'good';
         score += 8;
     } else if ((windSpeed >= 1 && windSpeed < 3) || (windSpeed > 20 && windSpeed <= 25)) {
         breakdown.wind.score = 4;
-        breakdown.wind.details = `${windSpeed.toFixed(1)} mph (Fair: light or strong winds)`;
+        breakdown.wind.details = `${windSpeed.toFixed(1)} mph (${windSpeed < 3 ? 'Too calm - fish see lines' : 'Strong - tough casting'})`;
         breakdown.wind.rating = 'fair';
         score += 4;
     } else {
         breakdown.wind.score = 0;
-        breakdown.wind.details = `${windSpeed.toFixed(1)} mph (Poor: too calm or too windy)`;
+        breakdown.wind.details = `${windSpeed.toFixed(1)} mph (${windSpeed <= 1 ? 'Dead calm - spooky fish' : 'Too windy - unsafe'})`;
         breakdown.wind.rating = 'poor';
     }
     
@@ -1113,8 +1753,127 @@ function calculateFishingScore() {
     // Update score color
     updateScoreColor(score);
     
+    // Update individual condition scores in the unified grid
+    updateConditionScores(breakdown);
+    
     // Update breakdown display
     updateBreakdownContent(breakdown, score);
+}
+
+// Update individual condition scores in the unified grid
+function updateConditionScores(breakdown) {
+    // Helper function to get score class
+    const getScoreClass = (rating) => {
+        switch (rating) {
+            case 'excellent': return 'excellent';
+            case 'good': return 'good';
+            case 'fair': return 'fair';
+            default: return 'poor';
+        }
+    };
+    
+    // Update environmental condition scores
+    updateScoreElement('tempScore', breakdown.airTemperature.score, breakdown.airTemperature.rating);
+    updateScoreElement('waterTempScore', breakdown.waterTemperature.score, breakdown.waterTemperature.rating);
+    updateScoreElement('pressureScore', breakdown.pressure.score, breakdown.pressure.rating);
+    updateScoreElement('windScore', breakdown.wind.score, breakdown.wind.rating);
+    updateScoreElement('moonScore', breakdown.moon.score, breakdown.moon.rating);
+    
+    // Update trend scores (calculated separately)
+    updateTrendScores();
+}
+
+function updateScoreElement(elementId, score, rating) {
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.textContent = score;
+        element.className = `condition-score ${rating}`;
+    }
+}
+
+function updateTrendScores() {
+    // Calculate and display trend scores
+    const pressureTrend = calculatePressureTrend();
+    const tempTrend = calculateTemperatureTrend();
+    const waterTempTrend = calculateWaterTemperatureTrend();
+    
+    // Update pressure trend display and score
+    const pressureTrendElement = document.getElementById('pressureTrend');
+    const pressureTrendScoreElement = document.getElementById('pressureTrendScore');
+    if (pressureTrendElement && pressureTrendScoreElement) {
+        pressureTrendElement.textContent = pressureTrend.trend === 'falling' ? '↓ Falling' : 
+                                         pressureTrend.trend === 'rising' ? '↑ Rising' : '→ Stable';
+        
+        // Calculate trend score (0-10 scale)
+        let trendScore = 5; // Base neutral score
+        let trendRating = 'fair';
+        
+        if (pressureTrend.trend === 'falling') {
+            trendScore = Math.min(10, 5 + Math.abs(pressureTrend.rateInHg) * 100);
+            trendRating = 'excellent';
+        } else if (pressureTrend.trend === 'rising') {
+            trendScore = Math.max(0, 5 - Math.abs(pressureTrend.rateInHg) * 50);
+            trendRating = 'poor';
+        } else {
+            trendScore = 6;
+            trendRating = 'good';
+        }
+        
+        pressureTrendScoreElement.textContent = Math.round(trendScore);
+        pressureTrendScoreElement.className = `condition-score ${trendRating}`;
+    }
+    
+    // Update air temperature trend display and score
+    const airTempTrendElement = document.getElementById('airTempTrend');
+    const airTempTrendScoreElement = document.getElementById('airTempTrendScore');
+    if (airTempTrendElement && airTempTrendScoreElement) {
+        airTempTrendElement.textContent = tempTrend.trend === 'rising' ? '↑ Warming' : 
+                                        tempTrend.trend === 'falling' ? '↓ Cooling' : '→ Stable';
+        
+        // Calculate air temp trend score (0-8 scale)
+        let tempScore = 4;
+        let tempRating = 'fair';
+        
+        if (tempTrend.trend === 'stable') {
+            tempScore = 6;
+            tempRating = 'good';
+        } else if (Math.abs(tempTrend.rate) < 2) {
+            tempScore = 5;
+            tempRating = 'good';
+        } else {
+            tempScore = 2;
+            tempRating = 'poor';
+        }
+        
+        airTempTrendScoreElement.textContent = Math.round(tempScore);
+        airTempTrendScoreElement.className = `condition-score ${tempRating}`;
+    }
+    
+    // Update water temperature trend display and score
+    const waterTempTrendElement = document.getElementById('waterTempTrend');
+    const waterTempTrendScoreElement = document.getElementById('waterTempTrendScore');
+    if (waterTempTrendElement && waterTempTrendScoreElement) {
+        waterTempTrendElement.textContent = waterTempTrend.trend === 'rising' ? '↑ Warming' : 
+                                          waterTempTrend.trend === 'falling' ? '↓ Cooling' : '→ Stable';
+        
+        // Calculate water temp trend score (0-8 scale)
+        let waterScore = 4;
+        let waterRating = 'fair';
+        
+        if (waterTempTrend.trend === 'stable') {
+            waterScore = 7;
+            waterRating = 'excellent';
+        } else if (Math.abs(waterTempTrend.rate) < 1) {
+            waterScore = 5;
+            waterRating = 'good';
+        } else {
+            waterScore = 2;
+            waterRating = 'poor';
+        }
+        
+        waterTempTrendScoreElement.textContent = Math.round(waterScore);
+        waterTempTrendScoreElement.className = `condition-score ${waterRating}`;
+    }
 }
 
 // USGS Water Data API Functions
@@ -1142,7 +1901,10 @@ async function fetchUSGSWaterData() {
                 
                 // Update water temperature history with historical data
                 if (waterTempData.historical && waterTempData.historical.length > 0) {
-                    waterTemperatureHistory = waterTempData.historical;
+                    waterTemperatureHistory = waterTempData.historical.map(item => ({
+                        timestamp: item.time,
+                        value: item.value
+                    }));
                     console.log(`Updated water temperature history with ${waterTemperatureHistory.length} historical readings`);
                     
                     // Update the chart
@@ -1154,7 +1916,7 @@ async function fetchUSGSWaterData() {
                 
                 // Update the UI to use USGS data
                 updateWaterTemperatureDisplay();
-                updateNearbyWaterBodiesDisplay();
+                await updateNearbyWaterBodiesDisplay();
             }
         }
     } catch (error) {
@@ -1206,7 +1968,11 @@ async function findNearestUSGSWaterData(lat, lon) {
                     
                     // Update water temperature history with historical data
                     if (waterTempData.historical && waterTempData.historical.length > 0) {
-                        waterTemperatureHistory = waterTempData.historical;
+                        // Transform historical data to match expected format (time -> timestamp)
+                        waterTemperatureHistory = waterTempData.historical.map(item => ({
+                            timestamp: item.time,
+                            value: item.value
+                        }));
                         console.log(`Updated water temperature history with ${waterTemperatureHistory.length} historical readings`);
                         
                         // Update the chart
@@ -1221,7 +1987,7 @@ async function findNearestUSGSWaterData(lat, lon) {
                     
                     // Update nearby water bodies list to include this site
                     nearbyWaterBodies = nearbyWaterSites;
-                    updateNearbyWaterBodiesDisplay();
+                    await updateNearbyWaterBodiesDisplay();
                     
                     // Recalculate fishing score with new water temperature data
                     calculateFishingScore();
@@ -1255,7 +2021,11 @@ async function findNearestUSGSWaterData(lat, lon) {
                     
                     // Update water temperature history with historical data
                     if (waterTempData.historical && waterTempData.historical.length > 0) {
-                        waterTemperatureHistory = waterTempData.historical;
+                        // Transform historical data to match expected format (time -> timestamp)
+                        waterTemperatureHistory = waterTempData.historical.map(item => ({
+                            timestamp: item.time,
+                            value: item.value
+                        }));
                         console.log(`Updated water temperature history with ${waterTemperatureHistory.length} historical readings`);
                         
                         // Update the chart
@@ -1270,7 +2040,7 @@ async function findNearestUSGSWaterData(lat, lon) {
                     
                     // Update nearby water bodies list to include this site
                     nearbyWaterBodies = nearbyWaterSites;
-                    updateNearbyWaterBodiesDisplay();
+                    await updateNearbyWaterBodiesDisplay();
                     
                     // Recalculate fishing score with new water temperature data
                     calculateFishingScore();
@@ -1287,7 +2057,7 @@ async function findNearestUSGSWaterData(lat, lon) {
         
         // Still update the nearby water bodies list even if no temperature data
         nearbyWaterBodies = nearbyWaterSites;
-        updateNearbyWaterBodiesDisplay();
+        await updateNearbyWaterBodiesDisplay();
         
         // Clear loading state and show estimated temperature
         hideWaterDataLoading();
@@ -1562,13 +2332,10 @@ async function fetchWaterTemperatureHistoricalData(siteNo) {
                 
                 // Process all values to create historical data
                 const historicalData = [];
-                const processedDays = new Set();
+                const dailyReadings = new Map(); // Group by day
                 
-                // Sample data every 6 hours to avoid too many points
-                const sampleInterval = Math.max(1, Math.floor(values.length / 20)); // Max 20 points
-                
-                for (let i = 0; i < values.length; i += sampleInterval) {
-                    const reading = values[i];
+                // First, group all readings by day
+                for (const reading of values) {
                     const tempValue = parseFloat(reading.value);
                     
                     // Convert to Fahrenheit if needed
@@ -1587,21 +2354,48 @@ async function fetchWaterTemperatureHistoricalData(siteNo) {
                     }
                     
                     const timestamp = new Date(reading.dateTime);
-                    
-                    // Avoid duplicate entries for the same day
                     const dayKey = timestamp.toDateString();
-                    if (processedDays.has(dayKey)) {
-                        continue;
-                    }
-                    processedDays.add(dayKey);
                     
-                    historicalData.push({
+                    if (!dailyReadings.has(dayKey)) {
+                        dailyReadings.set(dayKey, []);
+                    }
+                    
+                    dailyReadings.get(dayKey).push({
                         time: timestamp,
                         value: tempF,
                         temperature_f: tempF,
                         temperature_c: tempC,
                         datetime: reading.dateTime
                     });
+                }
+                
+                // Now select 2-3 representative readings from each day (morning, afternoon, evening)
+                for (const [dayKey, dayReadings] of dailyReadings) {
+                    if (dayReadings.length === 0) continue;
+                    
+                    // Sort readings by time for this day
+                    dayReadings.sort((a, b) => a.time - b.time);
+                    
+                    if (dayReadings.length === 1) {
+                        // Only one reading for this day
+                        historicalData.push(dayReadings[0]);
+                    } else if (dayReadings.length <= 3) {
+                        // Few readings, take all
+                        historicalData.push(...dayReadings);
+                    } else {
+                        // Multiple readings, take 2-3 representative ones
+                        const indices = [
+                            0, // First reading (morning)
+                            Math.floor(dayReadings.length / 2), // Middle (afternoon)
+                            dayReadings.length - 1 // Last reading (evening)
+                        ];
+                        
+                        indices.forEach(index => {
+                            if (dayReadings[index]) {
+                                historicalData.push(dayReadings[index]);
+                            }
+                        });
+                    }
                 }
                 
                 // Sort by time
@@ -1753,13 +2547,67 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 }
 
 function getFishingDescription(score) {
-    if (score >= 85) return 'Exceptional fishing conditions!';
-    if (score >= 70) return 'Excellent fishing weather';
-    if (score >= 55) return 'Good fishing conditions';
-    if (score >= 40) return 'Fair conditions';
-    if (score >= 25) return 'Poor conditions';
-    if (score >= 10) return 'Very poor conditions';
-    return 'Terrible conditions';
+    // Define bite description words for different score ranges
+    const biteDescriptions = {
+        exceptional: [
+            'absolutely legendary', 'insanely hot', 'completely bonkers', 'off the charts', 
+            'absolutely electric', 'totally insane', 'completely mental', 'absolutely wicked',
+            'ridiculously hot', 'completely nuts', 'absolutely bananas', 'totally lit'
+        ],
+        excellent: [
+            'absolutely stellar', 'incredibly hot', 'super active', 'really cooking', 
+            'totally dialed in', 'completely locked in', 'absolutely crushing', 'really cranking',
+            'super charged', 'totally fired up', 'absolutely pumping', 'really rolling'
+        ],
+        good: [
+            'pretty solid', 'fairly active', 'quite decent', 'reasonably good', 
+            'looking promising', 'holding steady', 'pretty consistent', 'fairly reliable',
+            'quite encouraging', 'reasonably active', 'pretty hopeful', 'fairly positive'
+        ],
+        fair: [
+            'somewhat mixed', 'kinda spotty', 'pretty hit or miss', 'a bit unpredictable',
+            'sorta iffy', 'somewhat inconsistent', 'kinda up and down', 'a bit scattered',
+            'pretty variable', 'somewhat temperamental', 'kinda moody', 'a bit finicky'
+        ],
+        poor: [
+            'pretty slow', 'quite tough', 'rather challenging', 'pretty sluggish',
+            'quite difficult', 'pretty stubborn', 'rather uncooperative', 'quite picky',
+            'pretty finicky', 'rather selective', 'quite hesitant', 'pretty reluctant'
+        ],
+        verypoor: [
+            'really tough', 'extremely challenging', 'pretty brutal', 'quite miserable',
+            'really stubborn', 'extremely difficult', 'pretty unforgiving', 'quite punishing',
+            'really harsh', 'extremely tough', 'pretty merciless', 'quite ruthless'
+        ],
+        terrible: [
+            'absolutely brutal', 'completely dead', 'totally lifeless', 'utterly hopeless',
+            'completely shut down', 'absolutely terrible', 'totally awful', 'completely dreadful',
+            'absolutely miserable', 'totally dismal', 'completely pathetic', 'utterly depressing'
+        ]
+    };
+    
+    let descriptions;
+    if (score >= 85) {
+        descriptions = biteDescriptions.exceptional;
+    } else if (score >= 70) {
+        descriptions = biteDescriptions.excellent;
+    } else if (score >= 55) {
+        descriptions = biteDescriptions.good;
+    } else if (score >= 40) {
+        descriptions = biteDescriptions.fair;
+    } else if (score >= 25) {
+        descriptions = biteDescriptions.poor;
+    } else if (score >= 10) {
+        descriptions = biteDescriptions.verypoor;
+    } else {
+        descriptions = biteDescriptions.terrible;
+    }
+    
+    // Randomly select a description from the appropriate array
+    const randomIndex = Math.floor(Math.random() * descriptions.length);
+    const selectedDescription = descriptions[randomIndex];
+    
+    return `The bite is ${selectedDescription}`;
 }
 
 function updateScoreColor(score) {
@@ -1803,6 +2651,10 @@ function getScoreGradientColors(score) {
 function updateWaterTemperatureDisplay() {
     const waterTempElement = document.getElementById('waterTemp');
     
+    console.log('updateWaterTemperatureDisplay called');
+    console.log('usgsWaterData:', usgsWaterData);
+    console.log('isWaterDataLoading:', isWaterDataLoading);
+    
     if (usgsWaterData && usgsWaterData.temperature) {
         const temp = usgsWaterData.temperature;
         const tempText = `${Math.round(temp.temperature_f)}°F`;
@@ -1812,25 +2664,46 @@ function updateWaterTemperatureDisplay() {
         
         waterTempElement.textContent = tempText;
         
-        // Create detailed tooltip showing source and distance
-        let tooltipText = `From ${usgsWaterData.site.site_name} - ${timeAgo}`;
-        if (distance && distance > 0) {
-            tooltipText += ` (${distance.toFixed(1)} km away)`;
+        if (temp.estimated) {
+            // This is estimated temperature
+            const estimationDetails = temp.estimation_details;
+            let tooltipText = `Estimated from 5-day average air temperature`;
+            if (estimationDetails) {
+                tooltipText += ` (avg: ${estimationDetails.avg_air_temp_f.toFixed(1)}°F, seasonal offset: ${estimationDetails.seasonal_offset}°F)`;
+            }
+            tooltipText += ` - ${usgsWaterData.site.site_name}`;
+            if (distance && distance > 0) {
+                tooltipText += ` (${distance.toFixed(1)} km away)`;
+            }
+            waterTempElement.title = tooltipText;
+            
+            // Style for estimated temperature
+            waterTempElement.style.color = '#f59e0b'; // Amber/orange for estimated
+            waterTempElement.style.fontWeight = 'bold';
+            waterTempElement.classList.remove('loading-pulse');
+            
+            console.log(`Water temperature estimated: ${tempText} for ${usgsWaterData.site.site_name}${distance > 0 ? ` (${distance.toFixed(1)} km away)` : ''}`);
+        } else {
+            // This is real USGS data
+            let tooltipText = `From ${usgsWaterData.site.site_name} - ${timeAgo}`;
+            if (distance && distance > 0) {
+                tooltipText += ` (${distance.toFixed(1)} km away)`;
+            }
+            waterTempElement.title = tooltipText;
+            
+            // Style for real USGS data
+            waterTempElement.style.color = '#10b981'; // Green for real data
+            waterTempElement.style.fontWeight = 'bold';
+            waterTempElement.classList.remove('loading-pulse');
+            
+            // Update water temperature history
+            updateWaterTemperatureHistory(temp.temperature_f);
+            
+            console.log(`Water temperature updated: ${tempText} from ${usgsWaterData.site.site_name}${distance > 0 ? ` (${distance.toFixed(1)} km away)` : ''}`);
         }
-        waterTempElement.title = tooltipText;
-        
-        // Add indicator that this is real USGS data
-        waterTempElement.style.color = '#10b981';
-        waterTempElement.style.fontWeight = 'bold';
-        waterTempElement.classList.remove('loading-pulse');
         
         // Clear loading state
         hideWaterDataLoading();
-        
-        // Update water temperature history
-        updateWaterTemperatureHistory(temp.temperature_f);
-        
-        console.log(`Water temperature updated: ${tempText} from ${usgsWaterData.site.site_name}${distance > 0 ? ` (${distance.toFixed(1)} km away)` : ''}`);
     } else if (weatherData && !isWaterDataLoading) {
         // Only show estimated temperature if we're not currently loading USGS data
         const estimatedTemp = Math.round(weatherData.current.main.temp - 5);
@@ -1845,35 +2718,82 @@ function updateWaterTemperatureDisplay() {
         
         console.log(`Water temperature estimated: ${estimatedTemp}°F (no USGS data available)`);
     }
+    
+    // Update the water temperature source toggle button text
+    updateWaterTempSourceToggleText();
 }
 
-function updateNearbyWaterBodiesDisplay() {
+// Update the water temperature source toggle button text
+function updateWaterTempSourceToggleText() {
+    const toggleTextElement = document.querySelector('.water-temp-toggle .toggle-text');
+    
+    if (currentWaterBody && currentWaterBody.site_name) {
+        // Show the current source name (truncated if too long)
+        const siteName = currentWaterBody.site_name;
+        const shortName = siteName.length > 25 ? siteName.substring(0, 25) + '...' : siteName;
+        toggleTextElement.textContent = shortName;
+        toggleTextElement.title = siteName; // Full name in tooltip
+    } else {
+        // Show default text when no specific source is selected
+        toggleTextElement.textContent = 'Water Temperature Data Source';
+        toggleTextElement.title = 'Select a water temperature data source';
+    }
+}
+
+async function updateNearbyWaterBodiesDisplay() {
+    const waterBodySelection = document.getElementById('waterBodySelection');
     const mapContainer = document.querySelector('.map-container');
     
     if (nearbyWaterBodies.length > 0) {
+        // Check water temperature data availability for each site
+        const sitesWithTempStatus = await Promise.all(
+            nearbyWaterBodies.slice(0, 3).map(async (site) => {
+                // Check if we already know the temperature data status
+                if (site.hasWaterTempData === undefined) {
+                    // Quick check for water temperature data availability
+                    try {
+                        const tempData = await fetchWaterTemperatureData(site.site_no);
+                        site.hasWaterTempData = tempData !== null;
+                    } catch (error) {
+                        site.hasWaterTempData = false;
+                    }
+                }
+                return site;
+            })
+        );
+        
         const waterBodiesHTML = `
             <div class="water-bodies-list">
-                <h3>Nearby Water Bodies with Temperature Data</h3>
-                ${nearbyWaterBodies.slice(0, 5).map(site => {
+                <h3>Water Temperature Data Source</h3>
+                ${sitesWithTempStatus.map(site => {
                     const distance = site.distance.toFixed(1);
                     const isActive = currentWaterBody && currentWaterBody.site_no === site.site_no;
+                    const hasWaterTempData = site.hasWaterTempData;
+                    const tempDataIcon = hasWaterTempData 
+                        ? '<span class="material-icons temp-data-icon available" title="Real water temperature data available">sensors</span>' 
+                        : '<span class="material-icons temp-data-icon unavailable" title="No water temperature data - will estimate from air temperature">sensors_off</span>';
+                    const tempDataText = hasWaterTempData ? 'Real water temp data' : 'Estimated water temp';
                     
                     return `
-                        <div class="water-body-item ${isActive ? 'active' : ''}" 
+                        <div class="water-body-item ${isActive ? 'active' : ''} ${hasWaterTempData ? 'has-temp-data' : 'no-temp-data'}" 
                              data-site-no="${site.site_no}" 
                              data-lat="${site.latitude}" 
                              data-lon="${site.longitude}"
-                             data-name="${site.site_name}">
+                             data-name="${site.site_name}"
+                             data-has-temp-data="${hasWaterTempData}">
                             <div class="water-body-info">
-                                <div class="water-body-name">${site.site_name}</div>
+                                <div class="water-body-name">
+                                    ${tempDataIcon}
+                                    ${site.site_name}
+                                </div>
                                 <div class="water-body-details">
-                                    ${site.site_type} • ${distance} km away
-                                    ${isActive ? ' • <span class="active-indicator">Active</span>' : ''}
+                                    ${site.site_type} • ${distance} km away • ${tempDataText}
+                                    ${isActive ? ' • <span class="active-indicator">Current Source</span>' : ''}
                                 </div>
                             </div>
                             <div class="water-body-actions">
                                 <button class="select-water-body-btn" data-site-no="${site.site_no}">
-                                    ${isActive ? 'Current' : 'Select'}
+                                    ${isActive ? 'Active' : 'Use This'}
                                 </button>
                             </div>
                         </div>
@@ -1882,44 +2802,108 @@ function updateNearbyWaterBodiesDisplay() {
             </div>
         `;
         
-        mapContainer.innerHTML = waterBodiesHTML;
+        waterBodySelection.innerHTML = waterBodiesHTML;
+        
+        // Clear the map container and show a simple map placeholder
+        mapContainer.innerHTML = `
+            <div class="map-placeholder">
+                <div class="map-icon">🗺️</div>
+                <div class="map-text">Interactive map coming soon</div>
+                <div class="map-subtext">Currently showing nearest USGS monitoring stations above</div>
+            </div>
+        `;
         
         // Add click handlers for water body selection
-        const selectButtons = mapContainer.querySelectorAll('.select-water-body-btn');
+        const selectButtons = waterBodySelection.querySelectorAll('.select-water-body-btn');
         selectButtons.forEach(button => {
             button.addEventListener('click', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                console.log('Water body button clicked');
                 const siteNo = e.target.dataset.siteNo;
-                const site = nearbyWaterBodies.find(s => s.site_no === siteNo);
+                console.log('Site number:', siteNo, 'Type:', typeof siteNo);
+                console.log('Available sites:', nearbyWaterBodies.map(s => ({ site_no: s.site_no, type: typeof s.site_no })));
+                let site = nearbyWaterBodies.find(s => s.site_no === siteNo);
+                
+                // If not found with exact match, try with string conversion
+                if (!site) {
+                    site = nearbyWaterBodies.find(s => String(s.site_no) === String(siteNo));
+                }
+                
+                // If still not found, try with number conversion
+                if (!site) {
+                    site = nearbyWaterBodies.find(s => Number(s.site_no) === Number(siteNo));
+                }
+                
+                console.log('Found site:', site);
                 
                 if (site) {
+                    console.log('Processing site selection...');
                     // Update current location to this water body
                     currentWaterBody = site;
                     
                     // Show loading indicators
                     showWaterDataLoading();
                     
-                    // Fetch water temperature data for this site
-                    const waterTempData = await fetchWaterTemperatureData(site.site_no);
+                    // Check if this site has water temperature data
+                    const hasWaterTempData = site.hasWaterTempData;
+                    console.log('Site has water temp data:', hasWaterTempData);
                     
-                    if (waterTempData) {
-                        usgsWaterData = {
-                            site: site,
-                            temperature: waterTempData
-                        };
+                    try {
+                        if (hasWaterTempData) {
+                            // Fetch real water temperature data for this site
+                            const waterTempData = await fetchWaterTemperatureHistoricalData(site.site_no);
+                            
+                            if (waterTempData) {
+                                usgsWaterData = {
+                                    site: site,
+                                    temperature: waterTempData.current
+                                };
+                                isUsingEstimatedWaterTemp = false;
+                                
+                                // Update water temperature history with historical data
+                                if (waterTempData.historical && waterTempData.historical.length > 0) {
+                                    // Transform historical data to match expected format (time -> timestamp)
+                                    waterTemperatureHistory = waterTempData.historical.map(item => ({
+                                        timestamp: item.time,
+                                        value: item.value
+                                    }));
+                                    console.log(`Updated water temperature history with ${waterTemperatureHistory.length} historical readings`);
+                                    
+                                    // Update the chart
+                                    updateWaterTemperatureChart();
+                                    
+                                    // Save to storage
+                                    saveToStorage('waterTemperatureHistory', waterTemperatureHistory);
+                                }
+                            } else {
+                                // Failed to get data, fall back to estimation
+                                useEstimatedWaterTemperature(site);
+                            }
+                        } else {
+                            // No water temperature data available, use estimation
+                            useEstimatedWaterTemperature(site);
+                        }
                         
                         // Update displays
+                        hideWaterDataLoading();
                         updateWaterTemperatureDisplay();
-                        updateNearbyWaterBodiesDisplay();
-                    } else {
-                        // Clear loading state if no data found
+                        await updateNearbyWaterBodiesDisplay();
+                        calculateFishingScore();
+                        console.log('Site selection completed');
+                    } catch (error) {
+                        console.error('Error processing site selection:', error);
                         hideWaterDataLoading();
                     }
+                } else {
+                    console.error('Site not found for siteNo:', siteNo);
                 }
             });
         });
         
         // Add click handlers for water body items
-        const waterBodyItems = mapContainer.querySelectorAll('.water-body-item');
+        const waterBodyItems = waterBodySelection.querySelectorAll('.water-body-item');
         waterBodyItems.forEach(item => {
             item.addEventListener('click', (e) => {
                 if (e.target.classList.contains('select-water-body-btn')) return;
@@ -1934,14 +2918,26 @@ function updateNearbyWaterBodiesDisplay() {
             });
         });
     } else {
-        mapContainer.innerHTML = `
+        waterBodySelection.innerHTML = `
             <div class="no-water-bodies">
                 <div class="no-water-bodies-icon">🌊</div>
-                <div class="no-water-bodies-text">No USGS water temperature monitoring sites found in this area</div>
+                <div class="no-water-bodies-text">No USGS monitoring sites found nearby</div>
                 <div class="no-water-bodies-subtext">Water temperature will be estimated from air temperature</div>
             </div>
         `;
+        
+        // Clear the map container and show a simple map placeholder
+        mapContainer.innerHTML = `
+            <div class="map-placeholder">
+                <div class="map-icon">🗺️</div>
+                <div class="map-text">Interactive map coming soon</div>
+                <div class="map-subtext">No nearby monitoring stations to display</div>
+            </div>
+        `;
     }
+    
+    // Update the toggle button text to reflect current state
+    updateWaterTempSourceToggleText();
 }
 
 function getTimeAgo(date) {
@@ -2031,7 +3027,7 @@ function updatePressureChart() {
     }
     
     // Draw pressure trend line
-    drawLineChart(ctx, pressureHistory, canvas.width, canvas.height, '#1e40af');
+    drawLineChart(ctx, pressureHistory, canvas.width, canvas.height, '#1e40af', 'inHg');
 }
 
 function updateTemperatureChart() {
@@ -2107,11 +3103,29 @@ function updateWaterTemperatureChart() {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
+    if (isUsingEstimatedWaterTemp) {
+        // Show disabled state for estimated temperature
+        ctx.fillStyle = '#94a3b8'; // Gray color for disabled state
+        ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        // Draw disabled icon or text
+        ctx.fillText('📊', canvas.width / 2, canvas.height / 2 - 20);
+        ctx.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillText('Chart disabled for estimated temperature', canvas.width / 2, canvas.height / 2 + 5);
+        ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillStyle = '#64748b';
+        ctx.fillText('Historical data not available', canvas.width / 2, canvas.height / 2 + 25);
+        return;
+    }
+    
     if (waterTemperatureHistory.length < 2) {
         // Show placeholder text
         ctx.fillStyle = '#64748b';
-        ctx.font = '14px Arial';
+        ctx.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
         ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
         ctx.fillText('Water temperature data will appear here', canvas.width / 2, canvas.height / 2);
         return;
     }
@@ -2327,10 +3341,15 @@ function drawTemperatureRangeChart(ctx, data, width, height, color) {
     }
 }
 
-function drawLineChart(ctx, data, width, height, color) {
-    const padding = 50; // Increased padding for labels
-    const chartWidth = width - 2 * padding;
-    const chartHeight = height - 2 * padding;
+function drawLineChart(ctx, data, width, height, color, units = '°F') {
+    // Adjust padding based on units - pressure labels need more space
+    const leftPadding = units === 'inHg' ? 80 : 50;
+    const rightPadding = 50;
+    const topPadding = 50;
+    const bottomPadding = 50;
+    
+    const chartWidth = width - leftPadding - rightPadding;
+    const chartHeight = height - topPadding - bottomPadding;
     
     // Get min and max values with some padding
     const values = data.map(item => item.value);
@@ -2353,19 +3372,19 @@ function drawLineChart(ctx, data, width, height, color) {
     
     // Horizontal grid lines (5 lines)
     for (let i = 0; i <= 4; i++) {
-        const y = padding + (i / 4) * chartHeight;
+        const y = topPadding + (i / 4) * chartHeight;
         ctx.beginPath();
-        ctx.moveTo(padding, y);
-        ctx.lineTo(width - padding, y);
+        ctx.moveTo(leftPadding, y);
+        ctx.lineTo(width - rightPadding, y);
         ctx.stroke();
     }
     
     // Vertical grid lines (4 lines)
     for (let i = 1; i < 4; i++) {
-        const x = padding + (i / 4) * chartWidth;
+        const x = leftPadding + (i / 4) * chartWidth;
         ctx.beginPath();
-        ctx.moveTo(x, padding);
-        ctx.lineTo(x, height - padding);
+        ctx.moveTo(x, topPadding);
+        ctx.lineTo(x, height - bottomPadding);
         ctx.stroke();
     }
     
@@ -2375,9 +3394,9 @@ function drawLineChart(ctx, data, width, height, color) {
     ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--text-secondary') || '#64748b';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(padding, padding);
-    ctx.lineTo(padding, height - padding);
-    ctx.lineTo(width - padding, height - padding);
+    ctx.moveTo(leftPadding, topPadding);
+    ctx.lineTo(leftPadding, height - bottomPadding);
+    ctx.lineTo(width - rightPadding, height - bottomPadding);
     ctx.stroke();
     
     // Draw value labels (Y-axis)
@@ -2387,10 +3406,16 @@ function drawLineChart(ctx, data, width, height, color) {
     ctx.textBaseline = 'middle';
     
     for (let i = 0; i <= 4; i++) {
-        const y = padding + (i / 4) * chartHeight;
+        const y = topPadding + (i / 4) * chartHeight;
         const value = maxValue - (i / 4) * adjustedRange;
-        const label = value.toFixed(2);
-        ctx.fillText(label, padding - 10, y);
+        // Format values based on units
+        let label;
+        if (units === 'inHg') {
+            label = value.toFixed(2) + ' inHg';
+        } else {
+            label = Math.round(value) + units;
+        }
+        ctx.fillText(label, leftPadding - 10, y);
     }
     
     // Draw time labels (X-axis)
@@ -2400,45 +3425,81 @@ function drawLineChart(ctx, data, width, height, color) {
     
     if (data.length > 1) {
         // For pressure data, show time labels; for daily data, show date labels
-        const showDates = data.length <= 7; // Daily data
+        const showDates = data.length <= 24; // Daily data or multi-day data
         
-        const indices = [0, Math.floor(data.length / 2), data.length - 1];
-        indices.forEach(index => {
-            if (data[index] && data[index].time) {
-                const x = padding + (index / (data.length - 1)) * chartWidth;
-                const time = new Date(data[index].time);
-                let timeLabel;
+        if (showDates && data.length > 5) {
+            // For multi-day data, show up to 5 day labels evenly spaced
+            const uniqueDays = new Map();
+            data.forEach((item, index) => {
+                const timestamp = new Date(item.time || item.timestamp);
+                const dayKey = timestamp.toDateString();
+                if (!uniqueDays.has(dayKey)) {
+                    uniqueDays.set(dayKey, { timestamp, index });
+                }
+            });
+            
+            const dayEntries = Array.from(uniqueDays.values());
+            if (dayEntries.length > 1) {
+                // Show up to 5 day labels evenly distributed
+                const maxLabels = Math.min(5, dayEntries.length);
+                const labelIndices = [];
                 
-                if (showDates) {
-                    timeLabel = time.toLocaleDateString('en-US', { 
+                for (let i = 0; i < maxLabels; i++) {
+                    const dayIndex = Math.floor(i * (dayEntries.length - 1) / (maxLabels - 1));
+                    labelIndices.push(dayEntries[dayIndex].index);
+                }
+                
+                labelIndices.forEach(index => {
+                    const x = leftPadding + (index / (data.length - 1)) * chartWidth;
+                    const time = new Date(data[index].time || data[index].timestamp);
+                    const timeLabel = time.toLocaleDateString('en-US', { 
                         month: 'short', 
                         day: 'numeric' 
                     });
-                } else {
-                    timeLabel = time.toLocaleTimeString('en-US', { 
-                        hour: 'numeric', 
-                        minute: '2-digit',
-                        hour12: true 
-                    });
-                }
-                
-                ctx.fillText(timeLabel, x, height - padding + 10);
+                    
+                    ctx.fillText(timeLabel, x, height - bottomPadding + 10);
+                });
             }
-        });
+        } else {
+            // For hourly data or simple data, show 3 evenly spaced labels
+            const indices = [0, Math.floor(data.length / 2), data.length - 1];
+            indices.forEach(index => {
+                if (data[index] && (data[index].time || data[index].timestamp)) {
+                    const x = leftPadding + (index / (data.length - 1)) * chartWidth;
+                    const time = new Date(data[index].time || data[index].timestamp);
+                    let timeLabel;
+                    
+                    if (showDates) {
+                        timeLabel = time.toLocaleDateString('en-US', { 
+                            month: 'short', 
+                            day: 'numeric' 
+                        });
+                    } else {
+                        timeLabel = time.toLocaleTimeString('en-US', { 
+                            hour: 'numeric', 
+                            minute: '2-digit',
+                            hour12: true 
+                        });
+                    }
+                    
+                    ctx.fillText(timeLabel, x, height - bottomPadding + 10);
+                }
+            });
+        }
     }
     
     // Draw gradient fill under line
-    const gradient = ctx.createLinearGradient(0, padding, 0, height - padding);
+    const gradient = ctx.createLinearGradient(0, topPadding, 0, height - bottomPadding);
     gradient.addColorStop(0, color + '40'); // 25% opacity
     gradient.addColorStop(1, color + '10'); // 6% opacity
     
     ctx.fillStyle = gradient;
     ctx.beginPath();
-    ctx.moveTo(padding, height - padding);
+    ctx.moveTo(leftPadding, height - bottomPadding);
     
     data.forEach((item, index) => {
-        const x = padding + (index / (data.length - 1)) * chartWidth;
-        const y = height - padding - ((item.value - minValue) / adjustedRange) * chartHeight;
+        const x = leftPadding + (index / (data.length - 1)) * chartWidth;
+        const y = height - bottomPadding - ((item.value - minValue) / adjustedRange) * chartHeight;
         
         if (index === 0) {
             ctx.lineTo(x, y);
@@ -2447,7 +3508,7 @@ function drawLineChart(ctx, data, width, height, color) {
         }
     });
     
-    ctx.lineTo(width - padding, height - padding);
+    ctx.lineTo(width - rightPadding, height - bottomPadding);
     ctx.closePath();
     ctx.fill();
     
@@ -2463,8 +3524,8 @@ function drawLineChart(ctx, data, width, height, color) {
     
     ctx.beginPath();
     data.forEach((item, index) => {
-        const x = padding + (index / (data.length - 1)) * chartWidth;
-        const y = height - padding - ((item.value - minValue) / adjustedRange) * chartHeight;
+        const x = leftPadding + (index / (data.length - 1)) * chartWidth;
+        const y = height - bottomPadding - ((item.value - minValue) / adjustedRange) * chartHeight;
         
         if (index === 0) {
             ctx.moveTo(x, y);
@@ -2480,8 +3541,8 @@ function drawLineChart(ctx, data, width, height, color) {
     // Draw data points
     ctx.fillStyle = color;
     data.forEach((item, index) => {
-        const x = padding + (index / (data.length - 1)) * chartWidth;
-        const y = height - padding - ((item.value - minValue) / adjustedRange) * chartHeight;
+        const x = leftPadding + (index / (data.length - 1)) * chartWidth;
+        const y = height - bottomPadding - ((item.value - minValue) / adjustedRange) * chartHeight;
         
         // Draw point with white border
         ctx.beginPath();
@@ -2497,8 +3558,8 @@ function drawLineChart(ctx, data, width, height, color) {
     // Highlight current value (last point)
     if (data.length > 0) {
         const lastItem = data[data.length - 1];
-        const x = padding + chartWidth;
-        const y = height - padding - ((lastItem.value - minValue) / adjustedRange) * chartHeight;
+        const x = leftPadding + chartWidth;
+        const y = height - bottomPadding - ((lastItem.value - minValue) / adjustedRange) * chartHeight;
         
         // Draw larger highlighted point
         ctx.beginPath();
@@ -2514,7 +3575,15 @@ function drawLineChart(ctx, data, width, height, color) {
         ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText(lastItem.value.toFixed(2), x + 15, y);
+        
+        // Format current value based on units
+        let currentValueLabel;
+        if (units === 'inHg') {
+            currentValueLabel = lastItem.value.toFixed(2) + ' inHg';
+        } else {
+            currentValueLabel = Math.round(lastItem.value) + units;
+        }
+        ctx.fillText(currentValueLabel, x + 15, y);
     }
 }
 
@@ -2780,7 +3849,7 @@ async function performSearch() {
 
 async function searchLocations(query) {
     try {
-        console.log(`Starting search for query: "${query}" in state: ${selectedState}`);
+        console.log(`Starting city search for query: "${query}" in state: ${selectedState}`);
         
         if (!selectedState) {
             console.log('No state selected, showing empty results');
@@ -2788,10 +3857,10 @@ async function searchLocations(query) {
             return;
         }
         
-        // Search for regular locations using OpenWeatherMap geocoding
+        // Search for cities only using OpenWeatherMap geocoding
         // Add state filter to the search query
         const searchQuery = `${query}, ${getStateName(selectedState)}`;
-        console.log(`Searching OpenWeatherMap with query: "${searchQuery}"`);
+        console.log(`Searching OpenWeatherMap for cities with query: "${searchQuery}"`);
         
         const geocodingResponse = await fetch(
             `${GEOCODING_API_URL}/direct?q=${encodeURIComponent(searchQuery)}&limit=10&appid=${CONFIG.WEATHER_API_KEY}`
@@ -2799,7 +3868,7 @@ async function searchLocations(query) {
         const allLocations = await geocodingResponse.json();
         console.log('OpenWeatherMap response:', allLocations);
         
-        // Filter locations to only include those in the selected state
+        // Filter locations to only include cities in the selected state
         const filteredLocations = allLocations.filter(location => {
             // Check if location has a state field that matches
             if (location.state) {
@@ -2810,236 +3879,41 @@ async function searchLocations(query) {
             return detectedState === selectedState;
         });
         
-        console.log(`Filtered to ${filteredLocations.length} regular locations`);
+        console.log(`Found ${filteredLocations.length} cities in ${getStateName(selectedState)}`);
         
-        // Search for USGS water bodies in the selected state
-        const waterBodySites = await searchUSGSWaterBodies(query);
-        console.log(`Found ${waterBodySites.length} water body sites`);
-        
-        // Combine results
-        const combinedResults = [...filteredLocations, ...waterBodySites];
-        console.log(`Combined results (${combinedResults.length} total):`, combinedResults);
-        
-        displaySearchResults(combinedResults);
+        displaySearchResults(filteredLocations);
     } catch (error) {
-        console.error('Location search error:', error);
+        console.error('City search error:', error);
         displaySearchResults([]);
     }
 }
 
-async function searchUSGSWaterBodies(query) {
-    try {
-        if (!selectedState) {
-            console.log('No state selected, skipping USGS search');
-            return [];
-        }
-        
-        const queryLower = query.toLowerCase();
-        const allWaterBodies = [];
-        
-        try {
-            // Get the appropriate site types based on water type filter
-            const getSiteTypesForSearch = () => {
-                if (selectedWaterType === 'LK') {
-                    return 'LK'; // Lakes only
-                } else if (selectedWaterType === 'ST') {
-                    return 'ST'; // Streams/rivers only
-                } else {
-                    return 'LK,ST'; // All water bodies for search
-                }
-            };
-            
-            const baseSiteTypes = getSiteTypesForSearch();
-            console.log(`Filtering search by water type: ${selectedWaterType || 'All'} (site types: ${baseSiteTypes})`);
-            
-            // Try multiple parameter codes and site types to find water monitoring sites
-            const searchParams = [
-                // Water temperature in Fahrenheit
-                { parameterCd: WATER_TEMP_PARAM_CODE_F, siteType: baseSiteTypes, description: `water temp (F) at ${selectedWaterType === 'LK' ? 'lakes' : selectedWaterType === 'ST' ? 'streams' : 'lakes/streams'}` },
-                // Water temperature in Celsius  
-                { parameterCd: WATER_TEMP_PARAM_CODE, siteType: baseSiteTypes, description: `water temp (C) at ${selectedWaterType === 'LK' ? 'lakes' : selectedWaterType === 'ST' ? 'streams' : 'lakes/streams'}` },
-                // Any site type with water temperature (only if no specific type selected)
-                ...(selectedWaterType ? [] : [{ parameterCd: WATER_TEMP_PARAM_CODE_F, siteType: '', description: 'water temp (F) all sites' }]),
-                // Streamflow (only if looking for streams or all)
-                ...(selectedWaterType !== 'LK' ? [{ parameterCd: '00060', siteType: 'ST', description: 'streamflow at streams' }] : []),
-                // Any active site of the selected type
-                { parameterCd: '', siteType: baseSiteTypes, description: `all parameters at ${selectedWaterType === 'LK' ? 'lakes' : selectedWaterType === 'ST' ? 'streams' : 'lakes/streams'}` }
-            ];
-            
-            let timeSeries = null;
-            let usedParams = null;
-            
-            for (const params of searchParams) {
-                const apiUrl = `${USGS_IV_API_URL}?format=json&stateCd=${selectedState}${params.parameterCd ? '&parameterCd=' + params.parameterCd : ''}${params.siteType ? '&siteType=' + params.siteType : ''}&siteStatus=active`;
-                console.log(`Trying ${params.description}: ${apiUrl}`);
-                
-                const response = await fetch(apiUrl);
-                
-                if (!response.ok) {
-                    console.log(`USGS API failed for ${params.description}: ${response.status}`);
-                    continue;
-                }
-                
-                const data = await response.json();
-                
-                // Parse the response structure
-                if (data.value && data.value.timeSeries) {
-                    timeSeries = data.value.timeSeries;
-                } else if (data.value && data.value.value && data.value.value.timeSeries) {
-                    timeSeries = data.value.value.timeSeries;
-                } else if (data.timeSeries) {
-                    timeSeries = data.timeSeries;
-                }
-                
-                if (timeSeries && timeSeries.length > 0) {
-                    console.log(`Success! Found ${timeSeries.length} sites using ${params.description}`);
-                    usedParams = params;
-                    break;
-                } else {
-                    console.log(`No sites found using ${params.description}`);
-                }
-            }
-            
-            if (!timeSeries || timeSeries.length === 0) {
-                console.log('No USGS sites found with any search parameters');
-                return [];
-            }
-            
-            console.log(`Found ${timeSeries.length} total USGS sites in ${selectedState} using ${usedParams.description}`);
-            
-            // Filter sites by name match - try multiple search approaches
-            let matchingSites = [];
-            
-            // First, try exact search
-            matchingSites = timeSeries.filter(timeSeriesItem => {
-                const siteName = timeSeriesItem.sourceInfo.siteName.toLowerCase();
-                const matches = siteName.includes(queryLower);
-                if (matches) {
-                    console.log(`Found exact matching site: ${siteName}`);
-                }
-                return matches;
-            });
-            
-            // If no exact matches, try broader search with water-related terms
-            if (matchingSites.length === 0 && queryLower.length > 2) {
-                console.log('No exact matches found, trying broader water body search');
-                const waterTerms = ['lake', 'river', 'creek', 'pond', 'reservoir', 'stream', 'bay', 'inlet'];
-                const hasWaterTerm = waterTerms.some(term => queryLower.includes(term));
-                
-                if (hasWaterTerm) {
-                    matchingSites = timeSeries.filter(timeSeriesItem => {
-                        const siteName = timeSeriesItem.sourceInfo.siteName.toLowerCase();
-                        // Check if site name contains water-related terms
-                        return waterTerms.some(term => siteName.includes(term));
-                    }).slice(0, 5); // Limit to 5 results
-                    
-                    console.log(`Found ${matchingSites.length} sites with water-related terms`);
-                }
-            }
-            
-            // If still no matches, try searching for any site that contains individual words from the query
-            if (matchingSites.length === 0 && queryLower.length > 3) {
-                console.log('No matches found, trying word-based search');
-                const queryWords = queryLower.split(' ').filter(word => word.length > 2);
-                
-                matchingSites = timeSeries.filter(timeSeriesItem => {
-                    const siteName = timeSeriesItem.sourceInfo.siteName.toLowerCase();
-                    return queryWords.some(word => siteName.includes(word));
-                }).slice(0, 5);
-                
-                console.log(`Found ${matchingSites.length} sites with word-based search`);
-            }
-            
-            // If still no matches, just show a few sites from the state for testing
-            if (matchingSites.length === 0) {
-                console.log('No matches found with any search strategy, showing sample sites for testing');
-                matchingSites = timeSeries.slice(0, 3);
-                console.log(`Showing ${matchingSites.length} sample sites for testing`);
-            }
-            
-            console.log(`Found ${matchingSites.length} matching sites for query: "${query}"`);
-                
-                // Add matching sites to results
-            const waterBodies = matchingSites.map(timeSeriesItem => {
-                const siteInfo = timeSeriesItem.sourceInfo;
-                    const siteLatLon = siteInfo.geoLocation.geogLocation;
-                    
-                const waterBody = {
-                        lat: parseFloat(siteLatLon.latitude),
-                        lon: parseFloat(siteLatLon.longitude),
-                        name: siteInfo.siteName,
-                        site_no: siteInfo.siteCode[0].value,
-                        site_type: siteInfo.siteProperty.find(prop => prop.name === 'siteTypeCd')?.value || 'Water Body',
-                        has_water_temp: true,
-                        is_water_body: true,
-                    state: selectedState
-                    };
-                
-                console.log('Created water body result:', waterBody);
-                return waterBody;
-                });
-                
-                allWaterBodies.push(...waterBodies);
-                
-            } catch (stateError) {
-            console.log(`Error searching state ${selectedState}:`, stateError);
-        }
-        
-        console.log(`Returning ${allWaterBodies.length} water body results`);
-        // Return top 5 matches
-        return allWaterBodies.slice(0, 5);
-        
-    } catch (error) {
-        console.error('USGS water body search error:', error);
-        return [];
-    }
-}
+// Removed searchUSGSWaterBodies function - no longer needed since we only search cities
 
 // Clean up - debug function no longer needed since USGS is working
 
 function displaySearchResults(locations) {
-    console.log(`displaySearchResults called with ${locations?.length || 0} locations`);
+    console.log(`displaySearchResults called with ${locations?.length || 0} cities`);
     
     if (!locations || locations.length === 0) {
-        searchResults.innerHTML = '<div class="search-result-item">No locations found</div>';
+        searchResults.innerHTML = '<div class="search-result-item">No cities found</div>';
         showSearchResults();
         return;
     }
     
-    // Count how many are water bodies vs regular locations
-    const waterBodyCount = locations.filter(loc => loc.is_water_body).length;
-    const regularLocationCount = locations.length - waterBodyCount;
-    console.log(`Displaying ${regularLocationCount} regular locations and ${waterBodyCount} water bodies`);
+    console.log(`Displaying ${locations.length} cities`);
     
     const resultsHTML = locations.map((location, index) => {
-        if (location.is_water_body) {
-            // Water body result with appropriate icon
-            const typeIcon = location.site_type === 'LK' ? '<span class="material-icons">landscape</span>' : location.site_type === 'ST' ? '<span class="material-icons">waves</span>' : '<span class="material-icons">water_drop</span>';
-            const typeText = location.site_type === 'LK' ? 'Lake' : location.site_type === 'ST' ? 'Stream/River' : location.site_type;
-            
-            return `
-                <div class="search-result-item water-body-result" 
-                     data-lat="${location.lat}" 
-                     data-lon="${location.lon}" 
-                     data-name="${location.name}"
-                     data-site-no="${location.site_no}"
-                     data-site-type="${location.site_type}">
-                    <div class="result-name">${typeIcon} ${location.name}</div>
-                    <div class="result-details">${typeText} • Real water temperature data</div>
-                </div>
-            `;
-        } else {
-            // Regular location result
-            const name = location.name;
-            const details = `${location.state || location.country}${location.country !== location.state ? ', ' + location.country : ''}`;
-            
-            return `
-                <div class="search-result-item" data-lat="${location.lat}" data-lon="${location.lon}" data-name="${name}, ${details}">
-                    <div class="result-name">${name}</div>
-                    <div class="result-details">${details}</div>
-                </div>
-            `;
-        }
+        // City result
+        const name = location.name;
+        const details = `${location.state || location.country}${location.country !== location.state ? ', ' + location.country : ''}`;
+        
+        return `
+            <div class="search-result-item" data-lat="${location.lat}" data-lon="${location.lon}" data-name="${name}, ${details}">
+                <div class="result-name"><span class="material-icons">location_city</span> ${name}</div>
+                <div class="result-details">${details}</div>
+            </div>
+        `;
     }).join('');
     
     searchResults.innerHTML = resultsHTML;
@@ -3050,16 +3924,9 @@ function displaySearchResults(locations) {
             const lat = parseFloat(item.dataset.lat);
             const lon = parseFloat(item.dataset.lon);
             const name = item.dataset.name;
-            const siteNo = item.dataset.siteNo;
-            const siteType = item.dataset.siteType;
             
-            if (siteNo) {
-                // Water body selection
-                selectWaterBody(lat, lon, name, siteNo, siteType);
-            } else {
-                // Regular location selection
-                selectLocation(lat, lon, name);
-            }
+            // City selection - will auto-find nearest water body
+            selectLocation(lat, lon, name);
         });
     });
     
@@ -3067,15 +3934,17 @@ function displaySearchResults(locations) {
 }
 
 function showSearchResults() {
+    console.log('showSearchResults called - adding show class');
     searchResults.classList.add('show');
 }
 
 function hideSearchResults() {
+    console.log('hideSearchResults called - removing show class');
     searchResults.classList.remove('show');
 }
 
 function selectLocation(lat, lon, name) {
-    console.log(`Selecting location: ${name} (${lat}, ${lon}) with water type filter: ${selectedWaterType || 'All'}`);
+    console.log(`Selecting city: ${name} (${lat}, ${lon}) - will auto-find nearest water body`);
     
     currentLocation = { lat, lon, name };
     locationSearch.value = '';
@@ -3095,77 +3964,17 @@ function selectLocation(lat, lon, name) {
     updateLocationDisplay();
     fetchWeatherData();
     
-    // Find nearest USGS water temperature data with a small delay to ensure state is set
+    // Automatically find nearest water body with water temperature data
     showWaterDataLoading();
     
     // Add a small delay to ensure state detection is complete
     setTimeout(() => {
-        console.log(`About to fetch water data for ${name} with state: ${selectedState}, water type: ${selectedWaterType || 'All'}`);
+        console.log(`Finding nearest water body for ${name} with state: ${selectedState}, water type: ${selectedWaterType || 'All'}`);
         findNearestUSGSWaterData(lat, lon);
     }, 100);
 }
 
-async function selectWaterBody(lat, lon, name, siteNo, siteType) {
-    currentLocation = { lat, lon, name };
-    locationSearch.value = '';
-    hideSearchResults();
-    
-    // Set this as the current water body
-    currentWaterBody = {
-        site_no: siteNo,
-        site_name: name,
-        latitude: lat,
-        longitude: lon,
-        site_type: siteType,
-        has_water_temp: true,
-        distance: 0 // This is the selected location
-    };
-    
-    // Add to recent locations
-    addToRecentLocations(currentLocation);
-    
-    // Update UI and fetch weather and water data
-    updateLocationDisplay();
-    fetchWeatherData();
-    
-    // Fetch water temperature data specifically for this site
-    showWaterDataLoading();
-    try {
-        const waterTempData = await fetchWaterTemperatureHistoricalData(siteNo);
-        if (waterTempData) {
-            usgsWaterData = {
-                site: currentWaterBody,
-                temperature: waterTempData.current
-            };
-            
-            // Update water temperature history with historical data
-            if (waterTempData.historical && waterTempData.historical.length > 0) {
-                waterTemperatureHistory = waterTempData.historical;
-                console.log(`Updated water temperature history with ${waterTemperatureHistory.length} historical readings`);
-                
-                // Update the chart
-                updateWaterTemperatureChart();
-                
-                // Save to storage
-                saveToStorage('waterTemperatureHistory', waterTemperatureHistory);
-            }
-            
-            // Update displays
-            updateWaterTemperatureDisplay();
-            updateNearbyWaterBodiesDisplay();
-            
-            // Recalculate fishing score with new water temperature data
-            calculateFishingScore();
-        } else {
-            // Clear loading state if no data found
-            hideWaterDataLoading();
-        }
-    } catch (error) {
-        console.error('Error fetching water temperature for selected site:', error);
-        // Clear loading state on error
-        hideWaterDataLoading();
-    }
-}
+// Removed selectWaterBody function - no longer needed since we only search cities
 
 function addToRecentLocations(location) {
     // Remove if already exists
@@ -3350,7 +4159,18 @@ function loadStoredData() {
     
     if (storedPressure) pressureHistory = storedPressure;
     if (storedTemperature) temperatureHistory = storedTemperature;
-    if (storedWaterTemperature) waterTemperatureHistory = storedWaterTemperature;
+    if (storedWaterTemperature) {
+        // Migrate old data format if needed (time -> timestamp)
+        waterTemperatureHistory = storedWaterTemperature.map(item => {
+            if (item.time && !item.timestamp) {
+                return {
+                    timestamp: item.time,
+                    value: item.value
+                };
+            }
+            return item;
+        });
+    }
     if (storedRecentLocations) recentLocations = storedRecentLocations;
     if (storedCurrentLocation) {
         currentLocation = storedCurrentLocation;
@@ -3381,6 +4201,9 @@ function loadStoredData() {
     
     // Display recent locations
     displayRecentLocations();
+    
+    // Initialize the water temperature source toggle text
+    updateWaterTempSourceToggleText();
 }
 
 // Periodic Data Updates
@@ -3406,4 +4229,4 @@ window.addEventListener('online', () => {
 
 window.addEventListener('offline', () => {
     console.log('App is offline');
-}); 
+});
