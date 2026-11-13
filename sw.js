@@ -1,139 +1,80 @@
-const CACHE_NAME = 'hows-the-bite-v1';
-const urlsToCache = [
-  '/',
-  '/index.html',
-  '/styles.css',
-  '/app.js',
-  '/manifest.json',
-  '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png'
+// Service worker: makes the app shell available offline.
+//
+// - App files (same origin) are fetched network-first, so a deploy shows up on
+//   the next load without any cache-busting, with the cache as offline fallback.
+// - API calls are NOT cached here. The page keeps its own snapshot of the last
+//   good data (with its real timestamp) and shows that when offline; serving a
+//   stale API response from here would make old data look fresh.
+//
+// Bump CACHE when the list of shell files changes.
+
+const CACHE = 'htb-shell-v4';
+
+const SHELL = [
+    './',
+    'index.html',
+    'styles.css',
+    'manifest.json',
+    'favicon.svg',
+    'icons/icon-192x192.png',
+    'icons/icon-512x512.png',
+    'js/app.js',
+    'js/theme-init.js',
+    'js/config.js',
+    'js/storage.js',
+    'js/api/http.js',
+    'js/api/usgs-api.js',
+    'js/api/weather-api.js',
+    'js/core/moon.js',
+    'js/core/scoring.js',
+    'js/core/sky.js',
+    'js/core/trend.js',
+    'js/core/util.js',
+    'js/ui/charts.js',
+    'js/ui/dom.js',
+    'js/ui/map.js',
+    'js/ui/theme.js',
+    'vendor/leaflet/leaflet.css',
+    'vendor/leaflet/leaflet.js',
 ];
 
-// Install event - cache resources
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        console.log('Opened cache');
-        return cache.addAll(urlsToCache);
-      })
-  );
+    event.waitUntil(
+        caches.open(CACHE)
+            .then((cache) => cache.addAll(SHELL))
+            .then(() => self.skipWaiting()),
+    );
 });
 
-// Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
-  );
+    event.waitUntil(
+        caches.keys()
+            .then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))
+            .then(() => self.clients.claim()),
+    );
 });
 
-// Fetch event - serve from cache when offline
 self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Cache hit - return response
-        if (response) {
-          return response;
-        }
-        
-        // Clone the request because it's a stream
-        const fetchRequest = event.request.clone();
-        
-        return fetch(fetchRequest).then((response) => {
-          // Check if we received a valid response
-          if (!response || response.status !== 200 || response.type !== 'basic') {
+    const { request } = event;
+    if (request.method !== 'GET') return;
+    const url = new URL(request.url);
+    if (url.origin !== self.location.origin) return; // APIs and map tiles go straight to the network
+    if (url.pathname.includes('/api/usgs/')) return; // so does the same-origin USGS proxy: never cache live data here
+
+    event.respondWith((async () => {
+        const cache = await caches.open(CACHE);
+        try {
+            const response = await fetch(request);
+            if (response.ok) cache.put(request, response.clone());
             return response;
-          }
-          
-          // Clone the response because it's a stream
-          const responseToCache = response.clone();
-          
-          // Cache API responses selectively
-          if (event.request.url.includes('api.openweathermap.org')) {
-            caches.open(CACHE_NAME)
-              .then((cache) => {
-                cache.put(event.request, responseToCache);
-              });
-          }
-          
-          return response;
-        }).catch(() => {
-          // If fetch fails, return offline fallback for HTML requests
-          if (event.request.destination === 'document') {
-            return caches.match('/index.html');
-          }
-        });
-      })
-  );
+        } catch (error) {
+            const cached = await cache.match(request, { ignoreSearch: true });
+            if (cached) return cached;
+            if (request.mode === 'navigate') {
+                const shell = await cache.match('index.html');
+                if (shell) return shell;
+            }
+            throw error;
+        }
+    })());
 });
-
-// Background sync for weather data
-self.addEventListener('sync', (event) => {
-  if (event.tag === 'background-sync') {
-    event.waitUntil(
-      // Handle background sync tasks
-      console.log('Background sync triggered')
-    );
-  }
-});
-
-// Push notifications (for future weather alerts)
-self.addEventListener('push', (event) => {
-  const options = {
-    body: event.data ? event.data.text() : 'Weather update available',
-    icon: '/icons/icon-192x192.png',
-    badge: '/icons/icon-96x96.png',
-    vibrate: [100, 50, 100],
-    data: {
-      dateOfArrival: Date.now(),
-      primaryKey: 1
-    },
-    actions: [
-      {
-        action: 'explore',
-        title: 'View Conditions',
-        icon: '/icons/icon-192x192.png'
-      },
-      {
-        action: 'close',
-        title: 'Close',
-        icon: '/icons/icon-192x192.png'
-      }
-    ]
-  };
-  
-  event.waitUntil(
-            self.registration.showNotification('How\'s the Bite', options)
-  );
-});
-
-// Handle notification clicks
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  
-  if (event.action === 'explore') {
-    event.waitUntil(
-      clients.openWindow('/')
-    );
-  }
-});
-
-// Handle periodic background sync (for future implementation)
-self.addEventListener('periodicsync', (event) => {
-  if (event.tag === 'weather-sync') {
-    event.waitUntil(
-      // Update weather data in background
-      console.log('Periodic sync triggered')
-    );
-  }
-}); 

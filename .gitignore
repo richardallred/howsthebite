@@ -90,3 +90,14 @@ jspm_packages/
 .Trashes
 ehthumbs.db
 Thumbs.db 
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+
+# Build output and Cloudflare local state
+dist/
+.wrangler/
+
+# Local secrets for `wrangler pages dev` (USGS_API_KEY)
+.dev.vars

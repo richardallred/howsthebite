@@ -1,34 +1,33 @@
 {
   "name": "hows-the-bite-pwa",
-  "version": "1.0.0",
-  "description": "A Progressive Web App for checking fishing conditions and finding out how the bite is on local water bodies",
-  "main": "index.html",
+  "version": "2.0.0",
+  "description": "A Progressive Web App that scores current fishing conditions from live weather and USGS water temperature data",
+  "private": true,
+  "type": "module",
   "scripts": {
-    "start": "http-server -p 8000 -o",
-    "dev": "http-server -p 8000 -o -c-1",
-    "build": "echo 'No build step required for this vanilla PWA'",
-    "test": "echo 'No tests specified'"
+    "start": "http-server . -p 8000 -c-1 -o",
+    "build": "node scripts/build.mjs",
+    "preview": "npm run build && wrangler pages dev dist --port 8788",
+    "deploy": "npm run build && wrangler pages deploy dist",
+    "test": "node --test",
+    "test:e2e": "playwright test",
+    "test:all": "node --test && playwright test"
   },
   "keywords": [
     "fishing",
     "weather",
     "pwa",
-    "progressive-web-app",
     "barometric-pressure",
     "water-temperature",
     "fishing-conditions"
   ],
-  "author": "How's the Bite? Developer",
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "devDependencies": {
-    "http-server": "^14.1.1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/your-username/hows-the-bite-pwa.git"
-  },
-  "bugs": {
-    "url": "https://github.com/your-username/hows-the-bite-pwa/issues"
-  },
-  "homepage": "https://github.com/your-username/hows-the-bite-pwa#readme"
-} 
+    "@playwright/test": "^1.65.0",
+    "http-server": "^14.1.1",
+    "wrangler": "^4.161.0"
+  }
+}

@@ -1,132 +1,57 @@
 {
-  "name": "How's the Bite? - Fishing Conditions App",
+  "name": "How's the Bite? — Fishing Conditions",
   "short_name": "How's the Bite?",
-  "description": "Check fishing conditions and find out how the bite is on local water bodies with weather, pressure trends, and water data",
-  "start_url": "/",
+  "description": "A 0–100 fishing score for any US lake or river, from live weather, pressure trends, moon phase and USGS water temperature.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#667eea",
-  "theme_color": "#1e40af",
-  "orientation": "portrait-primary",
-  "scope": "/",
+  "background_color": "#0f172a",
+  "theme_color": "#1d4ed8",
   "lang": "en-US",
-  "categories": ["sports", "weather", "productivity"],
+  "categories": ["sports", "weather"],
   "icons": [
-    {
-      "src": "favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
-    },
-    {
-      "src": "icons/icon-72x72.png",
-      "sizes": "72x72",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icons/icon-96x96.png",
-      "sizes": "96x96",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icons/icon-128x128.png",
-      "sizes": "128x128",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icons/icon-144x144.png",
-      "sizes": "144x144",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icons/icon-152x152.png",
-      "sizes": "152x152",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icons/icon-192x192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icons/icon-384x384.png",
-      "sizes": "384x384",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icons/icon-512x512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
+    { "src": "icons/icon-72x72.png", "sizes": "72x72", "type": "image/png" },
+    { "src": "icons/icon-96x96.png", "sizes": "96x96", "type": "image/png" },
+    { "src": "icons/icon-128x128.png", "sizes": "128x128", "type": "image/png" },
+    { "src": "icons/icon-144x144.png", "sizes": "144x144", "type": "image/png" },
+    { "src": "icons/icon-152x152.png", "sizes": "152x152", "type": "image/png" },
+    { "src": "icons/icon-192x192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-384x384.png", "sizes": "384x384", "type": "image/png" },
+    { "src": "icons/icon-512x512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" }
   ],
   "screenshots": [
     {
       "src": "screenshots/desktop.png",
-      "sizes": "1200x800",
+      "sizes": "1280x900",
       "type": "image/png",
-      "form_factor": "wide"
+      "form_factor": "wide",
+      "label": "Fishing score, factor breakdown and forecast"
     },
     {
       "src": "screenshots/mobile.png",
-      "sizes": "375x667",
+      "sizes": "780x1688",
       "type": "image/png",
-      "form_factor": "narrow"
+      "form_factor": "narrow",
+      "label": "Fishing score on a phone"
     }
   ],
   "shortcuts": [
     {
-      "name": "Current Conditions",
-      "short_name": "Conditions",
-      "description": "View current fishing conditions",
-      "url": "/?section=conditions",
-      "icons": [
-        {
-          "src": "icons/icon-96x96.png",
-          "sizes": "96x96",
-          "type": "image/png"
-        }
-      ]
+      "name": "Forecast",
+      "url": "./#forecast",
+      "icons": [{ "src": "icons/icon-96x96.png", "sizes": "96x96", "type": "image/png" }]
     },
     {
-      "name": "Weather Forecast",
-      "short_name": "Forecast",
-      "description": "Check weather forecast",
-      "url": "/?section=forecast",
-      "icons": [
-        {
-          "src": "icons/icon-96x96.png",
-          "sizes": "96x96",
-          "type": "image/png"
-        }
-      ]
+      "name": "Water temperature",
+      "url": "./#water",
+      "icons": [{ "src": "icons/icon-96x96.png", "sizes": "96x96", "type": "image/png" }]
     },
     {
-      "name": "Water Bodies Map",
-      "short_name": "Map",
-      "description": "View nearby water bodies",
-      "url": "/?section=map",
-      "icons": [
-        {
-          "src": "icons/icon-96x96.png",
-          "sizes": "96x96",
-          "type": "image/png"
-        }
-      ]
+      "name": "48-hour history",
+      "url": "./#history",
+      "icons": [{ "src": "icons/icon-96x96.png", "sizes": "96x96", "type": "image/png" }]
     }
-  ],
-  "related_applications": [],
-  "prefer_related_applications": false,
-  "edge_side_panel": {
-    "preferred_width": 400
-  },
-  "launch_handler": {
-    "client_mode": "navigate-existing"
-  }
-} 
+  ]
+}
