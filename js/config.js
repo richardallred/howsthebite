@@ -7,6 +7,12 @@ export const API = {
     PHOTON: 'https://photon.komoot.io/api/',
     // USGS Water Data OGC API (replaces waterservices.usgs.gov, which USGS is retiring).
     USGS: 'https://api.waterdata.usgs.gov/ogcapi/v1/collections',
+    // NOAA CO-OPS: tide predictions and coastal water temperature.
+    COOPS: 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter',
+    // NWS surf-zone forecast by beach (surf height, rip-current risk), an ArcGIS feature service.
+    NWS_BEACH: 'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/marine_beachforecast_summary/FeatureServer/0/query',
+    // Same-origin proxy for satellite sea-surface temperature (functions/api/sst.js); optional.
+    SST_PROXY: 'api/sst',
     // GBIF occurrence search: which sport fish have been recorded around a place.
     GBIF: 'https://api.gbif.org/v1/occurrence/search',
     // USGS Statistics API: what a gauge normally reads on each day of the year.
@@ -26,6 +32,11 @@ export const APP = {
     // key's quota. Without a key USGS allows 1,000 requests per hour per visitor IP.
     // On Cloudflare Pages the key belongs in the proxy's USGS_API_KEY secret instead.
     USGS_API_KEY: '',
+
+    // Amazon Associates tracking ID. It tags the lure suggestions' Amazon links and switches on
+    // the disclosure Amazon requires. It is public by nature (it appears in every link). Leave it
+    // empty ('') to make the links ordinary, untagged searches with no disclosure.
+    AMAZON_ASSOCIATE_TAG: 'howsthebite-20',
 
     REQUEST_TIMEOUT_MS: 15000,
     SEARCH_DEBOUNCE_MS: 300,

@@ -9,9 +9,10 @@
 import { test as base, expect } from '@playwright/test';
 
 import {
-    BLANK_TILE, DEFAULT_POINTS, DEFAULT_SCORE, DEFAULT_SPECIES, DEFAULT_STATIONS, NOW, alertsResponse,
-    continuousResponse, flowNormalsResponse, forecastResponse, gbifResponse, latestContinuousResponse,
-    monitoringLocationsResponse, observationsResponse, photonResponse, pointResponse, stationsResponse,
+    BLANK_TILE, DEFAULT_POINTS, DEFAULT_SCORE, DEFAULT_SPECIES, DEFAULT_STATIONS, NOW, alertsResponse, beachResponse,
+    continuousResponse, coopsResponse, flowNormalsResponse, forecastResponse, gbifResponse, latestContinuousResponse,
+    marineZonesResponse, monitoringLocationsResponse, observationsResponse, photonResponse, pointResponse, sstResponse,
+    stationsResponse, waveGridResponse,
 } from './api-mocks.js';
 
 export { DEFAULT_POINTS, DEFAULT_SCORE, NOW, expect };
@@ -21,6 +22,8 @@ const SERVICES = {
     photon: 'photon.komoot.io',
     usgs: 'api.waterdata.usgs.gov',
     gbif: 'api.gbif.org',
+    coops: 'api.tidesandcurrents.noaa.gov',
+    beach: 'mapservices.weather.noaa.gov',
     tiles: 'tile.openstreetmap.org',
 };
 
@@ -33,10 +36,11 @@ export const test = base.extend({
             stations: DEFAULT_STATIONS,
             alerts: [], // NWS alerts in effect: { event, onsetHours, endsHours } relative to NOW
             species: DEFAULT_SPECIES, // fish recorded in the region: { name: recordCount }, names from FISH in api-mocks.js
+            coast: {}, // overrides merged into DEFAULT_COAST (tides, sea temperature, beach and wave forecasts)
             // false: the site is plain static hosting, so /api/usgs is a 404 and the app goes direct.
             // true:  the Cloudflare Pages proxy is deployed and answers /api/usgs.
             proxy: false,
-            failures: {}, // service name ('nws', 'photon', 'usgs', 'gbif', 'proxy', 'tiles') -> HTTP status, or 'network'
+            failures: {}, // service name ('nws', 'photon', 'usgs', 'gbif', 'coops', 'beach', 'proxy', 'tiles') -> HTTP status, or 'network'
             calls: [], // { service, url } for every mocked request
             unexpected: [], // requests to hosts without a mock
             fail(service, status = 500) { this.failures[service] = status; },
@@ -83,6 +87,13 @@ export const test = base.extend({
             return usgs(route, url, collection ?? statistic);
         });
 
+        // The sea-surface-temperature proxy: deployed, or not, together with the USGS one.
+        await context.route((url) => url.pathname.endsWith('/api/sst'), (route) => {
+            api.calls.push({ service: 'sst', url: route.request().url() });
+            if (!api.proxy) return respond(route, 404, { error: 'Not found' });
+            return json(route, sstResponse(api.coast));
+        });
+
         await context.route((url) => url.hostname !== 'localhost', (route) => {
             const url = new URL(route.request().url());
             const service = Object.keys(SERVICES).find((name) => SERVICES[name] === url.hostname);
@@ -103,10 +114,14 @@ export const test = base.extend({
                     if (url.pathname.endsWith('/stations')) return json(route, stationsResponse(api.weather));
                     if (url.pathname.endsWith('/observations')) return json(route, observationsResponse(url, api.weather));
                     if (url.pathname === '/alerts/active') return json(route, alertsResponse(api.alerts));
+                    if (url.pathname === '/zones') return json(route, marineZonesResponse());
+                    if (/^\/gridpoints\/[A-Z]+\/\d+,\d+$/.test(url.pathname)) return json(route, waveGridResponse(api.coast));
                     api.unexpected.push(url.href);
                     return route.abort('blockedbyclient');
                 case 'photon': return json(route, photonResponse(url));
                 case 'gbif': return json(route, gbifResponse(api.species));
+                case 'coops': return json(route, coopsResponse(url, api.coast));
+                case 'beach': return json(route, beachResponse(api.coast));
                 case 'tiles': return route.fulfill({ status: 200, contentType: 'image/png', body: BLANK_TILE });
                 default: return usgs(route, url, /(?:collections\/([a-z-]+)\/items|statistics\/v0\/(observationNormals))$/.exec(url.pathname)?.slice(1).find(Boolean));
             }
@@ -130,6 +145,7 @@ export const test = base.extend({
 
     app: async ({ page }, use) => {
         const app = {
+            page,
             /** Open the app and wait until conditions have loaded. */
             async open(path = '/') {
                 await page.goto(path);

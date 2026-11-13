@@ -1,7 +1,7 @@
 {
   "name": "How's the Bite? — Fishing Conditions",
   "short_name": "How's the Bite?",
-  "description": "A 0–100 fishing score for any US lake or river, from USGS water temperature and river flow, time of day, live weather and moon phase.",
+  "description": "A 0–100 fishing score for any US lake, river, bay or beach, from water temperature, time of day, tides, surf and live weather, with lure suggestions for the conditions.",
   "id": "./",
   "start_url": "./",
   "scope": "./",

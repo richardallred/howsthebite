@@ -15,7 +15,7 @@ const dist = join(root, 'dist');
 const PUBLISH = [
     'index.html', '404.html', 'styles.css', 'sw.js', 'manifest.json',
     'favicon.ico', 'favicon.svg', '_headers',
-    'icons', 'js', 'vendor', 'screenshots',
+    'icons', 'js', 'data', 'vendor', 'screenshots',
 ];
 
 await rm(dist, { recursive: true, force: true });

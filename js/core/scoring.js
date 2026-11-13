@@ -10,6 +10,9 @@
 //   Moon                 8   real but small and inconsistent
 //   Barometric pressure  5   no measured effect on catch rates; kept small, trend only
 //
+// Salt water is scored on different factors (see FACTOR_WEIGHTS and the README): there is
+// no river flow, the tide matters, and for surf fishing so does the height of the waves.
+//
 // A factor that does not apply (river flow on a lake) is left out, and the score is the
 // share of the points that were available. Two things can then hold it down:
 //   * a limiting factor: water far outside the fish's range, a river in flood or a gale
@@ -22,10 +25,22 @@
 import { BITE_PHRASES, SCORE_BANDS } from '../config.js';
 import { moonInfo, moonTransit } from './moon.js';
 import { sunAltitude, sunTimes } from './sun.js';
+import { tideAt } from './tides.js';
 import { classifyTrend, mean } from './trend.js';
 import { clamp, isNum } from './util.js';
 
-export const FACTOR_MAX = { water: 35, light: 30, wind: 12, flow: 10, moon: 8, pressure: 5 };
+/**
+ * Points each factor can earn, by style of fishing. Each row adds up to 100.
+ *   fresh    lakes and rivers
+ *   inshore  bays, estuaries, flats, marsh, jetties and piers
+ *   surf     casting from an ocean beach
+ */
+export const FACTOR_WEIGHTS = {
+    fresh: { water: 35, light: 30, wind: 12, flow: 10, moon: 8, pressure: 5 },
+    inshore: { water: 35, tide: 27, light: 18, wind: 17, pressure: 3 },
+    surf: { water: 30, waves: 22, tide: 15, light: 15, wind: 15, pressure: 3 },
+};
+export const FACTOR_MAX = FACTOR_WEIGHTS.fresh;
 
 /** Score ceiling while thunderstorms or a dangerous-weather warning are in effect. */
 export const HAZARD_CAP = 15;
@@ -102,11 +117,52 @@ export const SPECIES_GROUPS = {
     },
 };
 
+// Salt-water groups. The curves are drawn from measured thresholds where they exist (snook stop
+// feeding near 58°F and die near 54°F; pompano avoid water under 68°F; spotted seatrout are
+// cold-stunned under 45°F; red drum feed poorly under 60°F; large striped bass avoid water over
+// 77°F; Chinook salmon keep to 46–54°F) and from long-standing guides' tables in between.
+Object.assign(SPECIES_GROUPS, {
+    tropical: {
+        label: 'Snook & tarpon',
+        prime: 'Prime range for snook, tarpon and pompano',
+        curve: [[48, 0], [55, 0.05], [60, 0.2], [68, 0.6], [74, 1], [86, 1], [90, 0.65], [94, 0.3], [98, 0]],
+        oxygen: [[2, 0.2], [3, 0.5], [4, 0.8], [5, 1]],
+        stun: [58, 'Cold enough to shut snook down; a longer cold snap can kill them'],
+    },
+    warmsalt: {
+        label: 'Redfish & seatrout',
+        prime: 'Prime range for redfish, seatrout and flounder',
+        curve: [[40, 0], [45, 0.1], [50, 0.25], [58, 0.6], [65, 1], [82, 1], [88, 0.6], [92, 0.3], [96, 0]],
+        oxygen: [[2, 0.2], [3, 0.5], [4, 0.8], [5, 1]],
+        stun: [45, 'Cold-stun range for seatrout; fish are barely feeding'],
+    },
+    coolsalt: {
+        label: 'Striped bass & bluefish',
+        prime: 'Prime range for striped bass, bluefish and fluke',
+        curve: [[36, 0], [42, 0.2], [48, 0.6], [55, 1], [70, 1], [74, 0.65], [78, 0.3], [82, 0.05], [85, 0]],
+        oxygen: [[2, 0.2], [3, 0.5], [4, 0.8], [5, 1]],
+    },
+    pacwarm: {
+        label: 'Halibut & surfperch',
+        prime: 'Prime range for halibut, corbina, croaker and bay bass',
+        // Barred surfperch bite all year, so the cold side falls away slowly.
+        curve: [[44, 0.2], [50, 0.5], [55, 0.75], [60, 1], [72, 1], [76, 0.7], [80, 0.4], [86, 0.1]],
+        oxygen: [[2, 0.2], [3, 0.5], [4, 0.8], [5, 1]],
+    },
+    paccold: {
+        label: 'Salmon & surfperch',
+        prime: 'Prime range for salmon, surfperch and rockfish',
+        curve: [[36, 0.3], [42, 0.6], [46, 0.9], [48, 1], [58, 1], [62, 0.7], [66, 0.35], [70, 0.1], [74, 0]],
+        oxygen: [[3, 0.2], [4, 0.5], [5, 0.75], [6, 1]],
+    },
+});
+
 function waterNote(tempF, share, groupId, label) {
     const group = SPECIES_GROUPS[groupId];
     // `label` names the fish actually found in the region ("Smallmouth & perch"), when known.
     if (share >= 0.95) return label && groupId !== 'any' ? `Prime range for ${label.toLowerCase()}` : group.prime;
     const coldSide = tempF < group.curve.find(([, y]) => y === 1)[0];
+    if (group.stun && tempF <= group.stun[0]) return group.stun[1];
     if (coldSide) {
         if (share >= 0.7) return 'A little cool — fish active, just short of their best';
         if (share >= 0.4) return 'Cool — fish feeding less, slow your presentation';
@@ -122,6 +178,19 @@ function waterNote(tempF, share, groupId, label) {
     if (share >= 0.4) return 'Warm — fish holding deeper';
     if (share >= 0.15) return 'Hot — fish stressed';
     return 'Dangerously hot for fish';
+}
+
+/**
+ * Where a water temperature sits relative to a species group's own range (fresh or salt):
+ * 'prime', or 'cool' / 'cold' below it, or 'warm' / 'hot' above it.
+ */
+export function temperatureZone(tempF, group = 'any') {
+    const knots = (SPECIES_GROUPS[group] ?? SPECIES_GROUPS.any).curve;
+    const share = curve(knots, tempF);
+    if (share >= 0.95) return 'prime';
+    const below = tempF < knots.find(([, y]) => y === 1)[0];
+    if (below) return share >= 0.5 ? 'cool' : 'cold';
+    return share >= 0.5 ? 'warm' : 'hot';
 }
 
 /**
@@ -162,11 +231,34 @@ export function scoreWaterTemp(tempF, { group = 'any', label = null, estimated =
 // Measured trip success and catch rates run dusk > dawn > daytime, and higher under
 // low light than bright sun (walleye success 0.47 at dusk, 0.34 at dawn, 0.26 by day;
 // bass 1.62/h at dusk, 1.14/h at dawn, 0.87/h by day, 0.52/h at night).
-const DUSK_LIGHT = 1;
-const DAWN_LIGHT = 0.75;
-const NIGHT_LIGHT = 0.35;
-const DAY_LIGHT = {
-    clear: 0.45, partly: 0.55, overcast: 0.68, 'light-precip': 0.68, precip: 0.6, storm: 0.6, unknown: 0.55,
+//
+// In salt water the pattern is flatter. Fish are most active around dawn and dusk there too,
+// but the one creel survey that compared day with night (1,862 shore anglers in Mississippi)
+// found no real difference, so night is not marked down and daytime only a little.
+const LIGHT_PROFILES = {
+    fresh: {
+        dusk: 1,
+        dawn: 0.75,
+        night: 0.35,
+        day: { clear: 0.45, partly: 0.55, overcast: 0.68, 'light-precip': 0.68, precip: 0.6, storm: 0.6, unknown: 0.55 },
+        nightNote: 'After dark — slower for most species, walleye and catfish excepted',
+        duskNote: 'Evening low light — usually the best bite of the day',
+        dawnNote: 'Early-morning low light — a strong window',
+    },
+    salt: {
+        dusk: 1,
+        dawn: 1,
+        night: 0.65,
+        day: { clear: 0.6, partly: 0.68, overcast: 0.78, 'light-precip': 0.78, precip: 0.7, storm: 0.7, unknown: 0.68 },
+        nightNote: 'After dark — about as good as daytime; snook and striped bass feed well at night',
+        duskNote: 'Evening low light — a prime feeding window',
+        dawnNote: 'First light — a prime feeding window',
+        dayNotes: {
+            clear: 'Bright sun — try deeper edges, channels and shade',
+            partly: 'Broken cloud — fair light',
+            overcast: 'Overcast — good low light all day',
+        },
+    },
 };
 const LOW_SUN_DEGREES = 12; // roughly the first and last hour of sunlight
 const HIGH_SUN_DEGREES = 25;
@@ -189,11 +281,14 @@ const DAY_NOTES = {
  * @param {number} [c.lat]
  * @param {number} [c.lon]
  * @param {string} [c.sky]  sky class from sky.js
+ * @param {'fresh'|'salt'} [c.water]
  * @returns {{ points, note, trend, phase: 'dawn'|'dusk'|'day'|'night' }}
  */
-export function scoreLight({ time, lat, lon, sky = 'unknown' }) {
-    const dayShare = DAY_LIGHT[sky] ?? DAY_LIGHT.unknown;
-    const dayNote = DAY_NOTES[sky] ?? DAY_NOTES.unknown;
+export function scoreLight({ time, lat, lon, sky = 'unknown', water = 'fresh' }) {
+    const profile = LIGHT_PROFILES[water] ?? LIGHT_PROFILES.fresh;
+    const { dawn: DAWN_LIGHT, dusk: DUSK_LIGHT, night: NIGHT_LIGHT } = profile;
+    const dayShare = profile.day[sky] ?? profile.day.unknown;
+    const dayNote = profile.dayNotes?.[sky] ?? DAY_NOTES[sky] ?? DAY_NOTES.unknown;
     if (!isNum(lat) || !isNum(lon) || !isNum(time)) {
         return graded(dayShare, FACTOR_MAX.light, { note: dayNote, trend: null, phase: 'day' });
     }
@@ -228,9 +323,9 @@ export function scoreLight({ time, lat, lon, sky = 'unknown' }) {
 
     let note = dayNote;
     if (sky !== 'storm') {
-        if (phase === 'dusk') note = 'Evening low light — usually the best bite of the day';
-        else if (phase === 'dawn') note = 'Early-morning low light — a strong window';
-        else if (phase === 'night') note = 'After dark — slower for most species, walleye and catfish excepted';
+        if (phase === 'dusk') note = profile.duskNote;
+        else if (phase === 'dawn') note = profile.dawnNote;
+        else if (phase === 'night') note = profile.nightNote;
     }
     return graded(share, FACTOR_MAX.light, { note, trend: null, phase });
 }
@@ -302,6 +397,53 @@ export function scoreFlow(flow) {
     const median = Number(flow.percentiles[50]);
     const trend = median > 0 ? `${Math.round((flow.cfs / median) * 100)}% of the median for today` : null;
     return graded(curve(FLOW_CURVE, percentile), FACTOR_MAX.flow, { note, trend, percentile });
+}
+
+// ---------------------------------------------------------------------------
+// Tide and surf (salt water)
+// ---------------------------------------------------------------------------
+
+// Telemetry and netting studies agree that inshore fish feed while the water is moving and
+// pause around slack, but which direction is better depends on the species and the spot
+// (red drum push onto flooded marsh on the rise; striped bass are logged more on the ebb).
+// So movement is scored and direction is only reported.
+const SLACK_SHARE = 0.4;
+
+/**
+ * @param {import('./tides.js').TideExtreme[]|null} extremes  predicted highs and lows
+ * @param {number} time  epoch ms
+ * @returns factor result with `state` (see tideAt), or null without predictions for that time
+ */
+export function scoreTide(extremes, time) {
+    const state = tideAt(extremes, time);
+    if (!state) return null;
+    let note;
+    if (state.slack) {
+        const top = (state.movement < 0.3 && time - state.previous.t < state.next.t - time ? state.previous : state.next).type === 'H';
+        note = top ? 'Slack water at high tide — the bite often pauses until it moves' : 'Slack water at low tide — the bite often pauses until it moves';
+    } else if (state.direction === 'rising') {
+        note = state.movement > 0.8 ? 'Incoming tide at full flow' : 'Incoming tide — water moving';
+    } else {
+        note = state.movement > 0.8 ? 'Outgoing tide at full flow' : 'Outgoing tide — water moving';
+    }
+    return graded(SLACK_SHARE + (1 - SLACK_SHARE) * state.movement, FACTOR_WEIGHTS.inshore.tide, { note, trend: null, state });
+}
+
+// The only catch data on waves (8,815 small-boat sea bass trips in the UK) showed landings
+// falling as wave height rose. Nothing supports the saying that flat surf fishes badly,
+// so calm water loses almost nothing; big surf loses a lot, for the fishing and the angler.
+const WAVE_CURVE = [[0, 0.9], [1, 1], [3, 1], [4, 0.8], [5, 0.55], [6, 0.35], [8, 0.1], [10, 0]];
+
+/** @param {number|null} heightFt  significant wave height at the beach, or null when unknown */
+export function scoreWaves(heightFt) {
+    if (!isNum(heightFt)) return null;
+    let note;
+    if (heightFt > 8) note = 'Dangerous surf — stay off the beach edge';
+    else if (heightFt > 6) note = 'Heavy surf — hard to hold bottom, risky wading';
+    else if (heightFt > 4) note = 'Rough surf — heavier sinkers, shorter fishing';
+    else if (heightFt >= 1) note = 'Fishable surf with some white water';
+    else note = 'Nearly flat — easy fishing, longer casts to reach fish';
+    return graded(curve(WAVE_CURVE, heightFt), FACTOR_WEIGHTS.surf.waves, { note, trend: null });
 }
 
 // ---------------------------------------------------------------------------
@@ -385,7 +527,7 @@ export function bitePhrase(score, date = new Date()) {
 
 // Factors that can spoil the fishing on their own, and the ceiling one of them sets:
 // no ceiling at half marks or better, falling to 10 when the factor scores nothing.
-const LIMITING = { water: 'water temperature', flow: 'river flow', wind: 'wind' };
+const LIMITING = { water: 'water temperature', flow: 'river flow', wind: 'wind', waves: 'surf' };
 const limitFor = (share) => Math.round(100 * clamp(0.1 + 1.8 * share, 0, 1));
 
 /**
@@ -403,27 +545,40 @@ const limitFor = (share) => Math.round(100 * clamp(0.1 + 1.8 * share, 0, 1));
  * @param {string} c.sky  sky class: 'clear' | 'partly' | 'overcast' | 'light-precip' | 'precip' | 'storm' | 'unknown'
  * @param {{ cfs: number, percentiles: object }|null} [c.flow]  river flow and its day-of-year percentiles
  * @param {string|null} [c.hazard]  a dangerous-weather warning in effect (its name), which caps the score
+ * @param {'fresh'|'inshore'|'surf'} [c.mode]  style of fishing; decides which factors count and how much
+ * @param {Array|null} [c.tides]  predicted highs and lows (salt water)
+ * @param {number|null} [c.waveFt]  wave height at the beach (surf)
  * @param {number} [c.lat]
  * @param {number} [c.lon]
  * @param {Date} [c.date]
  */
 export function scoreConditions(c) {
     const date = c.date ?? new Date();
-    const results = {
-        water: scoreWaterTemp(c.waterTempF, {
-            group: c.speciesGroup, label: c.speciesLabel, estimated: c.waterEstimated, change24h: c.waterChange24h,
-            oxygenMgL: c.oxygenMgL,
+    const mode = c.mode in FACTOR_WEIGHTS ? c.mode : 'fresh';
+    const weights = FACTOR_WEIGHTS[mode];
+    const salt = mode !== 'fresh';
+    const every = {
+        water: () => scoreWaterTemp(c.waterTempF, {
+            group: c.speciesGroup ?? (salt ? 'warmsalt' : 'any'), label: c.speciesLabel, estimated: c.waterEstimated,
+            change24h: c.waterChange24h, oxygenMgL: c.oxygenMgL,
         }),
-        light: scoreLight({ time: date.getTime(), lat: c.lat, lon: c.lon, sky: c.sky }),
-        wind: scoreWind(c.windMph, { gustMph: c.gustMph }),
-        flow: scoreFlow(c.flow),
-        moon: scoreMoon(date, c.lon),
-        pressure: scorePressure(c.pressureInHg, { change3h: c.pressureChange3h }),
+        waves: () => scoreWaves(c.waveFt),
+        tide: () => scoreTide(c.tides, date.getTime()),
+        light: () => scoreLight({ time: date.getTime(), lat: c.lat, lon: c.lon, sky: c.sky, water: salt ? 'salt' : 'fresh' }),
+        wind: () => scoreWind(c.windMph, { gustMph: c.gustMph }),
+        flow: () => scoreFlow(c.flow),
+        moon: () => scoreMoon(date, c.lon),
+        pressure: () => scorePressure(c.pressureInHg, { change3h: c.pressureChange3h }),
     };
 
-    const factors = Object.entries(results)
+    // Each factor is worked out as a share of full marks, then worth what this style of fishing gives it.
+    const factors = Object.keys(weights)
+        .map((id) => [id, every[id]()])
         .filter(([, result]) => result)
-        .map(([id, result]) => ({ id, max: FACTOR_MAX[id], rating: ratingFor(result.points, FACTOR_MAX[id]), ...result }));
+        .map(([id, result]) => {
+            const points = clamp(Math.round(result.share * weights[id]), 0, weights[id]);
+            return { id, max: weights[id], rating: ratingFor(points, weights[id]), ...result, points };
+        });
 
     const earned = factors.reduce((sum, factor) => sum + factor.points, 0);
     const available = factors.reduce((sum, factor) => sum + factor.max, 0);

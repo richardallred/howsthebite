@@ -262,7 +262,12 @@ export async function fetchWeather(lat, lon, { signal } = {}) {
     const point = await getPoint(lat, lon, signal);
 
     const [forecast, stationList] = await Promise.all([
-        nwsJson(`${point.forecastUrl}?units=us`, { signal }),
+        // A spot on open water (a bay, just off a point) is in a marine forecast cell, which has
+        // no daily forecast: NWS answers 404. Observations still work, so carry on without one.
+        nwsJson(`${point.forecastUrl}?units=us`, { signal }).catch((error) => {
+            if (error instanceof HttpError && error.status === 404) return { properties: { periods: [] } };
+            throw error;
+        }),
         nwsJson(`${point.stationsUrl}?limit=${STATIONS_LISTED}`, { signal }),
     ]);
     const periods = forecast.properties?.periods;

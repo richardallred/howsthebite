@@ -436,7 +436,7 @@ button, input { font: inherit; color: inherit; }
 .species-label { font-size: 0.875rem; font-weight: 600; color: var(--text-2); }
 .species-note { font-size: 0.875rem; color: var(--muted); }
 .species-note:empty { display: none; }
-.species [hidden] { display: none; }
+.species [hidden], .species[hidden], .level-card[hidden], .water-grid[hidden], .chart-card[hidden], .segmented[hidden] { display: none; }
 .species .segmented { max-width: 100%; overflow-x: auto; }
 .species .segmented button { padding: 0 12px; white-space: nowrap; }
 @media (max-width: 479px) {
@@ -444,6 +444,11 @@ button, input { font: inherit; color: inherit; }
     .species .segmented { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; border-radius: 22px; }
     /* An odd number of choices: the last one spans the row instead of leaving a hole. */
     .species .segmented button:last-child:nth-child(odd) { grid-column: 1 / -1; }
+    /* The kinds of water are short words: they share one row. */
+    .species #modeGroup { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); border-radius: 999px; }
+    .species #modeGroup button:last-child:nth-child(odd) { grid-column: auto; }
+    /* Label and control on one line each, tighter together. */
+    .species { gap: 6px 12px; margin-bottom: 10px; }
 }
 
 .factors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -498,6 +503,7 @@ button, input { font: inherit; color: inherit; }
     padding-bottom: 4px;
     scroll-snap-type: x proximity;
 }
+.forecast-empty { grid-column: 1 / -1; padding: 14px 4px; font-size: 0.9375rem; }
 .forecast-day {
     display: flex;
     flex-direction: column;
@@ -517,6 +523,28 @@ button, input { font: inherit; color: inherit; }
 .forecast-label { font-size: 0.875rem; color: var(--text-2); min-height: 2.6em; line-height: 1.3; }
 .forecast-temps { font-size: 1.125rem; }
 .forecast-meta { font-size: 0.8125rem; color: var(--muted); line-height: 1.4; }
+
+/* ---------- Lure suggestions ---------- */
+
+.lures { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; padding: 0; list-style: none; }
+.lure {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+}
+.lure-target { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.lure h3 { font-size: 1.0625rem; line-height: 1.3; }
+.lure-why { font-size: 0.9375rem; color: var(--text-2); line-height: 1.4; }
+.lure-how { font-size: 0.875rem; color: var(--muted); line-height: 1.4; }
+.lure-shop { margin-top: auto; padding-top: 6px; font-size: 0.875rem; font-weight: 600; }
+.lure-colour { margin-top: 12px; font-size: 0.9375rem; color: var(--text-2); }
+.lure-colour:empty { display: none; }
+.lure-note { margin-top: 8px; font-size: 0.8125rem; }
 
 /* ---------- Water temperature ---------- */
 
@@ -696,7 +724,8 @@ button, input { font: inherit; color: inherit; }
     inset: auto 0 0 0;
     z-index: 30;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr); /* however many sections there are, one row */
     padding-bottom: env(safe-area-inset-bottom);
     background: var(--surface);
     border-top: 1px solid var(--border);

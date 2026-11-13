@@ -71,8 +71,8 @@ test('the saved preference is used where it is offered, otherwise the most gener
     assert.equal(chooseSpecies(north, 'any').id, 'any');
 
     const gulf = speciesOptions(regionalSpecies(counts({ largemouth: 900, bluegill: 700 }), 30));
-    assert.deepEqual(chooseSpecies(gulf, 'cool'), { id: 'warm', label: 'Bass & panfish' });
-    assert.deepEqual(chooseSpecies(gulf, 'any'), { id: 'warm', label: 'Bass & panfish' });
+    assert.deepEqual(chooseSpecies(gulf, 'cool'), { id: 'warm', label: 'Bass & panfish', targets: ['bass', 'panfish', 'catfish'] });
+    assert.equal(chooseSpecies(gulf, 'any').id, 'warm');
 
     const noWalleye = speciesOptions(regionalSpecies(counts({ largemouth: 900, bluegill: 700, rainbow: 96 }), 29.8));
     assert.equal(chooseSpecies(noWalleye, 'cool').id, 'any');

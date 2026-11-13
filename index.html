@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>How's the Bite? — Fishing Conditions</title>
-    <meta name="description" content="A 0–100 fishing score for any US lake or river, built from USGS water temperature and river flow, time of day, live weather and moon phase.">
+    <meta name="description" content="A 0–100 fishing score for any US lake, river, bay or beach, built from water temperature, time of day, tides, surf, river flow and live weather, with lure suggestions for the conditions.">
     <meta name="theme-color" content="#1d4ed8">
     <meta name="color-scheme" content="light dark">
     <link rel="manifest" href="manifest.json">
@@ -96,6 +96,11 @@
         <section class="section" id="conditions" aria-labelledby="conditionsTitle">
             <h2 class="visually-hidden" id="conditionsTitle">Current conditions</h2>
             <ul class="alerts" id="alerts" aria-label="Weather alerts" hidden></ul>
+            <!-- Shown only near tidal water, where there is a choice to make. -->
+            <div class="species" id="modeRow" hidden>
+                <span class="species-label" id="modeLabel">Water</span>
+                <div class="segmented" id="modeGroup" role="group" aria-labelledby="modeLabel"></div>
+            </div>
             <div class="species">
                 <span class="species-label" id="speciesLabel">Fishing for</span>
                 <!-- Filled in by the app: only the fish recorded around the chosen place are offered. -->
@@ -114,6 +119,21 @@
                 </div>
                 <div class="factors" id="factors" aria-label="Score factors"></div>
             </div>
+        </section>
+
+        <section class="section" id="lures" aria-labelledby="luresTitle">
+            <div class="section-head">
+                <div>
+                    <h2 id="luresTitle">What to throw</h2>
+                    <p class="muted" id="lureSummary">Suggestions will appear with the conditions.</p>
+                </div>
+            </div>
+            <ul class="lures" id="lureList"></ul>
+            <p class="lure-colour" id="lureColour"></p>
+            <p class="muted lure-note">
+                Rules of thumb from fishery agencies and guides. Unlike the score, they are not based on measured catch rates.
+                <span id="affiliateDisclosure" hidden>As an Amazon Associate I earn from qualifying purchases.</span>
+            </p>
         </section>
 
         <section class="section" id="forecast" aria-labelledby="forecastTitle">
@@ -135,12 +155,17 @@
                     <button type="button" data-filter="river" aria-pressed="false">Rivers</button>
                 </div>
             </div>
-            <div class="card level-card" aria-labelledby="levelTitle">
+            <div class="card level-card" id="tideCard" aria-labelledby="tideTitle" hidden>
+                <h3 class="visually-hidden" id="tideTitle">Tides</h3>
+                <dl class="level-stats" id="tideStats"></dl>
+                <p class="muted" id="tideSource"></p>
+            </div>
+            <div class="card level-card" id="levelCard" aria-labelledby="levelTitle">
                 <h3 class="visually-hidden" id="levelTitle">Water level and flow</h3>
                 <dl class="level-stats" id="levelStats"></dl>
                 <p class="muted" id="levelSource">Looking for nearby USGS gauges…</p>
             </div>
-            <div class="water-grid">
+            <div class="water-grid" id="waterGrid">
                 <ul class="stations" id="stationList" aria-label="Nearby water temperature stations"></ul>
                 <div class="map-frame">
                     <div class="map" id="stationMap" role="region" aria-label="Map of nearby water temperature stations. The station list has the same information."></div>
@@ -161,11 +186,11 @@
                     <h3>Air temperature <span class="muted">°F</span></h3>
                     <div class="chart" id="airChart"></div>
                 </article>
-                <article class="card chart-card chart--water">
+                <article class="card chart-card chart--water" id="waterChartCard">
                     <h3>Water temperature <span class="muted">°F</span></h3>
                     <div class="chart" id="waterChart"></div>
                 </article>
-                <article class="card chart-card chart--level">
+                <article class="card chart-card chart--level" id="levelChartCard">
                     <h3><span id="levelChartTitle">River level</span> <span class="muted">ft</span></h3>
                     <div class="chart" id="levelChart"></div>
                 </article>
@@ -176,13 +201,15 @@
             <p>
                 Weather by the <a href="https://www.weather.gov/" target="_blank" rel="noopener">National Weather Service</a> ·
                 Water temperature, level and flow by the <a href="https://waterdata.usgs.gov/" target="_blank" rel="noopener">U.S. Geological Survey</a> ·
+                Tides, coastal water temperature and surf by <a href="https://tidesandcurrents.noaa.gov/" target="_blank" rel="noopener">NOAA</a> ·
                 Species ranges from <a href="https://www.gbif.org/" target="_blank" rel="noopener">GBIF</a> occurrence records ·
                 Place search by <a href="https://photon.komoot.io/" target="_blank" rel="noopener">Photon</a>, map data ©
                 <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors.
             </p>
             <p>
                 The score rates conditions, not your odds: water temperature and light count most, then wind, river flow
-                and the moon. Barometric pressure counts least, because studies of angler catch rates have found no effect.
+                and the moon; in salt water the tide and the surf take the place of flow and moon.
+                Barometric pressure counts least, because studies of angler catch rates have found no effect.
                 Skill, bait and how many fish are there matter more than all of it.
                 USGS readings are provisional. Check local conditions and regulations before you go.
             </p>
@@ -191,6 +218,7 @@
 
     <nav class="bottom-nav" aria-label="Sections">
         <a href="#conditions" aria-current="true"><svg class="icon" aria-hidden="true"><use href="#i-gauge"/></svg><span>Conditions</span></a>
+        <a href="#lures"><svg class="icon" aria-hidden="true"><use href="#i-hook"/></svg><span>Lures</span></a>
         <a href="#forecast"><svg class="icon" aria-hidden="true"><use href="#i-calendar"/></svg><span>Forecast</span></a>
         <a href="#water"><svg class="icon" aria-hidden="true"><use href="#i-waves"/></svg><span>Water</span></a>
         <a href="#history"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>History</span></a>

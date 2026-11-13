@@ -3,7 +3,7 @@
 // Key-less and CORS-enabled. Docs: https://techdocs.gbif.org/en/openapi/v1/occurrence
 
 import { API } from '../config.js';
-import { SPORT_FISH } from '../core/species.js';
+import { SALT_FISH, SPORT_FISH } from '../core/species.js';
 import { fetchJson } from './http.js';
 
 // The region is a box about 140 miles across, centred on a 0.5° grid: wide enough to
@@ -28,7 +28,8 @@ export async function fetchSpeciesCounts(lat, lon, { signal } = {}) {
     const set = (name, value) => url.searchParams.append(name, value);
     set('limit', 0); // counts only, no records
     set('facet', 'speciesKey');
-    set('facetLimit', SPORT_FISH.length + 5);
+    const keys = [...new Set([...SPORT_FISH, ...SALT_FISH].map((fish) => fish.key))]; // salmon are in both lists
+    set('facetLimit', keys.length + 5);
     set('hasCoordinate', 'true');
     set('occurrenceStatus', 'PRESENT');
     set('year', `${SINCE_YEAR},${new Date().getFullYear()}`);
@@ -37,7 +38,7 @@ export async function fetchSpeciesCounts(lat, lon, { signal } = {}) {
     set('license', 'CC_BY_4_0');
     set('decimalLatitude', `${(centreLat - HALF_HEIGHT_DEGREES).toFixed(1)},${(centreLat + HALF_HEIGHT_DEGREES).toFixed(1)}`);
     set('decimalLongitude', `${(centreLon - HALF_WIDTH_DEGREES).toFixed(1)},${(centreLon + HALF_WIDTH_DEGREES).toFixed(1)}`);
-    for (const fish of SPORT_FISH) set('taxonKey', fish.key);
+    for (const key of keys) set('taxonKey', key);
 
     // A short timeout: this refines the choices on offer and must never hold up the conditions.
     const data = await fetchJson(url, { signal, timeoutMs: 5000 });

@@ -48,6 +48,7 @@ export function pointResponse(overrides) {
     return {
         properties: {
             gridId: 'TST',
+            forecastGridData: `${NWS}/gridpoints/TST/10,20`,
             forecast: `${NWS}/gridpoints/TST/10,20/forecast`,
             observationStations: `${NWS}/gridpoints/TST/10,20/stations`,
             timeZone: w.timezone,
@@ -294,6 +295,88 @@ export function continuousResponse(url, stations) {
 }
 
 // ---------------------------------------------------------------------------
+// Salt water: NOAA tides and water temperature, NWS beach and wave forecasts
+// ---------------------------------------------------------------------------
+
+export const DEFAULT_COAST = {
+    // Highs and lows are 6 hours apart. With an offset of 0 the clock sits midway down a
+    // falling tide (full flow); an offset of 3 puts it on slack water at the top of the tide.
+    tideOffsetHours: 0,
+    tides: true, // false: the station has no predictions
+    waterTempF: 76, // at the nearest tide station; null = its thermometer is not reporting
+    // NWS surf-zone forecast for the beach. null = no forecast beach here (not an ocean beach).
+    // Off season the beach exists but every field is null.
+    beach: { name: 'Galveston Island Beaches', rip: 'Low', surf: '2 to 3 feet.', wtemp: 'in the mid 70s' },
+    waveFt: 2, // offshore wave forecast; null = the forecast cell has no wave data
+    satelliteTempF: 74.5, // what the sea-surface-temperature proxy answers
+};
+
+const coastOf = (overrides) => ({ ...DEFAULT_COAST, ...overrides });
+const coopsTime = (t) => new Date(t).toISOString().slice(0, 16).replace('T', ' ');
+
+/** CO-OPS datagetter: tide predictions or the latest water temperature, by `product`. */
+export function coopsResponse(url, overrides) {
+    const coast = coastOf(overrides);
+    const product = url.searchParams.get('product');
+    if (product === 'predictions') {
+        if (!coast.tides) return { error: { message: 'No Predictions data was found. Please make sure the Datum input is valid.' } };
+        const predictions = [];
+        for (let i = -6; i <= 13; i++) {
+            const high = Math.abs(i) % 2 === 1;
+            predictions.push({
+                t: coopsTime(NOW + (i * 6 - 3 + coast.tideOffsetHours) * HOUR + 6 * HOUR),
+                v: (high ? 2.04 : 0.31).toFixed(3),
+                type: high ? 'H' : 'L',
+            });
+        }
+        return { predictions };
+    }
+    if (product === 'water_temperature') {
+        if (coast.waterTempF === null) return { error: { message: 'No data was found. This product may not be offered at this station at the requested time.' } };
+        return {
+            metadata: { id: url.searchParams.get('station'), name: 'Test Pier' },
+            data: [{ t: coopsTime(NOW - 12 * 60_000), v: coast.waterTempF.toFixed(1), f: '0,0,0' }],
+        };
+    }
+    return { error: { message: 'Unknown product' } };
+}
+
+/** NWS beach-forecast feature service (ArcGIS JSON). */
+export function beachResponse(overrides) {
+    const { beach } = coastOf(overrides);
+    if (!beach) return { features: [] };
+    return {
+        features: [{
+            attributes: { beachname: beach.name, rip: beach.rip, surf: beach.surf, wtemp: beach.wtemp, productdat: '06/15/2026' },
+        }],
+    };
+}
+
+/** /zones?type=coastal&point=…: every probe point lands in open Gulf water. */
+export const marineZonesResponse = () => ({
+    features: [{ properties: { id: 'GMZ355', name: 'Coastal waters from High Island to Freeport TX out 20 NM' } }],
+});
+
+/** Raw forecast grid for a cell over water: wave height in metres, in 6-hour blocks. */
+export function waveGridResponse(overrides) {
+    const { waveFt } = coastOf(overrides);
+    const values = [];
+    for (let i = -1; i < 12; i++) {
+        values.push({
+            validTime: `${new Date(NOW + i * 6 * HOUR).toISOString().slice(0, 19)}+00:00/PT6H`,
+            value: waveFt === null ? 0 : Number((waveFt / 3.28084).toFixed(3)),
+        });
+    }
+    return { properties: { elevation: { unitCode: 'wmoUnit:m', value: 0 }, waveHeight: { uom: 'wmoUnit:m', values } } };
+}
+
+/** The site's own sea-surface-temperature proxy. */
+export const sstResponse = (overrides) => {
+    const { satelliteTempF } = coastOf(overrides);
+    return satelliteTempF === null ? { tempF: null, time: null } : { tempF: satelliteTempF, time: NOW - 30 * HOUR, lat: 29.3, lon: -94.75 };
+};
+
+// ---------------------------------------------------------------------------
 // Species occurrence counts (GBIF)
 // ---------------------------------------------------------------------------
 
@@ -302,6 +385,9 @@ export const FISH = {
     largemouth: 2394563, bluegill: 2394503, channelCatfish: 5202520,
     walleye: 2382172, pike: 2346633, muskie: 2346634, smallmouth: 5211250, perch: 2382004, sauger: 2382152,
     rainbow: 5204019, brown: 8215487, brook: 2351271, coho: 5204034, chinook: 5204024,
+    // Salt water
+    snook: 2369643, tarpon: 5203123, pompano: 5210681, redfish: 2400222, seatrout: 2400015, southernFlounder: 2408881,
+    whiting: 2400093, stripedBass: 2394612, bluefish: 5208090,
 };
 
 // A northern-Midwest mix: every group of fish is well recorded.
@@ -335,6 +421,8 @@ const PLACES = [
     { name: 'Lake Thunderbird', state: 'Oklahoma', county: 'Cleveland', countrycode: 'US', osm_key: 'water', osm_value: 'reservoir', lat: 35.246, lon: -97.233 },
     { name: 'Lake Norman Wastewater Basin', state: 'North Carolina', county: 'Iredell', countrycode: 'US', osm_key: 'water', osm_value: 'wastewater', lat: 35.6, lon: -80.9 },
     { name: 'French Broad River', state: 'North Carolina', county: 'Madison', countrycode: 'US', osm_key: 'waterway', osm_value: 'river', lat: 35.879, lon: -82.808 },
+    // On the coast: the real NOAA station list has a tide station (with a thermometer) under a mile from here.
+    { name: 'Galveston', state: 'Texas', county: 'Galveston', countrycode: 'US', osm_key: 'place', osm_value: 'city', lat: 29.3013, lon: -94.7977 },
 ];
 for (const place of PLACES) KNOWN_PLACES.push([place.lat, place.lon]);
 

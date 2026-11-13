@@ -110,18 +110,53 @@ export const storage = {
 
     /**
      * Species records for a region (see species-api.js). Ranges change over years, not
-     * days, so an answer is kept for a month and reused offline.
+     * days, so an answer is kept for a month and reused offline. ("2": answers now include
+     * salt-water fish; older saved answers are simply not looked at.)
      */
     getSpeciesCounts(regionKey) {
-        const entry = read('speciesRegions', {})?.[regionKey];
+        const entry = read('speciesRegions2', {})?.[regionKey];
         if (!entry?.counts || Date.now() - entry.savedAt > 30 * 24 * 60 * 60 * 1000) return null;
         return entry.counts;
     },
     setSpeciesCounts(regionKey, counts) {
-        const all = read('speciesRegions', {}) ?? {};
+        const all = read('speciesRegions2', {}) ?? {};
         delete all[regionKey];
         all[regionKey] = { counts, savedAt: Date.now() };
-        write('speciesRegions', Object.fromEntries(Object.entries(all).slice(-12))); // newest dozen regions
+        write('speciesRegions2', Object.fromEntries(Object.entries(all).slice(-12))); // newest dozen regions
+    },
+
+    /** The kind of fishing last chosen: 'fresh', 'inshore' or 'surf'. Used wherever that kind is possible. */
+    getMode() {
+        const mode = read('mode');
+        return mode === 'inshore' || mode === 'surf' ? mode : 'fresh';
+    },
+    setMode(mode) {
+        write('mode', mode);
+    },
+
+    /** The salt-water fish last chosen (a group id from SALT_GROUP_IDS in species.js), or null. */
+    getSaltGroup() {
+        const group = read('saltSpecies');
+        return typeof group === 'string' ? group : null;
+    },
+    setSaltGroup(group) {
+        write('saltSpecies', group);
+    },
+
+    /**
+     * What is already known about a coastal location and is slow to find out again:
+     * { surf: boolean, gridUrl: string|null } (whether it is an ocean beach, and the
+     * forecast cell that holds its waves).
+     */
+    getCoastHint(loc) {
+        return read('coast', {})?.[locationKey(loc)] ?? null;
+    },
+    setCoastHint(loc, hint) {
+        const all = read('coast', {}) ?? {};
+        const key = locationKey(loc);
+        delete all[key];
+        all[key] = hint;
+        write('coast', Object.fromEntries(Object.entries(all).slice(-30)));
     },
 
     /** The station the user picked by hand for a location, if any. */

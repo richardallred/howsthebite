@@ -1,9 +1,10 @@
 # 🎣 How's the Bite?
 
 A Progressive Web App that answers one question for anglers: **how good is the fishing right now?**
-Pick any US town, lake or river and get a 0–100 score built from real water temperature at the
-nearest USGS sensor, the time of day, live weather, river flow compared with normal, and the moon,
-plus the current river level, flow or lake elevation. The weights follow what studies of angler
+Pick any US town, lake, river, bay or beach and get a 0–100 score built from real water
+temperature, the time of day, live weather, river flow compared with normal and the moon, or, in
+salt water, the tide and the surf. It comes with lure suggestions for the conditions and the
+current river level, lake elevation or tide table. The weights follow what studies of angler
 catch rates have actually measured (see [How the score works](#how-the-score-works)).
 
 No framework and nothing to compile: plain HTML, CSS and ES modules. The app itself needs
@@ -17,7 +18,12 @@ No framework and nothing to compile: plain HTML, CSS and ES modules. The app its
   tuned to what you are fishing for: all species, bass and panfish, walleye and pike, or trout
 - **Only the fish that live there are offered**: the choices come from occurrence records for the
   region, so there is no walleye option in south Florida and no bass option in Alaska
-- **Best times** for the next day and a half, from sunrise/sunset and the forecast
+- **Salt water too**: near the coast, switch between Freshwater, Inshore (bays, flats, marsh,
+  piers) and Surf. Salt-water scores use NOAA tide predictions and coastal water temperature, and
+  for surf the Weather Service's surf height and rip-current risk
+- **What to throw**: three or four lure and bait suggestions for the local fish in the current
+  water temperature, light, wind, clarity and tide, each with a link to search for it on Amazon
+- **Best times** for the next day and a half, from sunrise/sunset, the tide and the forecast
 - **Weather alerts** from the National Weather Service; thunderstorm and other dangerous-weather
   warnings cap the score while they are in effect
 - **Live water temperature** from nearby USGS monitoring stations; pick a different station from the
@@ -65,7 +71,7 @@ Without that file the preview still works; the proxy just calls USGS anonymously
 ## Tests
 
 ```bash
-npm test            # unit tests: scoring, regional species, sun and moon, alerts, trends, sky, helpers, the USGS proxy
+npm test            # unit tests: scoring, tides and salt water, lures, regional species, sun and moon, alerts, the proxies
 npm run test:e2e    # browser tests (Playwright): the whole app, desktop and phone layouts
 npm run test:all    # both
 ```
@@ -150,6 +156,48 @@ scripts it loaded earlier, possibly for days.
 
 The `x-cache` response header reports `hit`, `miss` or `stale`.
 
+### The sea-temperature proxy
+
+`functions/api/sst.js` answers `GET /api/sst?lat=…&lon=…` with a satellite sea-surface
+temperature, for coasts where no tide station nearby has a thermometer. The source (NASA JPL's
+MUR analysis, served by NOAA CoastWatch) sends no CORS headers, so a browser cannot ask it
+directly. Requests are snapped to a 0.05° grid and cached for six hours; an outage serves the
+last reading for up to three days. On hosting without Functions the app notices and falls back to
+an estimate from air temperature.
+
+### Amazon links
+
+Lure suggestions link to Amazon search results, tagged with the Amazon Associates tracking ID in
+`AMAZON_ASSOCIATE_TAG` in `js/config.js`. With that setting empty they are ordinary links, nothing
+is earned and no disclosure is shown. If you fork this project, replace the ID with your own or
+empty it: never ship someone else's tag, or a made-up one.
+
+For the links to earn:
+
+1. The site's address must be listed in the [Amazon Associates](https://affiliate-program.amazon.com/)
+   account the tag belongs to. Amazon expects three qualifying sales within 180 days of applying;
+   your own orders do not count.
+2. Check one of the generated links in the Associates **Link Checker**. The format used is
+   `https://www.amazon.com/s?k=<search>&tag=<id>`, which carries the tag as the programme's
+   policies require; Amazon does not publish a canonical format for search links.
+
+What the app does to stay inside the programme's rules (Operating Agreement of October 2025 and
+Program Policies of April 2026):
+
+- Shows "As an Amazon Associate I earn from qualifying purchases." on the page and "(paid link)"
+  beside every tagged link, which is also what the FTC asks for.
+- Marks tagged links `rel="sponsored nofollow"`, as Google asks.
+- Uses plain, visible `amazon.com` addresses: no shortener and no redirect.
+- Shows no prices.
+- **Leaves links untagged in the installed app and when offline.** The policies bar affiliate
+  links in software "installable by an end user" and in offline material, and do not say whether
+  an installed web app counts. If Associates support confirms in writing that it does not, remove
+  that check in `affiliateTag()` in `js/app.js`.
+
+Links to search results are allowed only beside original content relevant to them, which the
+suggestions and the score are. Bass Pro Shops also runs an affiliate programme for tackle if
+Amazon turns out to be a poor fit.
+
 ## How the score works
 
 The score rates **conditions**, not your odds. Wherever catch rates have been measured, the
@@ -199,6 +247,76 @@ warning in effect (severe thunderstorm, tornado, special marine, flash flood and
 score at 15. When a ceiling applies, the score card says which one.
 
 Overall rating: 85+ exceptional, 70+ excellent, 55+ good, 40+ fair, 25+ poor, 10+ very poor.
+
+### Salt water
+
+Near tidal water the page offers **Inshore** (bays, estuaries, flats, marsh, jetties, piers) and,
+where the Weather Service forecasts for a beach, **Surf**. Fresh water stays the default; the
+choice is remembered and applies wherever it is possible. Tidal rivers get the choice too: only
+the angler knows whether they are fishing salt water there.
+
+| Factor | Inshore | Surf | How it is scored |
+|---|---|---|---|
+| Water temperature | 35 | 30 | A curve per group of fish: snook, tarpon and pompano peak at 74–86°F; redfish, seatrout and flounder at 65–82°F; striped bass, bluefish and fluke at 55–70°F; southern California halibut and surf fish at 60–72°F; salmon and northern surfperch at 48–58°F. Snook score almost nothing below 58°F. |
+| Tide | 27 | 15 | How fast the water is moving, from NOAA's predicted highs and lows: full marks at mid-tide, 40% at slack. Rising and falling score the same. |
+| Surf | — | 22 | Wave height at the beach. Up to 3 ft scores full marks and flat water 90%; points fall away above 4 ft and are gone by 10 ft. |
+| Light | 18 | 15 | Dawn and dusk 100%; daytime 60–78% by cloud; night 65%. |
+| Wind | 17 | 15 | The freshwater curve. |
+| Barometric pressure | 3 | 3 | Trend only. |
+
+Water temperature, surf and wind can each set a ceiling on the total, as in fresh water. There is
+no river-flow or moon factor. Where no wave height is available the surf factor is left out; where
+NOAA has no predictions, so is the tide.
+
+What salt-water fish are offered follows the region, as in fresh water, with two additions: each
+group is limited to the coast it lives on, and striped bass records count only where stripers run
+in salt water (reservoir fish across the South would otherwise put them on every Gulf beach).
+Hawaii's shore fish are not in the list, so Hawaii gets a warm-water score and no lure advice.
+
+**Why these weights.** The evidence is thinner than for fresh water, and no study ranks these
+factors against each other for shore anglers.
+
+- **Water temperature** is again the best supported, through physiology: snook stop feeding at
+  about 58°F and die near 54°F; spotted seatrout are cold-stunned below 45°F; pompano avoid water
+  under 68°F; red drum feed poorly below 60°F; large striped bass avoid water above 77°F.
+- **Tide.** Tagged summer flounder, red drum and striped bass all move and feed with the tide, but
+  the favoured stage differs by species and place, and nobody has measured the effect on catch
+  rates. So moving water is scored and direction is only reported. The one test of moon phase
+  beyond the tide (summer flounder) found nothing.
+- **Surf.** The only catch data on waves (8,815 small-boat sea bass trips in the UK) showed
+  landings falling as wave height rose. Nothing supports the saying that flat surf fishes badly.
+- **Light.** Fish are most active around dawn and dusk, but a creel survey of 1,862 Mississippi
+  shore anglers found night and day catch rates essentially the same, so night is not marked down.
+- **Not scored:** wind direction, water clarity and salinity after rain (species-specific or
+  untested, and not measured widely enough to use), and season (handled by which fish are offered
+  and by temperature).
+
+Sources: [summer flounder telemetry](https://bioone.org/journals/marine-and-coastal-fisheries/volume-6/issue-6/19425120.2014.893468/Small-Scale-Vertical-Movements-of-Summer-Flounder-Relative-to-Diurnal/10.1080/19425120.2014.893468.full) ·
+[Mississippi day/night shore creel](https://gsmfc.org/publications/GSMFC%20Number%20113.pdf) ·
+[seatrout winterkill](https://ncseagrant.ncsu.edu/hooklinescience/when-do-spotted-seatrout-succumb-to-winterkill/) ·
+[pompano review](https://repository.library.noaa.gov/view/noaa/49230/noaa_49230_DS1.pdf) ·
+[UK sea bass and wave height](https://pmc.ncbi.nlm.nih.gov/articles/PMC8970468/) ·
+[California surf fish study](https://wildlife.ca.gov/Conservation/Marine/Surf).
+Temperature ranges between the measured thresholds come from long-standing guides' tables.
+
+### Lure suggestions
+
+`js/core/lures.js` holds a list of rules per fish. Each rule names a lure or bait, how to fish it
+and why it suits the moment, and applies when the conditions match: water temperature judged
+against that fish's own range, light, wind, water clarity (measured turbidity, or river flow
+against normal as a stand-in), and in salt water the tide and the surf.
+
+**These are not measured.** Hardly anyone has tested lure choice against conditions. The rules
+follow what state agencies publish in their "how to catch" guides (Iowa, Minnesota, Oregon,
+Oklahoma, New York and Missouri for fresh water; Texas, South Carolina, Georgia, New Jersey,
+Florida and California for salt), filled in from In-Fisherman, Bassmaster and On The Water where
+agencies are silent. Perch and salmon entries are general practice. The page says all this.
+
+Where studies exist they are used: the one comparison of pike lures found spoons out-caught
+spinnerbaits, and the two studies of lure colour (largemouth bass and pike) found colour made no
+difference to catch rate, which the colour line under the suggestions says plainly. Some rules are
+advice rather than tackle: rest trout in water that is too warm, leave cold-stunned snook alone,
+and wait for daylight for pike and sunfish, which feed by sight.
 
 ### Why these weights
 
@@ -255,6 +373,10 @@ if you want to fit the weights rather than judge them.
 | Town, lake and river search | [Photon](https://photon.komoot.io/) (OpenStreetMap data, hosted by komoot) | Free community service with a fair-use policy and no uptime guarantee |
 | Water temperature, level, flow, dissolved oxygen, turbidity | [USGS Water Data APIs](https://api.waterdata.usgs.gov/docs/ogcapi/) | Public domain. `latest-continuous`, `monitoring-locations` and `continuous` collections. Readings are provisional. Oxygen and turbidity are reported by a minority of stations. |
 | Normal flow for today's date | [USGS Statistics API](https://api.waterdata.usgs.gov/statistics/v0/docs) (`observationNormals`) | Public domain. Day-of-year percentiles from each gauge's approved record. The API is labelled beta by USGS. |
+| Tide predictions, coastal water temperature | [NOAA CO-OPS](https://api.tidesandcurrents.noaa.gov/api/prod/) | Public domain, no key. CO-OPS has no "nearest station" search, so the app carries a station list in `data/coops-stations.json`; rebuild it now and then with `node scripts/update-coops-stations.mjs`. |
+| Surf height, rip-current risk, beach water temperature | NWS beach forecast ([feature service](https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/marine_beachforecast_summary/FeatureServer)) | Public domain. Many offices issue it only in the swimming season; the fields are empty otherwise. |
+| Wave-height forecast off a beach | NWS forecast grid (`api.weather.gov/gridpoints`) | Used when the beach forecast has no surf height. A beach's own grid cell is land, so the app looks a few miles out in each direction for one over open water and remembers it. |
+| Sea-surface temperature where no station is near | NASA JPL MUR analysis via [NOAA CoastWatch ERDDAP](https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.html), through `/api/sst` | Free to use and redistribute. About a day and a half old, and a degree or two warm inside bays; labelled a satellite estimate. |
 | Which sport fish live in the region | [GBIF occurrence search](https://techdocs.gbif.org/en/openapi/v1/occurrence) | No key. Counts only, restricted to CC0 and CC BY records. Free service with no uptime guarantee; the app falls back to a latitude rule without it. |
 | Sunrise, sunset, twilight, moon phase and position | Computed in the browser (`js/core/sun.js`, `js/core/moon.js`) | No request is made |
 | Map tiles | [OpenStreetMap](https://www.openstreetmap.org/copyright) via [Leaflet](https://leafletjs.com/) (vendored in `vendor/leaflet`) | Loaded only when the map scrolls into view |
@@ -282,7 +404,7 @@ Bathymetry (depth maps) exists only in scattered state and federal datasets, wit
 
 ### Licences, if the site ever earns money
 
-- **NWS** and **USGS** data are public domain: no restriction on commercial use.
+- **NWS**, **USGS** and **NOAA** data are public domain: no restriction on commercial use.
 - **GBIF** is free to use and asks to be credited (the page footer does). The app requests only
   records published under CC0 or CC BY, leaving out those marked non-commercial, and uses the
   counts, not the records.
@@ -297,7 +419,10 @@ There is no analytics. Your saved places and the last loaded conditions stay in 
 local storage. To fetch conditions, coordinates rounded to about 100 m go to the National Weather
 Service; USGS (or this site's proxy in front of it) is only asked about a box roughly 130 miles
 across, snapped to a 7-mile grid, and then about the individual gauges it found there. GBIF is asked which fish are
-recorded in a box about 140 miles across on a half-degree grid. The text you type in the search
+recorded in a box about 140 miles across on a half-degree grid. Near the coast, NOAA is asked for
+the tides at the nearest station, and the Weather Service's beach-forecast service is sent the
+same rounded coordinates. Following an Amazon link takes you to Amazon, which then sees the
+search and, if an Associates tag is configured, that you came from this site. The text you type in the search
 box goes to Photon. Your
 location is requested only when you press "Use my location".
 
@@ -320,9 +445,12 @@ js/
     http.js             fetch + JSON with timeout and cancellation
     weather-api.js      NWS observations, forecast and alerts, Photon place search
     species-api.js      GBIF: how often each sport fish is recorded around a place
+    coast-api.js        NOAA tides and water temperature, NWS beach and wave forecasts, sea temperature
     usgs-api.js         USGS stations: water temperature, level, flow, their history and flow normals
   core/                 Pure logic with no DOM access (unit tested)
-    scoring.js          The fishing score and the best-times outlook
+    scoring.js          The fishing score (fresh, inshore, surf) and the best-times outlook
+    lures.js            Lure and bait suggestions for the conditions
+    tides.js            Tide height and movement between predicted highs and lows
     species.js          Which groups of fish live in a region, and what to call them
     alerts.js           Which NWS alerts matter on the water
     trend.js            Time-based trend analysis
@@ -335,8 +463,11 @@ js/
     map.js              Lazy-loaded Leaflet station map
     theme.js            Light/dark toggle
     dom.js              Tiny DOM-building helpers
+data/
+  coops-stations.json   NOAA tide and water-temperature stations (built by scripts/update-coops-stations.mjs)
 functions/
   api/usgs/[[path]].js  Cloudflare Pages Function: caching proxy for the USGS API
+  api/sst.js            Cloudflare Pages Function: satellite sea-surface temperature
 scripts/build.mjs       Copies the publishable files to dist/
 tests/                  Unit tests (node --test)
 e2e/                    Browser tests (Playwright)

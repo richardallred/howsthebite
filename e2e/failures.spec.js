@@ -70,6 +70,19 @@ test.describe('weather coverage', () => {
         await expect(page.locator('#scoreValue')).toHaveText(String(Number(DEFAULT_SCORE) - 2)); // 3/5 instead of 5/5
     });
 
+    test('a spot on open water has no daily forecast, and everything else still works', async ({ page, context, app }) => {
+        // NWS answers 404 for the daily forecast of a marine grid cell.
+        await context.route('**/api.weather.gov/gridpoints/**/forecast**', (route) => route.fulfill({
+            status: 404, contentType: 'application/problem+json', headers: { 'access-control-allow-origin': '*' }, body: '{"title":"Marine Forecast Not Supported"}',
+        }));
+        await app.open();
+        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
+        await expect(page.locator('#notice')).toContainText('Showing Chicago'); // no error
+        await expect(page.locator('.forecast-day')).toHaveCount(0);
+        await expect(page.locator('#forecastList')).toContainText('no daily forecast for this exact spot');
+        await expect(app.factor('Light').locator('.factor-value')).toHaveText('Clear');
+    });
+
     test('a brief NWS error is retried once and the visitor never sees it', async ({ page, context, api, app }) => {
         let failuresLeft = 1;
         await context.route('**/api.weather.gov/gridpoints/**/forecast**', (route) => {
