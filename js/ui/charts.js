@@ -13,7 +13,7 @@ const HEIGHT = 200;
 const MARGIN = { top: 14, right: 52, bottom: 26, left: 44 };
 
 const formatters = new Map();
-function formatter(timezone, options) {
+export function formatter(timezone, options) {
     const key = `${timezone}|${JSON.stringify(options)}`;
     if (!formatters.has(key)) {
         let instance;
@@ -42,7 +42,7 @@ function timeTicks(start, end, timezone) {
     return ticks;
 }
 
-function nearestIndex(series, t) {
+export function nearestIndex(series, t) {
     let lo = 0;
     let hi = series.length - 1;
     while (hi - lo > 1) {

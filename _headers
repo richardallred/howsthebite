@@ -1,9 +1,11 @@
 # Response headers applied by Cloudflare Pages (https://developers.cloudflare.com/pages/configuration/headers/).
 # The Content-Security-Policy lists every origin the app talks to; add to connect-src
 # when adding a data source. There are no inline scripts or style attributes.
+# static.cloudflareinsights.com (script) and cloudflareinsights.com (connect) are Cloudflare
+# Web Analytics, which Cloudflare adds to the page when it is switched on for the project.
 
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self' https://api.weather.gov https://photon.komoot.io https://api.waterdata.usgs.gov https://api.gbif.org https://api.tidesandcurrents.noaa.gov https://mapservices.weather.noaa.gov; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self'; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self' https://api.weather.gov https://photon.komoot.io https://api.waterdata.usgs.gov https://api.gbif.org https://api.tidesandcurrents.noaa.gov https://mapservices.weather.noaa.gov https://cloudflareinsights.com; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin

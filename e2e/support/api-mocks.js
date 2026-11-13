@@ -138,6 +138,31 @@ export function forecastResponse(overrides) {
     return { properties: { periods } };
 }
 
+/** The same forecast hour by hour, for 84 hours from the top of the current hour, as NWS sends it. */
+export function hourlyForecastResponse(overrides) {
+    const { periods: halfDays } = forecastResponse(overrides).properties;
+    const first = Math.floor(NOW / HOUR) * HOUR;
+    const periods = [];
+    for (let i = 0; i < 84; i++) {
+        const start = first + i * HOUR;
+        const within = halfDays.find((period) => Date.parse(period.startTime) <= start && start < Date.parse(period.endTime)) ?? halfDays[0];
+        periods.push({
+            number: i + 1,
+            startTime: new Date(start).toISOString(),
+            endTime: new Date(start + HOUR).toISOString(),
+            isDaytime: within.isDaytime,
+            temperature: within.temperature,
+            temperatureUnit: 'F',
+            probabilityOfPrecipitation: within.probabilityOfPrecipitation,
+            windSpeed: within.windSpeed,
+            windDirection: within.windDirection,
+            icon: within.icon,
+            shortForecast: within.shortForecast,
+        });
+    }
+    return { properties: { periods } };
+}
+
 /** Active alerts as NWS sends them. `alerts` is a list of { event, onsetHours, endsHours } relative to NOW. */
 export function alertsResponse(alerts) {
     return {

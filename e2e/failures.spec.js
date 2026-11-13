@@ -85,14 +85,15 @@ test.describe('weather coverage', () => {
 
     test('a brief NWS error is retried once and the visitor never sees it', async ({ page, context, api, app }) => {
         let failuresLeft = 1;
-        await context.route('**/api.weather.gov/gridpoints/**/forecast**', (route) => {
+        // The daily forecast only (the hourly one is optional and is not retried).
+        await context.route((url) => url.hostname === 'api.weather.gov' && url.pathname.endsWith('/forecast'), (route) => {
             if (failuresLeft-- > 0) return route.fulfill({ status: 503, body: '{}', headers: { 'access-control-allow-origin': '*' } });
             return route.fallback();
         });
         await app.open();
         await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
         await expect(page.locator('#notice')).toContainText('Showing Chicago'); // only the first-visit hint, no error
-        expect(api.count('nws', '/forecast')).toBe(1); // the retry reached the normal mock
+        expect(api.count('nws', '/forecast?')).toBe(1); // the retry reached the normal mock
     });
 });
 

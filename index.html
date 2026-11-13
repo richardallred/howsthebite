@@ -138,9 +138,16 @@
 
         <section class="section" id="forecast" aria-labelledby="forecastTitle">
             <div class="section-head">
-                <h2 id="forecastTitle">5-day forecast</h2>
+                <h2 id="forecastTitle">Forecast</h2>
             </div>
-            <ol class="forecast" id="forecastList"></ol>
+            <article class="card chart-card chart--score" id="outlookCard">
+                <h3>Fishing score outlook <span class="muted" id="outlookRange"></span></h3>
+                <div class="chart" id="outlookChart"></div>
+                <ul class="outlook-days" id="outlookDays"></ul>
+                <p class="muted outlook-note" id="outlookNote"></p>
+            </article>
+            <h3 class="subhead" id="weatherTitle">5-day weather</h3>
+            <ol class="forecast" id="forecastList" aria-labelledby="weatherTitle"></ol>
         </section>
 
         <section class="section" id="water" aria-labelledby="waterTitle">

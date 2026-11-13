@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import {
     FACTOR_MAX, HAZARD_CAP, SPECIES_GROUPS, bandFor, bestWindows, bitePhrase, estimateWaterTemp, flowPercentile,
-    scoreConditions, scoreFlow, scoreLight, scoreMoon, scorePressure, scoreWaterTemp, scoreWind,
+    scoreConditions, scoreFlow, scoreLight, scoreMoon, scorePressure, scoreSeries, scoreWaterTemp, scoreWind,
 } from '../js/core/scoring.js';
 
 const HOUR = 3600_000;
@@ -317,6 +317,37 @@ test('no best windows are offered when the score is held flat the whole time', (
     assert.deepEqual(bestWindows({ ...ideal, waterTempF: 32.2 }, { start, hours: 36 }), []); // frozen: capped at every hour
     assert.deepEqual(bestWindows({ ...ideal, flow: { cfs: 20000, percentiles: NORMALS } }, { start, hours: 36 }), []);
     assert.ok(bestWindows({ ...ideal, waterTempF: 50 }, { start, hours: 36 }).length > 0); // cool but fishable
+});
+
+test('score series: the first point is the score now, later points use the forecast', () => {
+    const start = local(10).getTime();
+    const base = { ...ideal, pressureChange3h: 0.1, hazard: 'Severe Thunderstorm Warning' }; // now: capped by the warning
+    const series = scoreSeries(base, { start, end: start + 6 * HOUR });
+    assert.equal(series.length, 19); // now, then every 20 minutes
+    assert.equal(series[0].t, start);
+    assert.equal(series[0].score, scoreConditions({ ...base, date: new Date(start) }).score);
+    assert.equal(series[0].score, HAZARD_CAP);
+    assert.equal(series[0].cap, 'Severe Thunderstorm Warning in effect');
+    // The warning and the pressure trend are not carried into the hours ahead.
+    assert.ok(series[1].score > 70);
+    assert.equal(series[1].cap, null);
+    assert.equal(series[1].band.label, bandFor(series[1].score).label);
+    for (let i = 1; i < series.length; i++) assert.equal((series[i].t - series[i - 1].t), 20 * 60_000);
+
+    // What is forecast for an hour changes that hour only.
+    const windy = scoreSeries(ideal, { start, end: start + 6 * HOUR, at: (t) => (t >= start + 3 * HOUR ? { windMph: 32 } : null) });
+    assert.ok(windy[6].score > 70);
+    assert.ok(windy[12].score <= 12);
+    assert.equal(windy[12].cap, 'Held down by the wind');
+});
+
+test('score series: samples after the first sit on round clock times', () => {
+    const start = local(10, 7).getTime(); // 10:07
+    const series = scoreSeries(ideal, { start, end: start + 2 * HOUR });
+    assert.equal(series[0].t, start);
+    assert.equal(new Date(series[1].t).getUTCMinutes(), 20);
+    assert.equal(new Date(series[2].t).getUTCMinutes(), 40);
+    assert.ok(series[series.length - 1].t <= start + 2 * HOUR);
 });
 
 test('bands and phrases', () => {

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import { forecastSkyClass } from '../js/api/weather-api.js';
 import { summariseAlerts } from '../js/core/alerts.js';
 import { moonAge, moonInfo, moonTransit } from '../js/core/moon.js';
 import { sunAltitude, sunTimes } from '../js/core/sun.js';
@@ -206,4 +207,21 @@ test('alerts: dangerous ones in effect are flagged, advisories are listed, the r
     assert.equal(summariseAlerts([alert('Severe Thunderstorm Warning', 1, 2)], now).hazard, null);
     assert.deepEqual(summariseAlerts(undefined, now), { hazard: null, items: [] });
     assert.equal(summariseAlerts([{ event: 'Tornado Warning', onset: null, ends: null }], now).hazard, 'Tornado Warning');
+});
+
+test('a forecast chance of thunderstorms is not scored as a storm; a likely one is', () => {
+    const period = (shortForecast, chance, code = 'tsra') => ({
+        shortForecast, icon: `https://api.weather.gov/icons/land/day/${code},${chance ?? 0}?size=small`,
+        probabilityOfPrecipitation: { value: chance },
+    });
+    assert.equal(forecastSkyClass(period('Slight Chance Showers And Thunderstorms', 20, 'tsra_hi')), 'light-precip');
+    assert.equal(forecastSkyClass(period('Chance Showers And Thunderstorms', 40, 'tsra_sct')), 'light-precip');
+    assert.equal(forecastSkyClass(period('Showers And Thunderstorms Likely', 70)), 'storm');
+    assert.equal(forecastSkyClass(period('Showers And Thunderstorms', 93)), 'storm');
+    // No probability given: go by the wording.
+    assert.equal(forecastSkyClass(period('Isolated Thunderstorms', null)), 'light-precip');
+    assert.equal(forecastSkyClass(period('Thunderstorms', null)), 'storm');
+    // Anything that is not a storm is unaffected.
+    assert.equal(forecastSkyClass({ shortForecast: 'Sunny', icon: 'https://api.weather.gov/icons/land/day/skc?size=small' }), 'clear');
+    assert.equal(forecastSkyClass({ shortForecast: 'Rain Likely', icon: 'https://api.weather.gov/icons/land/day/rain,80?size=small', probabilityOfPrecipitation: { value: 80 } }), 'precip');
 });

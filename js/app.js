@@ -15,7 +15,7 @@ import { APP } from './config.js';
 import { summariseAlerts } from './core/alerts.js';
 import { colourAdvice, lureConditions, recommendLures } from './core/lures.js';
 import { moonInfo } from './core/moon.js';
-import { SPECIES_GROUPS, bestWindows, estimateWaterTemp, scoreConditions } from './core/scoring.js';
+import { SPECIES_GROUPS, bestWindows, estimateWaterTemp, scoreConditions, scoreSeries } from './core/scoring.js';
 import { DEFAULT_LABELS, chooseSpecies, regionalSpecies, saltSpeciesOptions, speciesOptions } from './core/species.js';
 import { sunTimes } from './core/sun.js';
 import { upcomingTides } from './core/tides.js';
@@ -26,6 +26,7 @@ import { locationKey, storage } from './storage.js';
 import { createLineChart } from './ui/charts.js';
 import { $, el, icon, setText } from './ui/dom.js';
 import { createStationMap } from './ui/map.js';
+import { createOutlookChart } from './ui/outlook-chart.js';
 import { initTheme } from './ui/theme.js';
 
 const state = {
@@ -51,6 +52,7 @@ const state = {
 let loadController = null;
 let historyController = null;
 let charts = null;
+let outlookChart = null;
 let stationMap = null;
 
 // ---------------------------------------------------------------------------
@@ -185,6 +187,71 @@ function surfNow(clock) {
     return isNum(offshore) ? { heightFt: offshore, source: 'NWS wave forecast just offshore' } : null;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const OUTLOOK_DAYS_AHEAD = 2; // the rest of today plus this many full days
+
+function inTimezone(options) {
+    try {
+        return new Intl.DateTimeFormat('en-US', { ...options, timeZone: state.weather?.timezone });
+    } catch {
+        return new Intl.DateTimeFormat('en-US', options);
+    }
+}
+
+/** The next local midnight after `time`, at the location being looked at. */
+function nextLocalMidnight(time) {
+    const parts = inTimezone({ hour: 'numeric', minute: 'numeric', second: 'numeric', hourCycle: 'h23' }).formatToParts(time);
+    const part = (type) => Number(parts.find((entry) => entry.type === type)?.value ?? 0);
+    const sinceMidnight = ((part('hour') * 60 + part('minute')) * 60 + part('second')) * 1000 + (time % 1000);
+    return time - sinceMidnight + DAY_MS;
+}
+
+/**
+ * The score from now to the end of the day after tomorrow, with what the chart needs to
+ * explain it: one entry per calendar day (its best moment, and the stretch around it that
+ * stays within 4 points) and the nights to shade.
+ */
+function deriveOutlook(inputs, clock) {
+    const end = nextLocalMidnight(clock) + OUTLOOK_DAYS_AHEAD * DAY_MS;
+    const samples = scoreSeries(inputs, { start: clock, end, at: (time) => forecastAt(time, clock) });
+
+    const dayKey = inTimezone({ year: 'numeric', month: '2-digit', day: '2-digit' });
+    const dayName = inTimezone({ weekday: 'short' });
+    const byDay = new Map();
+    for (const sample of samples.slice(0, -1)) { // the last sample is midnight, the first moment of a day beyond the chart
+        const key = dayKey.format(sample.t);
+        if (!byDay.has(key)) byDay.set(key, []);
+        byDay.get(key).push(sample);
+    }
+    const days = [...byDay.values()].map((list, index) => {
+        const best = Math.max(...list.map((sample) => sample.score));
+        let first = list.findIndex((sample) => sample.score === best);
+        let last = first;
+        const peak = list[first];
+        while (first > 0 && list[first - 1].score >= best - 4) first--;
+        while (last + 1 < list.length && list[last + 1].score >= best - 4) last++;
+        const lowest = Math.min(...list.map((sample) => sample.score));
+        return {
+            label: index === 0 ? 'Today' : dayName.format(list[0].t),
+            start: list[0].t,
+            end: Math.min(end, list[list.length - 1].t + 20 * 60 * 1000),
+            peak,
+            window: { start: list[first].t, end: list[last].t + 20 * 60 * 1000 },
+            flat: best - lowest < 5, // held down all day: no hour is better than another
+        };
+    });
+
+    // Shade from each sunset to the following sunrise (skipped where the sun does not set).
+    const { lat, lon } = state.location;
+    const nights = [];
+    for (let noon = clock - DAY_MS; noon < end + DAY_MS; noon += DAY_MS) {
+        const { sunset } = sunTimes(noon, lat, lon);
+        const { sunrise } = sunTimes(noon + DAY_MS, lat, lon);
+        if (sunset && sunrise && sunrise > clock && sunset < end) nights.push({ start: Math.max(sunset, clock), end: Math.min(sunrise, end) });
+    }
+    return { samples, days, nights, end };
+}
+
 function derive() {
     const { weather } = state;
     if (!weather) return null;
@@ -236,6 +303,7 @@ function derive() {
         hours: APP.OUTLOOK_HOURS,
         at: (time) => forecastAt(time, clock),
     });
+    const outlook = deriveOutlook(inputs, clock);
 
     const factor = (id) => result.factors.find((entry) => entry.id === id);
     const tide = factor('tide')?.state ?? null;
@@ -264,7 +332,7 @@ function derive() {
         ),
     };
 
-    return { result, windows, lures, alerts, clock, pressure, air, station, waterTempF, level, mode, salt, seaTemp, surf, tide };
+    return { result, windows, outlook, lures, alerts, clock, pressure, air, station, waterTempF, level, mode, salt, seaTemp, surf, tide };
 }
 
 // ---------------------------------------------------------------------------
@@ -551,6 +619,34 @@ function renderLures(derived) {
     setText('lureColour', colour);
 }
 
+function renderOutlook(derived) {
+    const list = $('outlookDays');
+    if (!derived) {
+        outlookChart.update([], { emptyText: state.loadFailed ? 'The outlook needs the current conditions.' : 'The outlook will appear with the conditions.' });
+        list.replaceChildren();
+        setText('outlookRange', '');
+        setText('outlookNote', '');
+        return;
+    }
+    const { samples, days, nights } = derived.outlook;
+    outlookChart.update(samples, { timezone: state.weather.timezone, days, nights });
+    setText('outlookRange', days.length > 1 ? `now to ${days[days.length - 1].label} night` : 'the rest of today');
+
+    list.replaceChildren(...days.map((day) => el('li', { class: 'outlook-day' },
+        el('span', { class: 'outlook-day-name' }, day.label),
+        el('span', { class: 'outlook-day-best' }, `${day.flat ? 'About' : 'Best'} ${day.peak.score} `, el('span', null, day.peak.band.label)),
+        el('span', { class: 'outlook-day-when' }, day.flat
+            ? day.peak.cap ?? 'Much the same all day'
+            : `${day.window.start <= derived.clock ? 'now' : clockTime(day.window.start)}–${clockTime(day.window.end)}`))));
+
+    const calculated = derived.salt ? 'light and tide are calculated' : 'light and moon are calculated';
+    const held = derived.salt
+        ? 'The water temperature is assumed to stay as it is now'
+        : 'Water temperature and river flow are assumed to stay as they are now';
+    setText('outlookNote', `Sky and wind follow the Weather Service's forecast${derived.mode === 'surf' ? ', as does the surf' : ''}; ${calculated}. `
+        + `${held}, so treat the later days as a rough guide. Shaded bands are night.`);
+}
+
 function renderForecast() {
     const list = $('forecastList');
     const { weather } = state;
@@ -757,6 +853,7 @@ function render() {
     renderSpeciesGroup();
     renderFactors(derived);
     renderLures(derived);
+    renderOutlook(derived);
     renderForecast();
     renderStations(derived);
     renderLevel(derived);
@@ -1398,6 +1495,7 @@ function init() {
             label: 'Water level', format: (v) => `${v.toFixed(2)} ft`, formatTick: (v) => v.toFixed(2), minRange: 0.4,
         }),
     };
+    outlookChart = createOutlookChart($('outlookChart'));
     stationMap = createStationMap($('stationMap'), { onSelect: (id) => selectStation(id) });
 
     $('locateBtn').addEventListener('click', useMyLocation);

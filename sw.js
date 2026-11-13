@@ -43,6 +43,7 @@ const SHELL = [
     'js/ui/charts.js',
     'js/ui/dom.js',
     'js/ui/map.js',
+    'js/ui/outlook-chart.js',
     'js/ui/theme.js',
     'vendor/leaflet/leaflet.css',
     'vendor/leaflet/leaflet.js',

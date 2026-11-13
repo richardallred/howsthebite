@@ -616,22 +616,38 @@ export function scoreConditions(c) {
  */
 const MIN_SPREAD_FOR_WINDOWS = 5;
 
+/**
+ * The score at regular steps from `start` to `end`: [{ t, score, band, cap }].
+ *
+ * `base` is the same object scoreConditions takes; `at(time)` returns whatever is forecast
+ * to differ at that time ({ sky, windMph, waveFt }) or null. The first sample is the score
+ * right now, exactly as shown. Ahead of now the water temperature, river flow and moon
+ * phase are assumed to hold, the pressure trend is unknown, and current alerts are not
+ * carried forward. Sun, moon and tide are worked out for each time.
+ * Samples after the first fall on the clock's own grid (:00, :20, :40).
+ */
+export function scoreSeries(base, { start, end, stepMinutes = 20, at = () => null } = {}) {
+    const step = stepMinutes * 60 * 1000;
+    const times = [start];
+    for (let t = Math.floor(start / step) * step + step; t <= end; t += step) times.push(t);
+    return times.map((t) => {
+        const conditions = t === start
+            ? { ...base, date: new Date(t) }
+            : { ...base, pressureChange3h: null, gustMph: null, hazard: null, ...(at(t) ?? {}), date: new Date(t) };
+        const result = scoreConditions(conditions);
+        return { t, score: result.score, band: result.band, cap: result.cap?.reason ?? null };
+    });
+}
+
 export function bestWindows(base, { start, hours = 36, stepMinutes = 20, at = () => null, limit = 3 } = {}) {
     const HALF_DAY = 12 * 3600 * 1000;
     const step = stepMinutes * 60 * 1000;
     const solarNoon = isNum(base.lat) && isNum(base.lon) ? sunTimes(start, base.lat, base.lon).noon : start;
 
-    // Sample now, then on the clock's own grid, so windows start and end on round times.
-    const times = [start];
-    for (let t = Math.floor(start / step) * step + step; t <= start + hours * 3600 * 1000; t += step) times.push(t);
-
     const halfDays = new Map();
     let lowest = Infinity;
     let highest = -Infinity;
-    for (const t of times) {
-        const { score } = scoreConditions({
-            ...base, pressureChange3h: null, gustMph: null, hazard: null, ...(at(t) ?? {}), date: new Date(t),
-        });
+    for (const { t, score } of scoreSeries(base, { start, end: start + hours * 3600 * 1000, stepMinutes, at })) {
         lowest = Math.min(lowest, score);
         highest = Math.max(highest, score);
         const key = Math.floor((t - solarNoon) / HALF_DAY);

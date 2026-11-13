@@ -10,7 +10,7 @@ import { test as base, expect } from '@playwright/test';
 
 import {
     BLANK_TILE, DEFAULT_POINTS, DEFAULT_SCORE, DEFAULT_SPECIES, DEFAULT_STATIONS, NOW, alertsResponse, beachResponse,
-    continuousResponse, coopsResponse, flowNormalsResponse, forecastResponse, gbifResponse, latestContinuousResponse,
+    continuousResponse, coopsResponse, flowNormalsResponse, forecastResponse, gbifResponse, hourlyForecastResponse, latestContinuousResponse,
     marineZonesResponse, monitoringLocationsResponse, observationsResponse, photonResponse, pointResponse, sstResponse,
     stationsResponse, waveGridResponse,
 } from './api-mocks.js';
@@ -111,6 +111,7 @@ export const test = base.extend({
                         return json(route, pointResponse(api.weather));
                     }
                     if (url.pathname.endsWith('/forecast')) return json(route, forecastResponse(api.weather));
+                    if (url.pathname.endsWith('/forecast/hourly')) return json(route, hourlyForecastResponse(api.weather));
                     if (url.pathname.endsWith('/stations')) return json(route, stationsResponse(api.weather));
                     if (url.pathname.endsWith('/observations')) return json(route, observationsResponse(url, api.weather));
                     if (url.pathname === '/alerts/active') return json(route, alertsResponse(api.alerts));

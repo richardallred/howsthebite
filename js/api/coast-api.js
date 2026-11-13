@@ -62,13 +62,14 @@ const gmt = (text) => Date.parse(`${String(text).replace(' ', 'T')}:00Z`);
 const stamp = (time) => new Date(time).toISOString().slice(0, 16).replace(/-/g, '').replace('T', ' '); // yyyyMMdd HH:mm
 
 /**
- * Predicted highs and lows from a day back to about two and a half days ahead:
+ * Predicted highs and lows from a day back to about three and a half days ahead:
  * [{ t, heightFt, type: 'H'|'L' }], oldest first. Heights are above mean lower low water.
  */
 export async function fetchTides(stationId, { signal, now = Date.now() } = {}) {
     const data = await coops({
         product: 'predictions', interval: 'hilo', datum: 'MLLW', station: stationId,
-        begin_date: stamp(now - 30 * HOUR_MS), range: 96, // far enough back for coasts with one tide a day
+        // From far enough back for coasts with one tide a day, to past the end of the day after tomorrow.
+        begin_date: stamp(now - 30 * HOUR_MS), range: 112,
     }, signal);
     return (data.predictions ?? [])
         .map((entry) => ({ t: gmt(entry.t), heightFt: Number.parseFloat(entry.v), type: entry.type === 'H' ? 'H' : 'L' }))

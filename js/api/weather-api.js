@@ -5,6 +5,7 @@
 // How the NWS API fits together:
 //   /points/{lat},{lon}                    -> forecast office + grid cell, nearby place name, time zone
 //   /gridpoints/{office}/{x},{y}/forecast  -> 7-day forecast in 12-hour periods
+//   /gridpoints/{office}/{x},{y}/forecast/hourly -> the same, hour by hour (sky and wind for the score outlook)
 //   /gridpoints/{office}/{x},{y}/stations  -> observation stations, nearest first
 //   /stations/{id}/observations            -> what that station actually measured (current + history)
 //   /alerts/active?point={lat},{lon}       -> warnings and advisories in effect for the spot
@@ -61,6 +62,7 @@ function getPoint(lat, lon, signal) {
                 const place = props.relativeLocation?.properties;
                 return {
                     forecastUrl: props.forecast,
+                    hourlyUrl: props.forecastHourly ?? `${props.forecast}/hourly`,
                     stationsUrl: props.observationStations,
                     timezone: props.timeZone,
                     place: place?.city ? [place.city, US_STATES[place.state] ?? place.state].filter(Boolean).join(', ') : null,
@@ -197,17 +199,37 @@ const typicalWind = (text) => {
     return numbers.length ? numbers.reduce((sum, n) => sum + n, 0) / numbers.length : null;
 };
 
-/** The forecast periods reduced to what the score can use for the hours ahead. */
-function outlookFrom(periods) {
-    return (periods ?? [])
+const OUTLOOK_HOURS = 84; // through the end of the day after tomorrow, with room to spare
+const STORM_LIKELY_PERCENT = 55;
+
+/**
+ * Sky class for a forecast period. A forecast "chance of thunderstorms" is not a storm
+ * overhead: across the South it is in the forecast most summer afternoons. Only a likely
+ * storm counts as one (and caps the score for those hours); a mere chance is scored as a
+ * showery, low-light spell.
+ */
+export function forecastSkyClass(period) {
+    const sky = describeSky({ text: period.shortForecast, icon: period.icon, preferIcon: true }).class;
+    if (sky !== 'storm') return sky;
+    const chance = period.probabilityOfPrecipitation?.value;
+    const likely = isNum(chance) ? chance >= STORM_LIKELY_PERCENT : !/chance|slight|isolated|scattered/i.test(period.shortForecast ?? '');
+    return likely ? 'storm' : 'light-precip';
+}
+
+/**
+ * Forecast periods reduced to what the score can use for the hours ahead: sky and wind.
+ * The hour-by-hour forecast is used when it loaded; otherwise the 12-hour periods.
+ */
+function outlookFrom(hourlyPeriods, halfDayPeriods) {
+    const hourly = (hourlyPeriods ?? []).length >= 12;
+    return (hourly ? hourlyPeriods.slice(0, OUTLOOK_HOURS) : (halfDayPeriods ?? []).slice(0, 7))
         .map((period) => ({
             start: Date.parse(period.startTime),
             end: Date.parse(period.endTime),
-            sky: describeSky({ text: period.shortForecast, icon: period.icon, preferIcon: true }).class,
+            sky: forecastSkyClass(period),
             windMph: typicalWind(period.windSpeed),
         }))
-        .filter((period) => isNum(period.start) && isNum(period.end))
-        .slice(0, 6); // three days is as far as the outlook looks
+        .filter((period) => isNum(period.start) && isNum(period.end));
 }
 
 /** NWS 12-hour periods -> one entry per local calendar day. */
@@ -261,13 +283,20 @@ function forecastSky(periods, now) {
 export async function fetchWeather(lat, lon, { signal } = {}) {
     const point = await getPoint(lat, lon, signal);
 
-    const [forecast, stationList] = await Promise.all([
+    const [forecast, hourly, stationList] = await Promise.all([
         // A spot on open water (a bay, just off a point) is in a marine forecast cell, which has
         // no daily forecast: NWS answers 404. Observations still work, so carry on without one.
         nwsJson(`${point.forecastUrl}?units=us`, { signal }).catch((error) => {
             if (error instanceof HttpError && error.status === 404) return { properties: { periods: [] } };
             throw error;
         }),
+        // Hour-by-hour sky and wind for the score outlook. Optional: no retry, short timeout,
+        // and the 12-hour periods stand in if it does not arrive.
+        fetchJson(`${point.hourlyUrl}?units=us`, { signal, timeoutMs: 8000, headers: { Accept: 'application/geo+json' } })
+            .catch((error) => {
+                if (isAbort(error)) throw error;
+                return null;
+            }),
         nwsJson(`${point.stationsUrl}?limit=${STATIONS_LISTED}`, { signal }),
     ]);
     const periods = forecast.properties?.periods;
@@ -307,7 +336,7 @@ export async function fetchWeather(lat, lon, { signal } = {}) {
             pressure: barometer ? seriesOf(barometer.observations, 'pressureInHg') : [],
         },
         daily: dailyFrom(periods, point.timezone),
-        outlook: outlookFrom(periods),
+        outlook: outlookFrom(hourly?.properties?.periods, periods),
     };
 }
 

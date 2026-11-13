@@ -23,6 +23,8 @@ No framework and nothing to compile: plain HTML, CSS and ES modules. The app its
   for surf the Weather Service's surf height and rip-current risk
 - **What to throw**: three or four lure and bait suggestions for the local fish in the current
   water temperature, light, wind, clarity and tide, each with a link to search for it on Amazon
+- **Score outlook**: a chart of the score from now to the end of the day after tomorrow, with
+  each day's best time, so you can pick when to go
 - **Best times** for the next day and a half, from sunrise/sunset, the tide and the forecast
 - **Weather alerts** from the National Weather Service; thunderstorm and other dangerous-weather
   warnings cap the score while they are in effect
@@ -248,6 +250,28 @@ score at 15. When a ceiling applies, the score card says which one.
 
 Overall rating: 85+ exceptional, 70+ excellent, 55+ good, 40+ fair, 25+ poor, 10+ very poor.
 
+### The outlook
+
+The chart under **Forecast** is the same score worked out every 20 minutes from now to the end of
+the day after tomorrow (`scoreSeries` in `js/core/scoring.js`). Its first point is the score shown
+at the top of the page.
+
+- **Calculated exactly:** the sun (light), the moon, and in salt water the tide.
+- **From forecasts:** sky and wind from the Weather Service's hour-by-hour forecast (the 12-hour
+  forecast if that fails to load), and off a beach the wave-height forecast.
+- **Assumed to hold:** water temperature and river flow stay as they are now. That is the main
+  reason the later days are only a rough guide: a cold front or a rise in the river will change
+  them.
+- **Not carried forward:** the pressure trend (unknown ahead, scored as neutral) and current
+  weather alerts.
+- **Thunderstorms:** a forecast hour counts as a storm, and is capped at 15, only when storms are
+  likely (55% or more). A mere chance of thunderstorms, which is in the forecast most summer
+  afternoons in the South, is scored as a showery, low-light spell.
+
+Each day's card gives its best score and the stretch around it that stays within four points.
+When something holds the score flat all day (frozen water, a river in flood), the card says so
+instead of naming a best time.
+
 ### Salt water
 
 Near tidal water the page offers **Inshore** (bays, estuaries, flats, marsh, jetties, piers) and,
@@ -369,7 +393,7 @@ if you want to fit the weights rather than judge them.
 
 | Data | Source | Notes |
 |---|---|---|
-| Current weather, 72-hour history, forecast, active alerts, place names for "use my location" | [US National Weather Service API](https://www.weather.gov/documentation/services-web-api) | Public domain, no key, US and territories only |
+| Current weather, 72-hour history, daily and hourly forecast, active alerts, place names for "use my location" | [US National Weather Service API](https://www.weather.gov/documentation/services-web-api) | Public domain, no key, US and territories only |
 | Town, lake and river search | [Photon](https://photon.komoot.io/) (OpenStreetMap data, hosted by komoot) | Free community service with a fair-use policy and no uptime guarantee |
 | Water temperature, level, flow, dissolved oxygen, turbidity | [USGS Water Data APIs](https://api.waterdata.usgs.gov/docs/ogcapi/) | Public domain. `latest-continuous`, `monitoring-locations` and `continuous` collections. Readings are provisional. Oxygen and turbidity are reported by a minority of stations. |
 | Normal flow for today's date | [USGS Statistics API](https://api.waterdata.usgs.gov/statistics/v0/docs) (`observationNormals`) | Public domain. Day-of-year percentiles from each gauge's approved record. The API is labelled beta by USGS. |
@@ -415,8 +439,12 @@ Bathymetry (depth maps) exists only in scattered state and federal datasets, wit
 
 ### Privacy
 
-There is no analytics. Your saved places and the last loaded conditions stay in your browser's
-local storage. To fetch conditions, coordinates rounded to about 100 m go to the National Weather
+The site uses [Cloudflare Web Analytics](https://www.cloudflare.com/web-analytics/) to count
+visits. Cloudflare adds the script when it is switched on for the Pages project; it sets no
+cookies and, by Cloudflare's own description, does not fingerprint visitors or track them across
+sites; it reports page views and page-load timings. Switch it off in the Cloudflare dashboard to
+remove it. Your saved places and the last loaded conditions stay in your
+browser's local storage. To fetch conditions, coordinates rounded to about 100 m go to the National Weather
 Service; USGS (or this site's proxy in front of it) is only asked about a box roughly 130 miles
 across, snapped to a 7-mile grid, and then about the individual gauges it found there. GBIF is asked which fish are
 recorded in a box about 140 miles across on a half-degree grid. Near the coast, NOAA is asked for
@@ -460,6 +488,7 @@ js/
     util.js             Distance, formatting and other helpers
   ui/
     charts.js           SVG line chart with tooltip, keyboard support and data table
+    outlook-chart.js    The score outlook chart: shaded nights, day labels, each day's best moment
     map.js              Lazy-loaded Leaflet station map
     theme.js            Light/dark toggle
     dom.js              Tiny DOM-building helpers
