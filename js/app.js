@@ -644,6 +644,16 @@ function renderLures(derived) {
     setText('lureColour', colour);
 }
 
+/** A ring filled to a 0–100 score, with the number in the middle. Coloured by the band of the enclosing element. */
+function scoreRing(score) {
+    const filled = Math.max(0, Math.min(100, score));
+    return el('span', { class: 'score-ring' },
+        svg('svg', { viewBox: '0 0 48 48', 'aria-hidden': 'true', focusable: 'false' },
+            svg('circle', { class: 'score-ring-track', cx: 24, cy: 24, r: 20, pathLength: 100 }),
+            svg('circle', { class: 'score-ring-fill', cx: 24, cy: 24, r: 20, pathLength: 100, 'stroke-dasharray': `${filled} 100` })),
+        el('span', { class: 'score-ring-number' }, String(score)));
+}
+
 function renderOutlook(derived) {
     const list = $('outlookDays');
     if (!derived) {
@@ -657,9 +667,13 @@ function renderOutlook(derived) {
     outlookChart.update(samples, { timezone: state.weather.timezone, days, nights });
     setText('outlookRange', days.length > 1 ? `now to ${days[days.length - 1].label} night` : 'the rest of today');
 
-    list.replaceChildren(...days.map((day) => el('li', { class: 'outlook-day' },
+    list.replaceChildren(...days.map((day) => el('li', { class: 'outlook-day', dataset: { band: day.peak.band.key } },
         el('span', { class: 'outlook-day-name' }, day.label),
-        el('span', { class: 'outlook-day-best' }, `${day.flat ? 'About' : 'Best'} ${day.peak.score} `, el('span', null, day.peak.band.label)),
+        el('span', { class: 'outlook-day-best' },
+            // The ring shows the day's best score; screen readers also hear whether the day is flat ("About").
+            el('span', { class: 'visually-hidden' }, `${day.flat ? 'About' : 'Best'} `),
+            scoreRing(day.peak.score), ' ',
+            el('span', { class: 'outlook-day-band' }, day.peak.band.label)),
         el('span', { class: 'outlook-day-when' }, day.flat
             ? day.peak.cap ?? 'Much the same all day'
             : `${day.window.start <= derived.clock ? 'now' : clockTime(day.window.start)}–${clockTime(day.window.end)}`))));
