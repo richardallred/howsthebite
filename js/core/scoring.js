@@ -102,9 +102,10 @@ export const SPECIES_GROUPS = {
     },
 };
 
-function waterNote(tempF, share, groupId) {
+function waterNote(tempF, share, groupId, label) {
     const group = SPECIES_GROUPS[groupId];
-    if (share >= 0.95) return group.prime;
+    // `label` names the fish actually found in the region ("Smallmouth & perch"), when known.
+    if (share >= 0.95) return label && groupId !== 'any' ? `Prime range for ${label.toLowerCase()}` : group.prime;
     const coldSide = tempF < group.curve.find(([, y]) => y === 1)[0];
     if (coldSide) {
         if (share >= 0.7) return 'A little cool — fish active, just short of their best';
@@ -127,14 +128,15 @@ function waterNote(tempF, share, groupId) {
  * @param {number} tempF
  * @param {object} [options]
  * @param {'any'|'warm'|'cool'|'cold'} [options.group]
+ * @param {string|null} [options.label]   what the group is called in this region, for the note
  * @param {boolean} [options.estimated]   no sensor nearby: the temperature is a guess from air temperature
  * @param {number|null} [options.change24h]  shown, but not scored: its effect on catch rates is unmeasured
  * @param {number|null} [options.oxygenMgL]  dissolved oxygen, when the station reports it
  */
-export function scoreWaterTemp(tempF, { group = 'any', estimated = false, change24h = null, oxygenMgL = null } = {}) {
+export function scoreWaterTemp(tempF, { group = 'any', label = null, estimated = false, change24h = null, oxygenMgL = null } = {}) {
     const groupId = group in SPECIES_GROUPS ? group : 'any';
     let share = curve(SPECIES_GROUPS[groupId].curve, tempF);
-    let note = waterNote(tempF, share, groupId);
+    let note = waterNote(tempF, share, groupId, label);
 
     if (estimated) {
         // A guess should not swing the score as far as a measurement: pull it toward the middle.
@@ -393,6 +395,7 @@ const limitFor = (share) => Math.round(100 * clamp(0.1 + 1.8 * share, 0, 1));
  * @param {number|null} [c.waterChange24h]
  * @param {number|null} [c.oxygenMgL]
  * @param {'any'|'warm'|'cool'|'cold'} [c.speciesGroup]
+ * @param {string|null} [c.speciesLabel]  the group's name in this region, e.g. 'Smallmouth & perch'
  * @param {number|null} c.pressureInHg
  * @param {number|null} [c.pressureChange3h]
  * @param {number} c.windMph
@@ -408,7 +411,8 @@ export function scoreConditions(c) {
     const date = c.date ?? new Date();
     const results = {
         water: scoreWaterTemp(c.waterTempF, {
-            group: c.speciesGroup, estimated: c.waterEstimated, change24h: c.waterChange24h, oxygenMgL: c.oxygenMgL,
+            group: c.speciesGroup, label: c.speciesLabel, estimated: c.waterEstimated, change24h: c.waterChange24h,
+            oxygenMgL: c.oxygenMgL,
         }),
         light: scoreLight({ time: date.getTime(), lat: c.lat, lon: c.lon, sky: c.sky }),
         wind: scoreWind(c.windMph, { gustMph: c.gustMph }),
@@ -450,10 +454,13 @@ export function scoreConditions(c) {
  *
  * Each half-day (solar midnight to noon, noon to midnight) offers one candidate: the
  * stretch around its best moment that stays within 4 points of it. Half-days whose
- * best is well short of the overall best are dropped.
+ * best is well short of the overall best are dropped. Returns nothing when the score
+ * barely moves over the whole period.
  *
  * @returns {Array<{ start: number, end: number, peak: number }>} epoch-ms ranges and their best score
  */
+const MIN_SPREAD_FOR_WINDOWS = 5;
+
 export function bestWindows(base, { start, hours = 36, stepMinutes = 20, at = () => null, limit = 3 } = {}) {
     const HALF_DAY = 12 * 3600 * 1000;
     const step = stepMinutes * 60 * 1000;
@@ -464,14 +471,21 @@ export function bestWindows(base, { start, hours = 36, stepMinutes = 20, at = ()
     for (let t = Math.floor(start / step) * step + step; t <= start + hours * 3600 * 1000; t += step) times.push(t);
 
     const halfDays = new Map();
+    let lowest = Infinity;
+    let highest = -Infinity;
     for (const t of times) {
         const { score } = scoreConditions({
             ...base, pressureChange3h: null, gustMph: null, hazard: null, ...(at(t) ?? {}), date: new Date(t),
         });
+        lowest = Math.min(lowest, score);
+        highest = Math.max(highest, score);
         const key = Math.floor((t - solarNoon) / HALF_DAY);
         if (!halfDays.has(key)) halfDays.set(key, []);
         halfDays.get(key).push({ t, score });
     }
+    // When something holds the score flat the whole time (frozen water, a river in flood),
+    // no hour is better than another and there is nothing to recommend.
+    if (highest - lowest < MIN_SPREAD_FOR_WINDOWS) return [];
 
     const horizon = start + hours * 3600 * 1000;
     const candidates = [...halfDays.values()].map((samples) => {

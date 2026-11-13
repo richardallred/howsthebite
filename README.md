@@ -15,6 +15,8 @@ No framework and nothing to compile: plain HTML, CSS and ES modules. The app its
 
 - **Fishing score (0–100)** with a per-factor breakdown that shows exactly where the points came from,
   tuned to what you are fishing for: all species, bass and panfish, walleye and pike, or trout
+- **Only the fish that live there are offered**: the choices come from occurrence records for the
+  region, so there is no walleye option in south Florida and no bass option in Alaska
 - **Best times** for the next day and a half, from sunrise/sunset and the forecast
 - **Weather alerts** from the National Weather Service; thunderstorm and other dangerous-weather
   warnings cap the score while they are in effect
@@ -63,7 +65,7 @@ Without that file the preview still works; the proxy just calls USGS anonymously
 ## Tests
 
 ```bash
-npm test            # unit tests: scoring, sun and moon, alerts, trends, sky, helpers, the USGS proxy
+npm test            # unit tests: scoring, regional species, sun and moon, alerts, trends, sky, helpers, the USGS proxy
 npm run test:e2e    # browser tests (Playwright): the whole app, desktop and phone layouts
 npm run test:all    # both
 ```
@@ -159,6 +161,28 @@ The logic lives in `js/core/scoring.js` and is covered by `tests/scoring.test.js
 | Moon | 8 | New or full moon, overhead or underfoot | 35% always, up to 30% more near new/full moon, and 35% more within about an hour of the moon crossing overhead or underfoot. |
 | Barometric pressure | 5 | Steady or slowly falling | Trend only: slowly falling 5, steady or falling fast 4, rising 3, rising fast 1. The level itself earns nothing. |
 
+**Species on offer.** The species setting only lists fish recorded around the place you are
+looking at (`js/core/species.js`). The app asks [GBIF](https://www.gbif.org/) how many openly
+licensed records of 19 sport fish exist since 1990 in a box about 140 miles across:
+
+- Walleye, pike and their cool-water relatives, and trout and salmon, are each offered when they
+  have at least 5 records that are 3% of the region's total, or 25 outright. A few strays do not
+  make a fishery.
+- The button is named for what is actually there: "Walleye & pike" in Minnesota, "Smallmouth"
+  around Dallas, "Perch" near Savannah, "Pike" and "Trout & salmon" in Alaska.
+- Bass and panfish are offered everywhere except Alaska, without consulting the counts: they live
+  in every other state, including thinly surveyed country with few records.
+- Where a single group lives (Florida, the Gulf coast), there is no choice to make and the score
+  says which fish it used.
+- Your saved preference is kept: where those fish are not recorded the score uses "All species"
+  and says so, and the preference applies again wherever they do live.
+- With fewer than 20 records in all, or if the lookup fails, the app assumes by latitude instead:
+  bass only south of 31°N, the Alaskan mix in Alaska, everything in between.
+
+An answer is remembered in the browser for a month per region, so GBIF is asked about once.
+Occurrence records show where fish have been recorded, not how good the fishing is, and stocked
+winter trout (Houston, Dallas) count as trout.
+
 **Total.** The score is the share of the available points, so a lake (no flow factor) is scored
 out of 90 and scaled to 100.
 
@@ -225,6 +249,7 @@ if you want to fit the weights rather than judge them.
 | Town, lake and river search | [Photon](https://photon.komoot.io/) (OpenStreetMap data, hosted by komoot) | Free community service with a fair-use policy and no uptime guarantee |
 | Water temperature, level, flow, dissolved oxygen, turbidity | [USGS Water Data APIs](https://api.waterdata.usgs.gov/docs/ogcapi/) | Public domain. `latest-continuous`, `monitoring-locations` and `continuous` collections. Readings are provisional. Oxygen and turbidity are reported by a minority of stations. |
 | Normal flow for today's date | [USGS Statistics API](https://api.waterdata.usgs.gov/statistics/v0/docs) (`observationNormals`) | Public domain. Day-of-year percentiles from each gauge's approved record. The API is labelled beta by USGS. |
+| Which sport fish live in the region | [GBIF occurrence search](https://techdocs.gbif.org/en/openapi/v1/occurrence) | No key. Counts only, restricted to CC0 and CC BY records. Free service with no uptime guarantee; the app falls back to a latitude rule without it. |
 | Sunrise, sunset, twilight, moon phase and position | Computed in the browser (`js/core/sun.js`, `js/core/moon.js`) | No request is made |
 | Map tiles | [OpenStreetMap](https://www.openstreetmap.org/copyright) via [Leaflet](https://leafletjs.com/) (vendored in `vendor/leaflet`) | Loaded only when the map scrolls into view |
 
@@ -252,6 +277,9 @@ Bathymetry (depth maps) exists only in scattered state and federal datasets, wit
 ### Licences, if the site ever earns money
 
 - **NWS** and **USGS** data are public domain: no restriction on commercial use.
+- **GBIF** is free to use and asks to be credited (the page footer does). The app requests only
+  records published under CC0 or CC BY, leaving out those marked non-commercial, and uses the
+  counts, not the records.
 - **Photon** and the **OpenStreetMap tile servers** are donated community services with fair-use
   policies and no guarantee. They do not forbid commercial sites, but a site with real traffic
   should move to a paid tile/geocoding provider or self-host. OpenStreetMap data requires the
@@ -262,7 +290,9 @@ Bathymetry (depth maps) exists only in scattered state and federal datasets, wit
 There is no analytics. Your saved places and the last loaded conditions stay in your browser's
 local storage. To fetch conditions, coordinates rounded to about 100 m go to the National Weather
 Service; USGS (or this site's proxy in front of it) is only asked about a box roughly 130 miles
-across, snapped to a 7-mile grid, and then about the individual gauges it found there. The text you type in the search box goes to Photon. Your
+across, snapped to a 7-mile grid, and then about the individual gauges it found there. GBIF is asked which fish are
+recorded in a box about 140 miles across on a half-degree grid. The text you type in the search
+box goes to Photon. Your
 location is requested only when you press "Use my location".
 
 ## Project structure
@@ -283,9 +313,11 @@ js/
   api/
     http.js             fetch + JSON with timeout and cancellation
     weather-api.js      NWS observations, forecast and alerts, Photon place search
+    species-api.js      GBIF: how often each sport fish is recorded around a place
     usgs-api.js         USGS stations: water temperature, level, flow, their history and flow normals
   core/                 Pure logic with no DOM access (unit tested)
     scoring.js          The fishing score and the best-times outlook
+    species.js          Which groups of fish live in a region, and what to call them
     alerts.js           Which NWS alerts matter on the water
     trend.js            Time-based trend analysis
     sun.js              Sun position, sunrise and sunset

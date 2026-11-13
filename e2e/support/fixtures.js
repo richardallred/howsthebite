@@ -9,9 +9,9 @@
 import { test as base, expect } from '@playwright/test';
 
 import {
-    BLANK_TILE, DEFAULT_POINTS, DEFAULT_SCORE, DEFAULT_STATIONS, NOW, alertsResponse, continuousResponse,
-    flowNormalsResponse, forecastResponse, latestContinuousResponse, monitoringLocationsResponse,
-    observationsResponse, photonResponse, pointResponse, stationsResponse,
+    BLANK_TILE, DEFAULT_POINTS, DEFAULT_SCORE, DEFAULT_SPECIES, DEFAULT_STATIONS, NOW, alertsResponse,
+    continuousResponse, flowNormalsResponse, forecastResponse, gbifResponse, latestContinuousResponse,
+    monitoringLocationsResponse, observationsResponse, photonResponse, pointResponse, stationsResponse,
 } from './api-mocks.js';
 
 export { DEFAULT_POINTS, DEFAULT_SCORE, NOW, expect };
@@ -20,6 +20,7 @@ const SERVICES = {
     nws: 'api.weather.gov',
     photon: 'photon.komoot.io',
     usgs: 'api.waterdata.usgs.gov',
+    gbif: 'api.gbif.org',
     tiles: 'tile.openstreetmap.org',
 };
 
@@ -31,10 +32,11 @@ export const test = base.extend({
             weather: {}, // overrides merged into DEFAULT_WEATHER (see api-mocks.js)
             stations: DEFAULT_STATIONS,
             alerts: [], // NWS alerts in effect: { event, onsetHours, endsHours } relative to NOW
+            species: DEFAULT_SPECIES, // fish recorded in the region: { name: recordCount }, names from FISH in api-mocks.js
             // false: the site is plain static hosting, so /api/usgs is a 404 and the app goes direct.
             // true:  the Cloudflare Pages proxy is deployed and answers /api/usgs.
             proxy: false,
-            failures: {}, // service name ('nws', 'photon', 'usgs', 'proxy', 'tiles') -> HTTP status, or 'network'
+            failures: {}, // service name ('nws', 'photon', 'usgs', 'gbif', 'proxy', 'tiles') -> HTTP status, or 'network'
             calls: [], // { service, url } for every mocked request
             unexpected: [], // requests to hosts without a mock
             fail(service, status = 500) { this.failures[service] = status; },
@@ -104,6 +106,7 @@ export const test = base.extend({
                     api.unexpected.push(url.href);
                     return route.abort('blockedbyclient');
                 case 'photon': return json(route, photonResponse(url));
+                case 'gbif': return json(route, gbifResponse(api.species));
                 case 'tiles': return route.fulfill({ status: 200, contentType: 'image/png', body: BLANK_TILE });
                 default: return usgs(route, url, /(?:collections\/([a-z-]+)\/items|statistics\/v0\/(observationNormals))$/.exec(url.pathname)?.slice(1).find(Boolean));
             }

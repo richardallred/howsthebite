@@ -4,6 +4,7 @@
 // results are applied only if they belong to the most recent request, so
 // switching locations quickly can never show data for the wrong place.
 
+import { fetchSpeciesCounts, speciesRegionKey } from './api/species-api.js';
 import { fetchFlowNormals, fetchLevelHistory, fetchWaterHistory, findStations } from './api/usgs-api.js';
 import { HttpError, isAbort } from './api/http.js';
 import { OutsideCoverageError, fetchAlerts, fetchWeather, reverseGeocode, searchPlaces } from './api/weather-api.js';
@@ -11,6 +12,7 @@ import { APP } from './config.js';
 import { summariseAlerts } from './core/alerts.js';
 import { moonInfo } from './core/moon.js';
 import { SPECIES_GROUPS, bestWindows, estimateWaterTemp, scoreConditions } from './core/scoring.js';
+import { DEFAULT_LABELS, chooseSpecies, regionalSpecies, speciesOptions } from './core/species.js';
 import { sunTimes } from './core/sun.js';
 import { changeOver, classifyTrend, lastHours } from './core/trend.js';
 import { debounce, distanceMiles, isNum, roundCoord, timeAgo } from './core/util.js';
@@ -30,7 +32,8 @@ const state = {
     waterHistory: [],
     levelHistory: [],
     waterFilter: storage.getWaterFilter(),
-    speciesGroup: storage.getSpeciesGroup(),
+    speciesGroup: storage.getSpeciesGroup(), // the saved preference; what is scored also depends on the region
+    speciesCounts: null, // { key, counts }: fish recorded in the region of the current location
     alerts: [],
     flowNormals: null, // { stationId, monthDay, percentiles } for the river gauge in use
     loading: false,
@@ -107,6 +110,20 @@ function observed(series, now, currentValue) {
     return points;
 }
 
+/** Records of each sport fish around the current location: just loaded, remembered from an earlier visit, or null. */
+function speciesCounts() {
+    if (!state.location) return null;
+    const key = speciesRegionKey(state.location.lat, state.location.lon);
+    if (state.speciesCounts?.key !== key) state.speciesCounts = { key, counts: storage.getSpeciesCounts(key) };
+    return state.speciesCounts.counts;
+}
+
+/** The species choices on offer here, and the one in use (the saved preference when it lives here). */
+function speciesChoice() {
+    const options = speciesOptions(regionalSpecies(speciesCounts(), state.location?.lat ?? 40));
+    return { options, chosen: chooseSpecies(options, state.speciesGroup) };
+}
+
 /** Flow counts toward the score only on moving water whose gauge has a long enough record. */
 const flowApplies = (gauge) => Boolean(gauge?.flow) && gauge.kind === 'river' && state.location?.kind !== 'lake';
 
@@ -141,10 +158,12 @@ function derive() {
 
     const gauge = levelStation();
     const alerts = summariseAlerts(state.alerts, clock);
+    const species = speciesChoice().chosen;
     const inputs = {
         lat: state.location.lat,
         lon: state.location.lon,
-        speciesGroup: state.speciesGroup,
+        speciesGroup: species.id,
+        speciesLabel: species.label,
         waterTempF,
         waterEstimated: !station,
         waterChange24h: station ? changeOver(state.waterHistory, APP.TEMP_TREND_HOURS) : null,
@@ -290,9 +309,24 @@ function renderScore(derived) {
 }
 
 function renderSpeciesGroup() {
-    for (const button of $('speciesGroup').querySelectorAll('button')) {
-        button.setAttribute('aria-pressed', String(button.dataset.group === state.speciesGroup));
-    }
+    const { options, chosen } = speciesChoice();
+    const container = $('speciesGroup');
+    const hadFocus = container.contains(document.activeElement);
+    const single = options.length === 1;
+
+    container.hidden = single;
+    $('speciesLabel').hidden = single;
+    container.replaceChildren(...(single ? [] : options.map((option) => el('button', {
+        type: 'button',
+        dataset: { group: option.id },
+        'aria-pressed': String(option.id === chosen.id),
+    }, option.label))));
+    if (hadFocus) container.querySelector('button[aria-pressed="true"]')?.focus();
+
+    let note = '';
+    if (single) note = `Scored for ${chosen.label.toLowerCase()}, the sport fish found around here.`;
+    else if (chosen.id !== state.speciesGroup) note = `${DEFAULT_LABELS[state.speciesGroup]} aren't recorded around here.`;
+    setText('speciesNote', note);
 }
 
 function renderAlerts(derived) {
@@ -620,6 +654,18 @@ async function loadFlowNormals(gauge, signal) {
     }
 }
 
+/**
+ * Find out which sport fish are recorded around the location, unless that is already
+ * known. Optional: on failure the choices fall back to a latitude-based assumption.
+ */
+async function loadSpeciesCounts(location, signal) {
+    if (speciesCounts()) return;
+    const key = speciesRegionKey(location.lat, location.lon);
+    const counts = await fetchSpeciesCounts(location.lat, location.lon, { signal });
+    storage.setSpeciesCounts(key, counts);
+    if (state.location === location) state.speciesCounts = { key, counts };
+}
+
 async function load() {
     const location = state.location;
     if (!location) return;
@@ -637,6 +683,7 @@ async function load() {
         fetchWeather(location.lat, location.lon, { signal }),
         loadWater(location, signal),
         fetchAlerts(location.lat, location.lon, { signal }),
+        loadSpeciesCounts(location, signal),
     ]);
     if (signal.aborted) return; // a newer load() owns the screen now
 

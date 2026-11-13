@@ -171,3 +171,68 @@ test.describe('use my location, no permission', () => {
         await expect(page.getByRole('heading', { level: 1 })).toHaveText('Chicago, Illinois');
     });
 });
+
+test.describe('species on offer follow the region', () => {
+    const choices = (page) => page.locator('#speciesGroup button');
+
+    test('a northern place offers every group, named for the fish recorded there', async ({ page, api, app }) => {
+        await app.open();
+        await expect(choices(page)).toHaveText(['All species', 'Bass & panfish', 'Walleye & pike', 'Trout']);
+        await expect(page.locator('#speciesNote')).toBeHidden();
+
+        // One question per region, remembered afterwards: a reload asks nothing.
+        expect(api.count('gbif')).toBe(1);
+        const asked = new URL(api.calls.find((call) => call.service === 'gbif').url).searchParams;
+        expect(asked.get('decimalLatitude')).toBe('41.0,43.0'); // a 0.5° grid cell, not the exact spot
+        expect(asked.get('decimalLongitude')).toBe('-88.8,-86.2');
+        expect(asked.getAll('license')).toEqual(['CC0_1_0', 'CC_BY_4_0']);
+        await page.reload();
+        await app.loaded();
+        await expect(choices(page)).toHaveCount(4);
+        expect(api.count('gbif')).toBe(1);
+    });
+
+    test('where only bass and panfish are recorded there is nothing to choose, and the score says what it used', async ({ page, api, app }) => {
+        api.species = { largemouth: 900, bluegill: 700, channelCatfish: 60, sauger: 4, rainbow: 3 }; // a few strays
+        await app.open();
+        await expect(choices(page)).toHaveCount(0);
+        await expect(page.locator('#speciesGroup')).toBeHidden();
+        await expect(page.locator('#speciesNote')).toHaveText('Scored for bass & panfish, the sport fish found around here.');
+        // 68°F sits just under the top of the bass curve, where "all species" would have given full marks.
+        await expect(app.factor('Water temperature')).toContainText('Prime range for bass & panfish');
+        await expect(app.factor('Water temperature').locator('.factor-points')).toHaveText(/^34\/35/);
+    });
+
+    test('a preference for fish that do not live here is set aside, not forgotten', async ({ page, api, app }) => {
+        await app.open();
+        await page.getByRole('button', { name: 'Walleye & pike' }).click();
+        await expect(page.getByRole('button', { name: 'Walleye & pike' })).toHaveAttribute('aria-pressed', 'true');
+
+        // Asheville's region in this test: bass, smallmouth, perch and trout, but no walleye or pike.
+        api.species = { largemouth: 500, bluegill: 300, smallmouth: 80, perch: 40, walleye: 2, brown: 200 };
+        await app.search('Asheville', 'Asheville, North Carolina');
+        await expect(choices(page)).toHaveText(['All species', 'Bass & panfish', 'Smallmouth & perch', 'Trout']);
+        await expect(page.getByRole('button', { name: 'Smallmouth & perch' })).toHaveAttribute('aria-pressed', 'true'); // same group, local name
+        await expect(app.factor('Water temperature')).toContainText('Prime range for smallmouth & perch');
+
+        // Lake Norman's region: no cool-water fish at all.
+        api.species = { largemouth: 500, bluegill: 300, brown: 60 };
+        await app.search('Lake Norman', 'Lake Norman, North Carolina');
+        await expect(choices(page)).toHaveText(['All species', 'Bass & panfish', 'Trout']);
+        await expect(page.getByRole('button', { name: 'All species' })).toHaveAttribute('aria-pressed', 'true');
+        await expect(page.locator('#speciesNote')).toHaveText("Walleye & pike aren't recorded around here.");
+
+        // Somewhere they do live, the preference applies again.
+        api.species = { largemouth: 400, bluegill: 300, walleye: 120, pike: 100, rainbow: 150 };
+        await app.search('Madison', 'Madison, Wisconsin');
+        await expect(page.getByRole('button', { name: 'Walleye & pike' })).toHaveAttribute('aria-pressed', 'true');
+        await expect(page.locator('#speciesNote')).toBeHidden();
+    });
+
+    test('if the species lookup fails, conditions still load and the usual choices are offered', async ({ page, api, app }) => {
+        api.fail('gbif', 503);
+        await app.open();
+        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
+        await expect(choices(page)).toHaveText(['All species', 'Bass & panfish', 'Walleye & pike', 'Trout']);
+    });
+});

@@ -312,6 +312,13 @@ test('best windows are the low-light periods, earliest first', () => {
     assert.ok(stormy.every((window) => window.start >= local(24).getTime()));
 });
 
+test('no best windows are offered when the score is held flat the whole time', () => {
+    const start = local(10).getTime();
+    assert.deepEqual(bestWindows({ ...ideal, waterTempF: 32.2 }, { start, hours: 36 }), []); // frozen: capped at every hour
+    assert.deepEqual(bestWindows({ ...ideal, flow: { cfs: 20000, percentiles: NORMALS } }, { start, hours: 36 }), []);
+    assert.ok(bestWindows({ ...ideal, waterTempF: 50 }, { start, hours: 36 }).length > 0); // cool but fishable
+});
+
 test('bands and phrases', () => {
     assert.equal(bandFor(100).key, 'exceptional');
     assert.equal(bandFor(85).key, 'exceptional');

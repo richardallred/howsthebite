@@ -294,6 +294,32 @@ export function continuousResponse(url, stations) {
 }
 
 // ---------------------------------------------------------------------------
+// Species occurrence counts (GBIF)
+// ---------------------------------------------------------------------------
+
+/** GBIF species keys, by the names the tests use. */
+export const FISH = {
+    largemouth: 2394563, bluegill: 2394503, channelCatfish: 5202520,
+    walleye: 2382172, pike: 2346633, muskie: 2346634, smallmouth: 5211250, perch: 2382004, sauger: 2382152,
+    rainbow: 5204019, brown: 8215487, brook: 2351271, coho: 5204034, chinook: 5204024,
+};
+
+// A northern-Midwest mix: every group of fish is well recorded.
+export const DEFAULT_SPECIES = { largemouth: 400, bluegill: 300, walleye: 120, pike: 100, rainbow: 150, brown: 90 };
+
+/** `species` is { name: recordCount } using the names in FISH. Shaped like a GBIF facet-only search. */
+export function gbifResponse(species) {
+    const counts = Object.entries(species)
+        .filter(([, count]) => count > 0)
+        .map(([name, count]) => ({ name: String(FISH[name]), count }))
+        .sort((a, b) => b.count - a.count);
+    return {
+        offset: 0, limit: 0, endOfRecords: false, count: counts.reduce((sum, entry) => sum + entry.count, 0),
+        results: [], facets: [{ field: 'SPECIES_KEY', counts }],
+    };
+}
+
+// ---------------------------------------------------------------------------
 // Place search (Photon)
 // ---------------------------------------------------------------------------
 

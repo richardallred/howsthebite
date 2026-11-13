@@ -434,11 +434,16 @@ button, input { font: inherit; color: inherit; }
 
 .species { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 12px; }
 .species-label { font-size: 0.875rem; font-weight: 600; color: var(--text-2); }
+.species-note { font-size: 0.875rem; color: var(--muted); }
+.species-note:empty { display: none; }
+.species [hidden] { display: none; }
 .species .segmented { max-width: 100%; overflow-x: auto; }
 .species .segmented button { padding: 0 12px; white-space: nowrap; }
 @media (max-width: 479px) {
     /* Four labels do not fit on one line of a phone: two rows of two. */
     .species .segmented { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; border-radius: 22px; }
+    /* An odd number of choices: the last one spans the row instead of leaving a hole. */
+    .species .segmented button:last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
 
 .factors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }

@@ -8,7 +8,7 @@
 //
 // Bump CACHE when the list of shell files changes.
 
-const CACHE = 'htb-shell-v5';
+const CACHE = 'htb-shell-v6';
 
 const SHELL = [
     './',
@@ -23,12 +23,14 @@ const SHELL = [
     'js/config.js',
     'js/storage.js',
     'js/api/http.js',
+    'js/api/species-api.js',
     'js/api/usgs-api.js',
     'js/api/weather-api.js',
     'js/core/alerts.js',
     'js/core/moon.js',
     'js/core/scoring.js',
     'js/core/sky.js',
+    'js/core/species.js',
     'js/core/sun.js',
     'js/core/trend.js',
     'js/core/util.js',

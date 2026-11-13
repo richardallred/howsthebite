@@ -98,12 +98,9 @@
             <ul class="alerts" id="alerts" aria-label="Weather alerts" hidden></ul>
             <div class="species">
                 <span class="species-label" id="speciesLabel">Fishing for</span>
-                <div class="segmented" id="speciesGroup" role="group" aria-labelledby="speciesLabel">
-                    <button type="button" data-group="any" aria-pressed="true">All species</button>
-                    <button type="button" data-group="warm" aria-pressed="false">Bass &amp; panfish</button>
-                    <button type="button" data-group="cool" aria-pressed="false">Walleye &amp; pike</button>
-                    <button type="button" data-group="cold" aria-pressed="false">Trout</button>
-                </div>
+                <!-- Filled in by the app: only the fish recorded around the chosen place are offered. -->
+                <div class="segmented" id="speciesGroup" role="group" aria-labelledby="speciesLabel"></div>
+                <p class="species-note" id="speciesNote" aria-live="polite"></p>
             </div>
             <div class="hero">
                 <div class="score-card" id="scoreCard" data-band="loading" aria-live="polite" aria-atomic="true">
@@ -179,6 +176,7 @@
             <p>
                 Weather by the <a href="https://www.weather.gov/" target="_blank" rel="noopener">National Weather Service</a> ·
                 Water temperature, level and flow by the <a href="https://waterdata.usgs.gov/" target="_blank" rel="noopener">U.S. Geological Survey</a> ·
+                Species ranges from <a href="https://www.gbif.org/" target="_blank" rel="noopener">GBIF</a> occurrence records ·
                 Place search by <a href="https://photon.komoot.io/" target="_blank" rel="noopener">Photon</a>, map data ©
                 <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors.
             </p>

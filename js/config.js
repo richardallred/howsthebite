@@ -7,6 +7,8 @@ export const API = {
     PHOTON: 'https://photon.komoot.io/api/',
     // USGS Water Data OGC API (replaces waterservices.usgs.gov, which USGS is retiring).
     USGS: 'https://api.waterdata.usgs.gov/ogcapi/v1/collections',
+    // GBIF occurrence search: which sport fish have been recorded around a place.
+    GBIF: 'https://api.gbif.org/v1/occurrence/search',
     // USGS Statistics API: what a gauge normally reads on each day of the year.
     USGS_STATS: 'https://api.waterdata.usgs.gov/statistics/v0',
     // Same-origin caching proxy for the USGS API (functions/api/usgs/[[path]].js on

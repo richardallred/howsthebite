@@ -108,6 +108,22 @@ export const storage = {
         write('species', group);
     },
 
+    /**
+     * Species records for a region (see species-api.js). Ranges change over years, not
+     * days, so an answer is kept for a month and reused offline.
+     */
+    getSpeciesCounts(regionKey) {
+        const entry = read('speciesRegions', {})?.[regionKey];
+        if (!entry?.counts || Date.now() - entry.savedAt > 30 * 24 * 60 * 60 * 1000) return null;
+        return entry.counts;
+    },
+    setSpeciesCounts(regionKey, counts) {
+        const all = read('speciesRegions', {}) ?? {};
+        delete all[regionKey];
+        all[regionKey] = { counts, savedAt: Date.now() };
+        write('speciesRegions', Object.fromEntries(Object.entries(all).slice(-12))); // newest dozen regions
+    },
+
     /** The station the user picked by hand for a location, if any. */
     getPreferredStation(loc) {
         return read('stations', {})?.[locationKey(loc)] ?? null;

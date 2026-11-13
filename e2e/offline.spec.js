@@ -19,7 +19,7 @@ test('after one visit the app opens offline and shows the last conditions with t
     expect(cached).toEqual(expect.arrayContaining(['/index.html', '/styles.css', '/js/app.js', '/vendor/leaflet/leaflet.js']));
 
     // Mocked routes would still answer while "offline", so take the services down as well.
-    const services = ['nws', 'usgs', 'photon', 'tiles'];
+    const services = ['nws', 'usgs', 'gbif', 'photon', 'tiles'];
     await context.setOffline(true);
     services.forEach((service) => api.fail(service, 'network'));
     await page.reload();
