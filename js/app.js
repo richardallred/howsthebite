@@ -28,6 +28,7 @@ import { $, el, icon, setText, svg } from './ui/dom.js';
 import { createStationMap } from './ui/map.js';
 import { createOutlookChart } from './ui/outlook-chart.js';
 import { initTheme } from './ui/theme.js';
+import { initTips, tip } from './ui/tips.js';
 
 const state = {
     location: null,
@@ -531,7 +532,8 @@ function renderTides(derived) {
     const salt = Boolean(derived?.salt);
     $('tideCard').hidden = !salt;
     // The freshwater parts of the section have nothing to say about a bay or a beach.
-    for (const id of ['levelCard', 'waterGrid', 'waterFilter', 'waterChartCard', 'levelChartCard']) $(id).hidden = salt;
+    for (const id of ['levelCard', 'waterGrid', 'waterFilter', 'waterChartCard', 'levelChartCard', 'levelSource']) $(id).hidden = salt;
+    $('tideSource').hidden = !salt;
     setText('waterTitle', salt ? 'Tides and water temperature' : 'Water temperature, level and flow');
     if (!salt) return;
 
@@ -579,11 +581,12 @@ function renderFactors(derived) {
         const display = factorDisplay(factor, derived);
         const rating = RATING_LABELS[factor.rating];
         return el('article', { class: 'factor', dataset: { rating: factor.rating } },
-            el('h3', { class: 'factor-label' }, icon(display.iconName), display.label),
+            // The reading and its one-line detail are shown; what it means for the fishing is a tip.
+            el('div', { class: 'factor-head' },
+                el('h3', { class: 'factor-label' }, icon(display.iconName), display.label),
+                tip('What this means for the fishing', el('span', { class: 'factor-note' }, factor.note))),
             el('p', { class: 'factor-value' }, display.valueIcon ?? null, display.value),
-            el('div', { class: 'factor-text' },
-                el('p', { class: 'factor-note' }, factor.note),
-                el('p', { class: 'factor-extra' }, display.extra ?? '')),
+            el('p', { class: 'factor-extra' }, display.extra ?? ''),
             el('div', { class: 'factor-foot' },
                 el('div', { class: 'meter', 'aria-hidden': 'true' },
                     el('span', { style: `width:${Math.round((factor.points / factor.max) * 100)}%` })),
@@ -630,9 +633,10 @@ function renderLures(derived) {
         : `There are no suggestions yet for ${fish}.`);
     list.replaceChildren(...picks.map((pick) => el('li', { class: 'lure' },
         el('p', { class: 'lure-target' }, `For ${pick.target}`),
-        el('h3', null, pick.name),
+        el('div', { class: 'lure-name' },
+            el('h3', null, pick.name),
+            tip('How to fish it', el('span', { class: 'lure-how' }, pick.how))),
         el('p', { class: 'lure-why' }, `${pick.why}.`),
-        el('p', { class: 'lure-how' }, pick.how),
         pick.query && el('a', {
             class: 'lure-shop',
             href: shopUrl(pick.query, tag),
@@ -856,15 +860,24 @@ function renderLocation() {
 }
 
 function renderUpdatedAt() {
+    // "Updated 5 min ago" is shown; where the readings were taken is a tip beside it.
     let text = ' ';
+    let detail = '';
     if (state.loading) text = state.weather ? 'Refreshing…' : 'Loading conditions…';
     else if (state.weather) {
         const { station, current } = state.weather;
         text = `Updated ${timeAgo(state.weather.fetchedAt)}`;
-        if (station?.name) text += ` · weather observed at ${station.name} ${timeAgo(current.time)}`;
-        if (state.weather.pressureStation?.name) text += `, pressure at ${state.weather.pressureStation.name}`;
+        if (station?.name) detail = `${text} · weather observed at ${station.name} ${timeAgo(current.time)}`;
+        if (state.weather.pressureStation?.name) detail += `, pressure at ${state.weather.pressureStation.name}`;
     }
-    setText('updatedAt', text);
+    const node = $('updatedAt');
+    const key = `${text}|${detail}`;
+    if (node.dataset.key !== key) {
+        node.dataset.key = key;
+        const wasOpen = node.querySelector('.tip.is-open') !== null;
+        node.replaceChildren(text, detail ? tip('Where the readings come from', detail) : '');
+        if (wasOpen) node.querySelector('.tip')?.classList.add('is-open');
+    }
     $('refreshBtn').classList.toggle('is-busy', state.loading);
 }
 
@@ -1517,6 +1530,7 @@ async function offerLocalConditions() {
 
 function init() {
     initTheme();
+    initTips();
     initSearch();
     initSectionNav();
     initInstallPrompt();

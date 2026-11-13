@@ -10,7 +10,7 @@
 // files, so every release that changes anything is seen as a new version. The value
 // here is only used when the source tree is served directly (npm start, the tests).
 
-const CACHE = 'htb-shell-v7';
+const CACHE = 'htb-shell-v8';
 
 const SHELL = [
     './',
@@ -51,6 +51,7 @@ const SHELL = [
     'js/ui/map.js',
     'js/ui/outlook-chart.js',
     'js/ui/theme.js',
+    'js/ui/tips.js',
     'vendor/leaflet/leaflet.css',
     'vendor/leaflet/leaflet.js',
 ];

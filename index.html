@@ -43,6 +43,7 @@
             <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3v4M16 3v4"/></symbol>
             <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="m5 15 4-5 4 3 6-8"/></symbol>
             <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+            <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.01"/></symbol>
             <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
         </defs>
     </svg>
@@ -143,29 +144,37 @@
 
         <section class="section panel" id="lures" aria-labelledby="luresTitle">
             <div class="panel-head">
-                <h2 class="panel-title" id="luresTitle">What to throw</h2>
-                <p class="panel-sub" id="lureSummary">Suggestions will appear with the conditions.</p>
+                <div class="title-row">
+                    <h2 class="panel-title" id="luresTitle">What to throw</h2>
+                    <span class="tip">
+                        <button type="button" class="tip-btn" aria-label="How lures are picked" aria-describedby="luresTip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button>
+                        <span class="tip-text" role="tooltip" id="luresTip">
+                            <span class="tip-para" id="lureSummary">Suggestions will appear with the conditions.</span>
+                            <span class="tip-para" id="lureColour"></span>
+                            <span class="tip-para lure-note">Rules of thumb from fishery agencies and guides, not based on measured catch rates.</span>
+                        </span>
+                    </span>
+                </div>
             </div>
             <ul class="lures" id="lureList"></ul>
-            <div class="lure-foot">
-                <p class="lure-colour" id="lureColour"></p>
-                <p class="lure-note">
-                    Rules of thumb from fishery agencies and guides, not based on measured catch rates.
-                    <span id="affiliateDisclosure" hidden>As an Amazon Associate I earn from qualifying purchases.</span>
-                </p>
-            </div>
+            <p class="lure-disclosure" id="affiliateDisclosure" hidden>As an Amazon Associate I earn from qualifying purchases.</p>
         </section>
 
         <section class="section panel" id="forecast" aria-labelledby="forecastTitle">
             <div class="panel-head">
-                <h2 class="panel-title" id="forecastTitle">Forecast</h2>
+                <div class="title-row">
+                    <h2 class="panel-title" id="forecastTitle">Forecast</h2>
+                    <span class="tip">
+                        <button type="button" class="tip-btn" aria-label="How the outlook is worked out" aria-describedby="outlookNote" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button>
+                        <span class="tip-text" role="tooltip" id="outlookNote"></span>
+                    </span>
+                </div>
                 <p class="panel-sub" id="outlookRange"></p>
             </div>
             <div class="chart-card chart--score" id="outlookCard">
                 <h3 class="visually-hidden">Fishing score outlook</h3>
                 <ul class="outlook-days" id="outlookDays"></ul>
                 <div class="chart" id="outlookChart"></div>
-                <p class="outlook-note" id="outlookNote"></p>
             </div>
             <h3 class="subhead" id="weatherTitle">5-day weather</h3>
             <ol class="forecast" id="forecastList" aria-labelledby="weatherTitle"></ol>
@@ -173,9 +182,16 @@
 
         <section class="section panel" id="water" aria-labelledby="waterTitle">
             <div class="panel-head">
-                <div>
+                <div class="title-row">
                     <h2 class="panel-title" id="waterTitle">Water temperature, level and flow</h2>
-                    <p class="panel-sub" id="waterSummary">Looking for nearby USGS sensors…</p>
+                    <span class="tip">
+                        <button type="button" class="tip-btn" aria-label="Where the water readings come from" aria-describedby="waterTip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button>
+                        <span class="tip-text" role="tooltip" id="waterTip">
+                            <span class="tip-para" id="waterSummary">Looking for nearby USGS sensors…</span>
+                            <span class="tip-para" id="levelSource">Looking for nearby USGS gauges…</span>
+                            <span class="tip-para" id="tideSource" hidden></span>
+                        </span>
+                    </span>
                 </div>
                 <div class="segmented segmented-small" id="waterFilter" role="group" aria-label="Filter stations by water type">
                     <button type="button" data-filter="all" aria-pressed="true">All</button>
@@ -186,12 +202,10 @@
             <div class="level-card" id="tideCard" aria-labelledby="tideTitle" hidden>
                 <h3 class="visually-hidden" id="tideTitle">Tides</h3>
                 <dl class="level-stats" id="tideStats"></dl>
-                <p class="level-source" id="tideSource"></p>
             </div>
             <div class="level-card" id="levelCard" aria-labelledby="levelTitle">
                 <h3 class="visually-hidden" id="levelTitle">Water level and flow</h3>
                 <dl class="level-stats" id="levelStats"></dl>
-                <p class="level-source" id="levelSource">Looking for nearby USGS gauges…</p>
             </div>
             <div class="water-grid" id="waterGrid">
                 <ul class="stations" id="stationList" aria-label="Nearby water temperature stations"></ul>

@@ -223,6 +223,69 @@ button, input { font: inherit; color: inherit; }
 .panel-head > .panel-sub { margin-top: 0; }
 .panel-head > #lureSummary { flex-basis: 100%; max-width: none; }
 
+/* ---------- Info tips (js/ui/tips.js) ---------- */
+
+.title-row { display: flex; align-items: center; gap: 2px; }
+
+.tip { position: relative; display: inline-flex; flex: none; vertical-align: middle; }
+.tip-btn {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--muted);
+    cursor: help;
+}
+.tip-btn .icon { width: 15px; height: 15px; }
+.tip-btn:hover, .tip.is-open .tip-btn { color: var(--ink); background: var(--sunk); }
+/* Touch targets: a bigger invisible hit area without moving anything. */
+@media (pointer: coarse) { .tip-btn { position: relative; } .tip-btn::after { content: ""; position: absolute; inset: -10px; } }
+
+.tip-text {
+    display: none;
+    position: absolute;
+    z-index: 25;
+    top: calc(100% + 6px);
+    left: -8px;
+    width: max-content;
+    max-width: min(300px, calc(100vw - 40px));
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--ink);
+    color: var(--paper);
+    box-shadow: var(--shadow-pop);
+    font: 400 0.8125rem/1.45 var(--font);
+    letter-spacing: 0;
+    text-transform: none;
+    text-align: left;
+    white-space: normal;
+    cursor: auto;
+}
+.tip-end .tip-text { left: auto; right: -8px; }
+.tip-para { display: block; }
+.tip-para + .tip-para { margin-top: 6px; }
+.tip-para:empty { display: none; }
+@media (hover: hover) { .tip:hover .tip-text { display: block; } }
+.tip-btn:focus-visible + .tip-text, .tip.is-open .tip-text { display: block; }
+/* Phones: an open tip is a sheet above the bottom navigation, so it never runs off the screen. */
+@media (max-width: 619px) {
+    .tip-text, .tip-end .tip-text {
+        position: fixed;
+        top: auto;
+        left: max(16px, env(safe-area-inset-left));
+        right: max(16px, env(safe-area-inset-right));
+        bottom: calc(var(--nav-height) + env(safe-area-inset-bottom) + 12px);
+        width: auto;
+        max-width: none;
+        padding: 14px 16px;
+        font-size: 0.875rem;
+    }
+}
+
 /* ---------- Buttons ---------- */
 
 .btn {
@@ -368,7 +431,7 @@ button, input { font: inherit; color: inherit; }
     text-wrap: balance;
 }
 .location-meta { display: flex; align-items: center; gap: 4px; margin-top: 6px; }
-.location-meta p { font: 400 0.75rem/1.4 var(--font-mono); color: var(--muted); }
+.location-meta p { display: flex; align-items: center; gap: 2px; font: 400 0.75rem/1.4 var(--font-mono); color: var(--muted); }
 
 .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .chips-label { font: 500 0.6875rem/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-right: 2px; }
@@ -599,8 +662,8 @@ button, input { font: inherit; color: inherit; }
 .factor.is-placeholder::before { content: ""; grid-area: label; width: 40%; height: 10px; border-radius: 3px; background: var(--sunk); }
 @keyframes pulse { 50% { opacity: 0.55; } }
 
+.factor-head { grid-area: label; display: flex; align-items: center; gap: 2px; min-width: 0; }
 .factor-label {
-    grid-area: label;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -625,10 +688,8 @@ button, input { font: inherit; color: inherit; }
 .moon-glyph .moon-dark { fill: var(--sunk); stroke: var(--line-strong); stroke-width: 0.8; }
 .moon-glyph .moon-lit { fill: var(--ink-2); }
 
-/* The note and the detail share one muted line. */
-.factor-note, .factor-extra { display: inline; font-size: 0.8125rem; color: var(--muted); line-height: 1.35; }
-.factor-text { grid-area: note; min-width: 0; padding-left: 25px; }
-.factor-extra:not(:empty)::before { content: " · "; }
+/* One short detail under the label; the explanation lives in the tip. */
+.factor-extra { grid-area: note; min-width: 0; padding-left: 25px; font-size: 0.8125rem; color: var(--muted); line-height: 1.35; }
 
 .factor-foot { grid-area: foot; display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
 .meter { width: 72px; height: 5px; border-radius: 3px; background: var(--sunk); overflow: hidden; }
@@ -652,15 +713,14 @@ button, input { font: inherit; color: inherit; }
 .lures { counter-reset: lure; }
 .lure-target { grid-column: 1 / -1; font: 500 0.6875rem/1.4 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .lure-target::before { content: counter(lure, decimal-leading-zero) "  "; color: var(--accent); white-space: pre; }
-.lure h3 { font: 700 1.125rem/1.2 var(--font-display); font-stretch: 85%; }
+.lure-name { min-width: 0; }
+.lure h3 { display: inline; font: 700 1.125rem/1.2 var(--font-display); font-stretch: 85%; }
+.lure-name .tip { margin-left: 2px; vertical-align: -5px; }
 .lure-why { grid-column: 1 / -1; font-size: 0.875rem; color: var(--ink-2); line-height: 1.4; }
-.lure-how { grid-column: 1 / -1; font-size: 0.8125rem; color: var(--muted); line-height: 1.4; }
 .lure-shop { grid-column: 2; grid-row: 2; align-self: baseline; font-size: 0.8125rem; font-weight: 500; white-space: nowrap; }
 
-.lure-foot { display: grid; gap: 4px; padding: 12px 20px 16px; }
-.lure-colour { font-size: 0.875rem; color: var(--ink-2); }
-.lure-colour:empty { display: none; }
-.lure-note { font-size: 0.75rem; color: var(--muted); }
+.lure-disclosure { padding: 10px 20px 14px; font-size: 0.75rem; color: var(--muted); }
+.lures:has(+ .lure-disclosure[hidden]) .lure:nth-last-child(-n + 2) { border-bottom: 0; }
 
 /* ---------- Forecast ---------- */
 
@@ -703,8 +763,6 @@ button, input { font: inherit; color: inherit; }
 .score-ring-fill { stroke: var(--band); stroke-linecap: round; transition: stroke-dasharray 0.5s cubic-bezier(0.3, 0.7, 0.2, 1); }
 .score-ring-number { font: 800 1.25rem/1 var(--font-display); font-stretch: 72%; font-variant-numeric: tabular-nums; }
 
-.outlook-note { margin: 6px 0 4px; font-size: 0.75rem; line-height: 1.45; color: var(--muted); }
-.outlook-note:empty { display: none; }
 
 .subhead { margin: 20px 20px 0; }
 .subhead { font: 500 0.6875rem/1.4 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
@@ -755,7 +813,6 @@ button, input { font: inherit; color: inherit; }
 .level-stat dd { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; margin: 2px 0 0; }
 .level-stat strong { font: 500 1.25rem/1.25 var(--font-mono); font-variant-numeric: tabular-nums; }
 .level-stat span { font-size: 0.8125rem; color: var(--muted); }
-.level-source { font-size: 0.75rem; line-height: 1.45; color: var(--muted); }
 
 .water-grid { display: grid; border-top: 1px solid var(--line); }
 
@@ -1000,6 +1057,7 @@ button, input { font: inherit; color: inherit; }
     .subhead { margin-inline: 16px; }
     .lure { grid-template-columns: minmax(0, 1fr); }
     .lure-shop { grid-column: 1; grid-row: auto; margin-top: 2px; }
+    .lure-disclosure { padding-inline: 16px; }
     .forecast-day:first-child { padding-left: 16px; }
 }
 
