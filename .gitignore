@@ -1,5 +1,5 @@
-# Configuration files containing API keys
-config.js
+# The pre-2.0 root config file, which held an API key. Root only: js/config.js has no secrets and must be tracked.
+/config.js
 
 # Dependencies
 node_modules/
