@@ -6,8 +6,8 @@
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#1d4ed8",
+  "background_color": "#eceee8",
+  "theme_color": "#eceee8",
   "lang": "en-US",
   "categories": ["sports", "weather"],
   "icons": [

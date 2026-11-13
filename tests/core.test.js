@@ -108,8 +108,8 @@ test('NWS sky reports are classified from text first, then the icon', () => {
     assert.deepEqual(iconCodes(icon('day/wind_few')), ['few']);
     assert.deepEqual(iconCodes(null), []);
 
-    assert.deepEqual(describeSky({ text: 'Mostly Cloudy', icon: icon('day/bkn') }), { class: 'overcast', label: 'Mostly cloudy', emoji: '☁️' });
-    assert.equal(describeSky({ text: 'Clear', icon: icon('night/skc') }).emoji, '🌙');
+    assert.deepEqual(describeSky({ text: 'Mostly Cloudy', icon: icon('day/bkn') }), { class: 'overcast', label: 'Mostly cloudy', icon: 'cloud' });
+    assert.equal(describeSky({ text: 'Clear', icon: icon('night/skc') }).icon, 'moon');
     assert.equal(describeSky({ text: 'Mostly Clear', icon: icon('day/few') }).class, 'clear');
     assert.equal(describeSky({ text: 'Partly Cloudy' }).class, 'partly');
     assert.equal(describeSky({ text: 'Light Rain and Fog/Mist', icon: icon('day/rain') }).class, 'light-precip');
@@ -119,10 +119,10 @@ test('NWS sky reports are classified from text first, then the icon', () => {
     assert.equal(describeSky({ text: 'Thunderstorm in Vicinity' }).class, 'storm');
     assert.equal(describeSky({ text: 'Freezing Fog' }).class, 'overcast');
     assert.equal(describeSky({ text: 'Freezing Rain' }).class, 'precip');
-    assert.equal(describeSky({ text: 'Light Snow' }).emoji, '🌨️');
+    assert.equal(describeSky({ text: 'Light Snow' }).icon, 'snow');
 
     // No text: fall back to the icon. Nothing at all: unknown.
-    assert.deepEqual(describeSky({ icon: icon('day/tsra_hi,40') }), { class: 'storm', label: 'Isolated thunderstorms', emoji: '⛈️' });
+    assert.deepEqual(describeSky({ icon: icon('day/tsra_hi,40') }), { class: 'storm', label: 'Isolated thunderstorms', icon: 'storm' });
     assert.equal(describeSky({}).class, 'unknown');
 
     // Forecasts: "Slight Chance Light Rain" under a mostly-cloudy icon is a cloudy day.

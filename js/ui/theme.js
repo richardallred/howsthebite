@@ -4,7 +4,7 @@
 import { storage } from '../storage.js';
 import { $ } from './dom.js';
 
-const THEME_COLORS = { light: '#1d4ed8', dark: '#0f172a' };
+const THEME_COLORS = { light: '#eceee8', dark: '#0d1412' };
 const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
 
 const currentTheme = () => storage.getTheme() ?? (systemDark.matches ? 'dark' : 'light');

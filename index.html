@@ -5,12 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>How's the Bite? — Fishing Conditions</title>
     <meta name="description" content="A 0–100 fishing score for any US lake, river, bay or beach, built from water temperature, time of day, tides, surf, river flow and live weather, with lure suggestions for the conditions.">
-    <meta name="theme-color" content="#1d4ed8">
+    <meta name="theme-color" content="#eceee8">
     <meta name="color-scheme" content="light dark">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <link rel="icon" href="favicon.ico" sizes="any">
     <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+    <link rel="preload" href="fonts/archivo-variable.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="fonts/instrument-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 
     <!-- Applies the saved theme before first paint (blocking on purpose). -->
     <script src="js/theme-init.js"></script>
@@ -32,6 +34,11 @@
             <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4.2 17.5a8.5 8.5 0 1 1 15.6 0"/><path d="m12 14 3.8-5"/><circle cx="12" cy="14" r="1.3"/></symbol>
             <symbol id="i-wind" viewBox="0 0 24 24"><path d="M3 9h10.5a2.8 2.8 0 1 0-2.8-2.8"/><path d="M3 14h15.2a2.8 2.8 0 1 1-2.8 2.8"/><path d="M3 19h6"/></symbol>
             <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18h9.5a3.5 3.5 0 0 0 .4-7 5.5 5.5 0 0 0-10.6 1.3A3 3 0 0 0 7 18z"/></symbol>
+            <symbol id="i-partly" viewBox="0 0 24 24"><path d="M9 3.5v1.3M3.5 9h1.3M5.1 5.1l.9.9M12.9 5.1l-.9.9"/><path d="M5.9 11.5A3.5 3.5 0 0 1 12 7.6"/><path d="M9 20h8.5a3.5 3.5 0 0 0 .3-7 4.8 4.8 0 0 0-9.2 1A3 3 0 0 0 9 20z"/></symbol>
+            <symbol id="i-fog" viewBox="0 0 24 24"><path d="M7 13h9.5a3.5 3.5 0 0 0 .4-7 5.5 5.5 0 0 0-10.6 1.3A3 3 0 0 0 7 13z"/><path d="M4 17h16M6 21h12"/></symbol>
+            <symbol id="i-rain" viewBox="0 0 24 24"><path d="M7 15h9.5a3.5 3.5 0 0 0 .4-7 5.5 5.5 0 0 0-10.6 1.3A3 3 0 0 0 7 15z"/><path d="m8.5 18-1 2.5M12.5 18l-1 2.5M16.5 18l-1 2.5"/></symbol>
+            <symbol id="i-snow" viewBox="0 0 24 24"><path d="M7 15h9.5a3.5 3.5 0 0 0 .4-7 5.5 5.5 0 0 0-10.6 1.3A3 3 0 0 0 7 15z"/><path d="M8 18.5h.01M12 20.5h.01M16 18.5h.01"/></symbol>
+            <symbol id="i-storm" viewBox="0 0 24 24"><path d="M7 15h9.5a3.5 3.5 0 0 0 .4-7 5.5 5.5 0 0 0-10.6 1.3A3 3 0 0 0 7 15z"/><path d="m12.5 15-2 3.5h3l-2 3.5"/></symbol>
             <symbol id="i-waves" viewBox="0 0 24 24"><path d="M3 8c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 13.5c2-2 4-2 6 0s4 2 6 0 4-2 6 0M3 19c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/></symbol>
             <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3v4M16 3v4"/></symbol>
             <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="m5 15 4-5 4 3 6-8"/></symbol>
@@ -46,13 +53,21 @@
         <div class="wrap header-row">
             <a class="brand" href="./">
                 <svg class="icon brand-icon" aria-hidden="true"><use href="#i-hook"/></svg>
-                <span>How's the Bite?</span>
+                <span>How's the Bite</span>
             </a>
+            <form class="search" id="searchForm" role="search" autocomplete="off">
+                <label class="visually-hidden" for="searchInput">Search for a place</label>
+                <svg class="icon search-icon" aria-hidden="true"><use href="#i-search"/></svg>
+                <input id="searchInput" type="search" name="q" enterkeyhint="search"
+                       placeholder="Town, lake or river"
+                       role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="searchResults">
+                <ul class="search-results" id="searchResults" role="listbox" aria-label="Matching places" hidden></ul>
+            </form>
             <div class="header-actions">
-                <button class="btn btn-ghost btn-icon" id="themeToggle" type="button" aria-label="Switch theme">
+                <button class="btn btn-quiet btn-icon" id="themeToggle" type="button" aria-label="Switch theme">
                     <svg class="icon" aria-hidden="true"><use href="#i-moon"/></svg>
                 </button>
-                <button class="btn btn-ghost" id="locateBtn" type="button">
+                <button class="btn btn-quiet" id="locateBtn" type="button">
                     <svg class="icon" aria-hidden="true"><use href="#i-locate"/></svg>
                     <span>Use my location</span>
                 </button>
@@ -61,26 +76,16 @@
     </header>
 
     <section class="location-bar" aria-label="Location">
-        <div class="wrap">
-            <div class="location-head">
-                <div class="location-title">
-                    <h1 id="locationName">Loading…</h1>
-                    <p class="muted" id="updatedAt" aria-live="polite">&nbsp;</p>
+        <div class="wrap location-head">
+            <div class="location-title">
+                <h1 id="locationName">Loading…</h1>
+                <div class="location-meta">
+                    <p id="updatedAt" aria-live="polite">&nbsp;</p>
+                    <button class="btn btn-quiet btn-icon btn-small" id="refreshBtn" type="button" aria-label="Refresh conditions" title="Refresh conditions">
+                        <svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>
+                    </button>
                 </div>
-                <button class="btn btn-outline btn-icon" id="refreshBtn" type="button" aria-label="Refresh conditions" title="Refresh conditions">
-                    <svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>
-                </button>
             </div>
-
-            <form class="search" id="searchForm" role="search" autocomplete="off">
-                <label class="visually-hidden" for="searchInput">Search for a place</label>
-                <svg class="icon search-icon" aria-hidden="true"><use href="#i-search"/></svg>
-                <input id="searchInput" type="search" name="q" enterkeyhint="search"
-                       placeholder="Search a US town, lake or river — e.g. “Lake Norman”"
-                       role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="searchResults">
-                <ul class="search-results" id="searchResults" role="listbox" aria-label="Matching places" hidden></ul>
-            </form>
-
             <div class="chips" id="recentLocations" hidden></div>
         </div>
     </section>
@@ -96,81 +101,97 @@
         <section class="section" id="conditions" aria-labelledby="conditionsTitle">
             <h2 class="visually-hidden" id="conditionsTitle">Current conditions</h2>
             <ul class="alerts" id="alerts" aria-label="Weather alerts" hidden></ul>
-            <!-- Shown only near tidal water, where there is a choice to make. -->
-            <div class="species" id="modeRow" hidden>
-                <span class="species-label" id="modeLabel">Water</span>
-                <div class="segmented" id="modeGroup" role="group" aria-labelledby="modeLabel"></div>
-            </div>
-            <div class="species">
-                <span class="species-label" id="speciesLabel">Fishing for</span>
-                <!-- Filled in by the app: only the fish recorded around the chosen place are offered. -->
-                <div class="segmented" id="speciesGroup" role="group" aria-labelledby="speciesLabel"></div>
-                <p class="species-note" id="speciesNote" aria-live="polite"></p>
+            <div class="controls">
+                <!-- Shown only near tidal water, where there is a choice to make. -->
+                <div class="species" id="modeRow" hidden>
+                    <span class="species-label" id="modeLabel">Water</span>
+                    <div class="segmented" id="modeGroup" role="group" aria-labelledby="modeLabel"></div>
+                </div>
+                <div class="species">
+                    <span class="species-label" id="speciesLabel">Fishing for</span>
+                    <!-- Filled in by the app: only the fish recorded around the chosen place are offered. -->
+                    <div class="segmented" id="speciesGroup" role="group" aria-labelledby="speciesLabel"></div>
+                    <p class="species-note" id="speciesNote" aria-live="polite"></p>
+                </div>
             </div>
             <div class="hero">
-                <div class="score-card" id="scoreCard" data-band="loading" aria-live="polite" aria-atomic="true">
-                    <p class="score-kicker">Fishing score</p>
-                    <p class="score-number"><span id="scoreValue">–</span><span class="score-outof">/100</span></p>
-                    <p class="score-band" id="scoreBand">&nbsp;</p>
+                <div class="panel score-card" id="scoreCard" data-band="loading" aria-live="polite" aria-atomic="true">
+                    <div class="score-top">
+                        <p class="score-number"><span id="scoreValue">–</span><span class="score-outof">/100</span></p>
+                        <div class="score-verdict">
+                            <p class="eyebrow score-kicker">Fishing score</p>
+                            <p class="score-band" id="scoreBand">&nbsp;</p>
+                        </div>
+                    </div>
+                    <div class="score-scale" aria-hidden="true">
+                        <span class="score-pin" id="scorePin"></span>
+                    </div>
                     <p class="score-phrase" id="scorePhrase">Checking conditions…</p>
                     <p class="score-cap" id="scoreCap"></p>
-                    <p class="score-now" id="scoreNow"></p>
                     <p class="score-best" id="scoreBest"></p>
+                    <p class="score-now" id="scoreNow"></p>
                 </div>
-                <div class="factors" id="factors" aria-label="Score factors"></div>
+                <div class="panel factors-panel">
+                    <div class="panel-head">
+                        <h2 class="panel-title">Why this score</h2>
+                        <p class="panel-sub">Most important first</p>
+                    </div>
+                    <div class="factors" id="factors" aria-label="Score factors"></div>
+                </div>
             </div>
         </section>
 
-        <section class="section" id="lures" aria-labelledby="luresTitle">
-            <div class="section-head">
-                <div>
-                    <h2 id="luresTitle">What to throw</h2>
-                    <p class="muted" id="lureSummary">Suggestions will appear with the conditions.</p>
-                </div>
+        <section class="section panel" id="lures" aria-labelledby="luresTitle">
+            <div class="panel-head">
+                <h2 class="panel-title" id="luresTitle">What to throw</h2>
+                <p class="panel-sub" id="lureSummary">Suggestions will appear with the conditions.</p>
             </div>
             <ul class="lures" id="lureList"></ul>
-            <p class="lure-colour" id="lureColour"></p>
-            <p class="muted lure-note">
-                Rules of thumb from fishery agencies and guides. Unlike the score, they are not based on measured catch rates.
-                <span id="affiliateDisclosure" hidden>As an Amazon Associate I earn from qualifying purchases.</span>
-            </p>
+            <div class="lure-foot">
+                <p class="lure-colour" id="lureColour"></p>
+                <p class="lure-note">
+                    Rules of thumb from fishery agencies and guides, not based on measured catch rates.
+                    <span id="affiliateDisclosure" hidden>As an Amazon Associate I earn from qualifying purchases.</span>
+                </p>
+            </div>
         </section>
 
-        <section class="section" id="forecast" aria-labelledby="forecastTitle">
-            <div class="section-head">
-                <h2 id="forecastTitle">Forecast</h2>
+        <section class="section panel" id="forecast" aria-labelledby="forecastTitle">
+            <div class="panel-head">
+                <h2 class="panel-title" id="forecastTitle">Forecast</h2>
+                <p class="panel-sub" id="outlookRange"></p>
             </div>
-            <article class="card chart-card chart--score" id="outlookCard">
-                <h3>Fishing score outlook <span class="muted" id="outlookRange"></span></h3>
-                <div class="chart" id="outlookChart"></div>
+            <div class="chart-card chart--score" id="outlookCard">
+                <h3 class="visually-hidden">Fishing score outlook</h3>
                 <ul class="outlook-days" id="outlookDays"></ul>
-                <p class="muted outlook-note" id="outlookNote"></p>
-            </article>
+                <div class="chart" id="outlookChart"></div>
+                <p class="outlook-note" id="outlookNote"></p>
+            </div>
             <h3 class="subhead" id="weatherTitle">5-day weather</h3>
             <ol class="forecast" id="forecastList" aria-labelledby="weatherTitle"></ol>
         </section>
 
-        <section class="section" id="water" aria-labelledby="waterTitle">
-            <div class="section-head">
+        <section class="section panel" id="water" aria-labelledby="waterTitle">
+            <div class="panel-head">
                 <div>
-                    <h2 id="waterTitle">Water temperature, level and flow</h2>
-                    <p class="muted" id="waterSummary">Looking for nearby USGS sensors…</p>
+                    <h2 class="panel-title" id="waterTitle">Water temperature, level and flow</h2>
+                    <p class="panel-sub" id="waterSummary">Looking for nearby USGS sensors…</p>
                 </div>
-                <div class="segmented" id="waterFilter" role="group" aria-label="Filter stations by water type">
+                <div class="segmented segmented-small" id="waterFilter" role="group" aria-label="Filter stations by water type">
                     <button type="button" data-filter="all" aria-pressed="true">All</button>
                     <button type="button" data-filter="lake" aria-pressed="false">Lakes</button>
                     <button type="button" data-filter="river" aria-pressed="false">Rivers</button>
                 </div>
             </div>
-            <div class="card level-card" id="tideCard" aria-labelledby="tideTitle" hidden>
+            <div class="level-card" id="tideCard" aria-labelledby="tideTitle" hidden>
                 <h3 class="visually-hidden" id="tideTitle">Tides</h3>
                 <dl class="level-stats" id="tideStats"></dl>
-                <p class="muted" id="tideSource"></p>
+                <p class="level-source" id="tideSource"></p>
             </div>
-            <div class="card level-card" id="levelCard" aria-labelledby="levelTitle">
+            <div class="level-card" id="levelCard" aria-labelledby="levelTitle">
                 <h3 class="visually-hidden" id="levelTitle">Water level and flow</h3>
                 <dl class="level-stats" id="levelStats"></dl>
-                <p class="muted" id="levelSource">Looking for nearby USGS gauges…</p>
+                <p class="level-source" id="levelSource">Looking for nearby USGS gauges…</p>
             </div>
             <div class="water-grid" id="waterGrid">
                 <ul class="stations" id="stationList" aria-label="Nearby water temperature stations"></ul>
@@ -182,23 +203,23 @@
 
         <section class="section" id="history" aria-labelledby="historyTitle">
             <div class="section-head">
-                <h2 id="historyTitle">Last 48 hours</h2>
+                <h2 class="panel-title" id="historyTitle">Last 48 hours</h2>
             </div>
             <div class="charts">
-                <article class="card chart-card chart--pressure">
-                    <h3>Barometric pressure <span class="muted">inHg</span></h3>
+                <article class="panel chart-card chart--pressure">
+                    <h3>Barometric pressure <span class="unit">inHg</span></h3>
                     <div class="chart" id="pressureChart"></div>
                 </article>
-                <article class="card chart-card chart--air">
-                    <h3>Air temperature <span class="muted">°F</span></h3>
+                <article class="panel chart-card chart--air">
+                    <h3>Air temperature <span class="unit">°F</span></h3>
                     <div class="chart" id="airChart"></div>
                 </article>
-                <article class="card chart-card chart--water" id="waterChartCard">
-                    <h3>Water temperature <span class="muted">°F</span></h3>
+                <article class="panel chart-card chart--water" id="waterChartCard">
+                    <h3>Water temperature <span class="unit">°F</span></h3>
                     <div class="chart" id="waterChart"></div>
                 </article>
-                <article class="card chart-card chart--level" id="levelChartCard">
-                    <h3><span id="levelChartTitle">River level</span> <span class="muted">ft</span></h3>
+                <article class="panel chart-card chart--level" id="levelChartCard">
+                    <h3><span id="levelChartTitle">River level</span> <span class="unit">ft</span></h3>
                     <div class="chart" id="levelChart"></div>
                 </article>
             </div>
@@ -206,19 +227,17 @@
 
         <footer class="app-footer">
             <p>
-                Weather by the <a href="https://www.weather.gov/" target="_blank" rel="noopener">National Weather Service</a> ·
-                Water temperature, level and flow by the <a href="https://waterdata.usgs.gov/" target="_blank" rel="noopener">U.S. Geological Survey</a> ·
-                Tides, coastal water temperature and surf by <a href="https://tidesandcurrents.noaa.gov/" target="_blank" rel="noopener">NOAA</a> ·
-                Species ranges from <a href="https://www.gbif.org/" target="_blank" rel="noopener">GBIF</a> occurrence records ·
+                Data from the <a href="https://www.weather.gov/" target="_blank" rel="noopener">National Weather Service</a>,
+                <a href="https://waterdata.usgs.gov/" target="_blank" rel="noopener">USGS</a>,
+                <a href="https://tidesandcurrents.noaa.gov/" target="_blank" rel="noopener">NOAA</a> and
+                <a href="https://www.gbif.org/" target="_blank" rel="noopener">GBIF</a>.
                 Place search by <a href="https://photon.komoot.io/" target="_blank" rel="noopener">Photon</a>, map data ©
                 <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors.
             </p>
             <p>
-                The score rates conditions, not your odds: water temperature and light count most, then wind, river flow
-                and the moon; in salt water the tide and the surf take the place of flow and moon.
-                Barometric pressure counts least, because studies of angler catch rates have found no effect.
-                Skill, bait and how many fish are there matter more than all of it.
-                USGS readings are provisional. Check local conditions and regulations before you go.
+                The score rates conditions, not your odds. Water temperature and light count most; barometric pressure
+                counts least, because catch-rate studies find no effect. USGS readings are provisional.
+                Check local regulations before you go.
             </p>
         </footer>
     </main>
@@ -232,14 +251,14 @@
     </nav>
 
     <div class="install-banner" id="installBanner" hidden>
-        <p>Install How's the Bite? for one-tap access and offline use.</p>
+        <p>Install How's the Bite for one-tap access and offline use.</p>
         <button class="btn btn-solid btn-small" id="installBtn" type="button">Install</button>
-        <button class="btn btn-ghost btn-icon btn-small" id="installDismiss" type="button" aria-label="Dismiss">
+        <button class="btn btn-quiet btn-icon btn-small" id="installDismiss" type="button" aria-label="Dismiss">
             <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg>
         </button>
     </div>
 
-    <noscript><p class="noscript">How's the Bite? needs JavaScript to load live conditions.</p></noscript>
+    <noscript><p class="noscript">How's the Bite needs JavaScript to load live conditions.</p></noscript>
 
     <script type="module" src="js/app.js"></script>
 </body>

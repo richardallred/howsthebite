@@ -9,14 +9,14 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const REFERENCE_NEW_MOON = Date.UTC(2000, 0, 6, 18, 14);
 
 const PHASES = [
-    { name: 'New Moon', icon: '🌑' },
-    { name: 'Waxing Crescent', icon: '🌒' },
-    { name: 'First Quarter', icon: '🌓' },
-    { name: 'Waxing Gibbous', icon: '🌔' },
-    { name: 'Full Moon', icon: '🌕' },
-    { name: 'Waning Gibbous', icon: '🌖' },
-    { name: 'Last Quarter', icon: '🌗' },
-    { name: 'Waning Crescent', icon: '🌘' },
+    { name: 'New Moon' },
+    { name: 'Waxing Crescent' },
+    { name: 'First Quarter' },
+    { name: 'Waxing Gibbous' },
+    { name: 'Full Moon' },
+    { name: 'Waning Gibbous' },
+    { name: 'Last Quarter' },
+    { name: 'Waning Crescent' },
 ];
 
 /** Days since the last new moon, in [0, 29.53). */

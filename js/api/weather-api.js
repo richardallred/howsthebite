@@ -260,7 +260,7 @@ function dailyFrom(periods, timezone) {
         return {
             t,
             label: sky.label,
-            icon: sky.emoji,
+            icon: sky.icon, // an id in the page's icon sprite
             highF: isNum(day?.temperature) ? day.temperature : null, // null once the daytime period has passed
             lowF: lows.length ? Math.min(...lows) : null,
             precipChance: Math.max(0, ...all.map((period) => period.probabilityOfPrecipitation?.value ?? 0)),

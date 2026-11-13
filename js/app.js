@@ -24,7 +24,7 @@ import { debounce, distanceMiles, isNum, roundCoord, timeAgo } from './core/util
 import { compassPoint } from './core/sky.js';
 import { locationKey, storage } from './storage.js';
 import { createLineChart } from './ui/charts.js';
-import { $, el, icon, setText } from './ui/dom.js';
+import { $, el, icon, setText, svg } from './ui/dom.js';
 import { createStationMap } from './ui/map.js';
 import { createOutlookChart } from './ui/outlook-chart.js';
 import { initTheme } from './ui/theme.js';
@@ -421,10 +421,33 @@ function factorDisplay(factor, derived) {
             };
         default: {
             const moon = moonInfo(new Date(derived.clock));
-            return { label: 'Moon', iconName: 'moon', value: `${moon.icon} ${moon.name}`, extra: factor.trend };
+            return { label: 'Moon', iconName: 'moon', value: moon.name, valueIcon: moonGlyph(moon.fraction), extra: factor.trend };
         }
     }
 }
+
+/**
+ * The moon as it looks tonight: the lit part drawn over the dark disc. `fraction` runs
+ * 0 (new) → 0.5 (full) → 1; the lit limb is on the right while waxing, on the left while waning.
+ */
+function moonGlyph(fraction) {
+    const r = 7;
+    const waxing = fraction < 0.5;
+    const terminator = Math.abs(Math.cos(2 * Math.PI * fraction)) * r; // half-width of the shadow's edge
+    const gibbous = fraction > 0.25 && fraction < 0.75;
+    // Down the lit limb, then back up along the terminator.
+    const limbSweep = waxing ? 1 : 0;
+    const edgeSweep = waxing === gibbous ? 1 : 0;
+    const lit = `M8 1A${r} ${r} 0 0 ${limbSweep} 8 15A${terminator.toFixed(2)} ${r} 0 0 ${edgeSweep} 8 1Z`;
+    return svg('svg', { class: 'moon-glyph', viewBox: '0 0 16 16', 'aria-hidden': 'true', focusable: 'false' },
+        svg('circle', { class: 'moon-dark', cx: 8, cy: 8, r }),
+        svg('path', { class: 'moon-lit', d: lit }));
+}
+
+/** The sprite icon for a sky; older saved snapshots carry no icon name, so fall back on the sky class. */
+const SKY_ICONS = new Set(['sun', 'moon', 'partly', 'cloud', 'fog', 'rain', 'snow', 'storm', 'thermometer']);
+const SKY_CLASS_ICONS = { clear: 'sun', partly: 'partly', overcast: 'cloud', 'light-precip': 'rain', precip: 'rain', storm: 'storm' };
+const skyIcon = (sky) => (SKY_ICONS.has(sky?.icon) ? sky.icon : SKY_CLASS_ICONS[sky?.class] ?? 'thermometer');
 
 /** ["now–9:20 PM", "Tue 4:40–7:00 AM"] */
 function describeWindows(windows, clock) {
@@ -453,6 +476,7 @@ function renderScore(derived) {
         setText('scoreBest', '');
         return;
     }
+    $('scorePin').style.left = `${Math.max(0, Math.min(100, derived.result.score))}%`;
     const { result } = derived;
     const { current } = state.weather;
     card.dataset.band = result.band.key;
@@ -460,12 +484,12 @@ function renderScore(derived) {
     setText('scoreBand', result.band.label);
     setText('scorePhrase', result.phrase);
     const feelsLike = isNum(current.feelsLikeF) ? ` · feels like ${Math.round(current.feelsLikeF)}°F` : '';
-    setText('scoreNow', `${current.sky.emoji} ${current.sky.label} · ${Math.round(current.tempF)}°F${feelsLike}`);
+    $('scoreNow').replaceChildren(icon(skyIcon(current.sky)), `${current.sky.label} · ${Math.round(current.tempF)}°F${feelsLike}`);
     setText('scoreCap', result.cap ? result.cap.reason : '');
-    // Each window is kept on one line; the list wraps between windows on a narrow card.
+    // Each window is a chip that stays on one line; the first (soonest) is highlighted.
     const best = describeWindows(derived.windows, derived.clock);
-    $('scoreBest').replaceChildren(...(best.length ? ['Best times: '] : []),
-        ...best.flatMap((text, index) => [index ? ' · ' : '', el('span', { class: 'nowrap' }, text)]));
+    $('scoreBest').replaceChildren(...(best.length ? [el('span', { class: 'eyebrow score-best-label' }, 'Best times: ')] : []),
+        ...best.flatMap((text, index) => [index ? el('span', { class: 'sep' }, ' · ') : '', el('span', { class: 'window nowrap' }, text)]));
 }
 
 function renderSpeciesGroup() {
@@ -556,9 +580,10 @@ function renderFactors(derived) {
         const rating = RATING_LABELS[factor.rating];
         return el('article', { class: 'factor', dataset: { rating: factor.rating } },
             el('h3', { class: 'factor-label' }, icon(display.iconName), display.label),
-            el('p', { class: 'factor-value' }, display.value),
-            el('p', { class: 'factor-note' }, factor.note),
-            el('p', { class: 'factor-extra' }, display.extra ?? ' '),
+            el('p', { class: 'factor-value' }, display.valueIcon ?? null, display.value),
+            el('div', { class: 'factor-text' },
+                el('p', { class: 'factor-note' }, factor.note),
+                el('p', { class: 'factor-extra' }, display.extra ?? '')),
             el('div', { class: 'factor-foot' },
                 el('div', { class: 'meter', 'aria-hidden': 'true' },
                     el('span', { style: `width:${Math.round((factor.points / factor.max) * 100)}%` })),
@@ -670,7 +695,7 @@ function renderForecast() {
         return el('li', { class: 'forecast-day' },
             el('p', { class: 'forecast-name' }, isToday ? 'Today' : dayName.format(day.t),
                 el('span', { class: 'muted' }, dayDate.format(day.t))),
-            el('p', { class: 'forecast-icon', 'aria-hidden': 'true' }, day.icon),
+            el('p', { class: 'forecast-icon', 'aria-hidden': 'true' }, icon(SKY_ICONS.has(day.icon) ? day.icon : 'cloud')),
             el('p', { class: 'forecast-label' }, day.label),
             el('p', { class: 'forecast-temps' },
                 // In the evening NWS no longer forecasts a daytime high for today.

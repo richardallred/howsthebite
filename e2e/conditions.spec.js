@@ -12,7 +12,7 @@ test.describe('first visit', () => {
         await expect(page.locator('#scoreBand')).toHaveText('Excellent');
         await expect(page.locator('#scorePhrase')).toHaveText(/^The bite is \w+/);
         await expect(page.locator('#scoreCard')).toHaveAttribute('data-band', 'excellent');
-        await expect(page.locator('#scoreNow')).toHaveText('☀️ Clear · 72°F');
+        await expect(page.locator('#scoreNow')).toHaveText('Clear · 72°F');
         await expect(page.locator('#scoreCap')).toBeHidden(); // nothing is holding the score down
         // Sunset in Chicago on 15 June is 8:28 PM; dawn the next day is the runner-up.
         await expect(page.locator('#scoreBest')).toHaveText(/^Best times: 7:\d\d–9:\d\d PM · Tue 4:\d\d–\d:\d\d AM$/);
