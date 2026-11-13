@@ -9,11 +9,12 @@
 import { test as base, expect } from '@playwright/test';
 
 import {
-    BLANK_TILE, DEFAULT_STATIONS, NOW, continuousResponse, forecastResponse, latestContinuousResponse,
-    monitoringLocationsResponse, observationsResponse, photonResponse, pointResponse, stationsResponse,
+    BLANK_TILE, DEFAULT_POINTS, DEFAULT_SCORE, DEFAULT_STATIONS, NOW, alertsResponse, continuousResponse,
+    flowNormalsResponse, forecastResponse, latestContinuousResponse, monitoringLocationsResponse,
+    observationsResponse, photonResponse, pointResponse, stationsResponse,
 } from './api-mocks.js';
 
-export { NOW, expect };
+export { DEFAULT_POINTS, DEFAULT_SCORE, NOW, expect };
 
 const SERVICES = {
     nws: 'api.weather.gov',
@@ -22,13 +23,14 @@ const SERVICES = {
     tiles: 'tile.openstreetmap.org',
 };
 
-const PROXY_PATH = /\/api\/usgs\/([a-z-]+)\/items$/;
+const PROXY_PATH = /\/api\/usgs\/(?:([a-z-]+)\/items|statistics\/(observationNormals))$/;
 
 export const test = base.extend({
     api: async ({ context }, use) => {
         const api = {
             weather: {}, // overrides merged into DEFAULT_WEATHER (see api-mocks.js)
             stations: DEFAULT_STATIONS,
+            alerts: [], // NWS alerts in effect: { event, onsetHours, endsHours } relative to NOW
             // false: the site is plain static hosting, so /api/usgs is a 404 and the app goes direct.
             // true:  the Cloudflare Pages proxy is deployed and answers /api/usgs.
             proxy: false,
@@ -63,6 +65,7 @@ export const test = base.extend({
             if (collection === 'latest-continuous') return json(route, latestContinuousResponse(url, api.stations));
             if (collection === 'monitoring-locations') return json(route, monitoringLocationsResponse(url, api.stations));
             if (collection === 'continuous') return json(route, continuousResponse(url, api.stations));
+            if (collection === 'observationNormals') return json(route, flowNormalsResponse(url, api.stations));
             api.unexpected.push(url.href);
             return route.abort('blockedbyclient');
         };
@@ -74,7 +77,8 @@ export const test = base.extend({
             api.calls.push({ service: 'proxy', url: url.href });
             if (!api.proxy) return respond(route, 404, { error: 'Not found' });
             if (failed(route, 'proxy')) return undefined;
-            return usgs(route, url, PROXY_PATH.exec(url.pathname)[1]);
+            const [, collection, statistic] = PROXY_PATH.exec(url.pathname);
+            return usgs(route, url, collection ?? statistic);
         });
 
         await context.route((url) => url.hostname !== 'localhost', (route) => {
@@ -96,11 +100,12 @@ export const test = base.extend({
                     if (url.pathname.endsWith('/forecast')) return json(route, forecastResponse(api.weather));
                     if (url.pathname.endsWith('/stations')) return json(route, stationsResponse(api.weather));
                     if (url.pathname.endsWith('/observations')) return json(route, observationsResponse(url, api.weather));
+                    if (url.pathname === '/alerts/active') return json(route, alertsResponse(api.alerts));
                     api.unexpected.push(url.href);
                     return route.abort('blockedbyclient');
                 case 'photon': return json(route, photonResponse(url));
                 case 'tiles': return route.fulfill({ status: 200, contentType: 'image/png', body: BLANK_TILE });
-                default: return usgs(route, url, /collections\/([a-z-]+)\/items/.exec(url.pathname)?.[1]);
+                default: return usgs(route, url, /(?:collections\/([a-z-]+)\/items|statistics\/v0\/(observationNormals))$/.exec(url.pathname)?.slice(1).find(Boolean));
             }
         });
 

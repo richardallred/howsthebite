@@ -63,6 +63,25 @@ test('whitelists and normalises query parameters, and never forwards a client ke
     assert.equal(upstreamUrl(`https://x.test/a?id=${'x'.repeat(3000)}`, ['monitoring-locations', 'items']), null);
 });
 
+test('forwards the day-of-year flow statistics, for one station at a time, and caches them for a day', async () => {
+    const { url, freshSeconds } = upstreamUrl(
+        'https://x.test/api/usgs/statistics/observationNormals?monitoring_location_id=USGS-1&parameter_code=00060'
+        + '&computation_type=percentile&start_date=06-15&end_date=06-15&api_key=stolen&page_size=100000',
+        ['statistics', 'observationNormals'],
+    );
+    assert.equal(url.href,
+        'https://api.waterdata.usgs.gov/statistics/v0/observationNormals?computation_type=percentile&end_date=06-15'
+        + '&monitoring_location_id=USGS-1&parameter_code=00060&start_date=06-15');
+    assert.equal(freshSeconds, 86400);
+
+    assert.equal((await call('statistics/observationNormals', '?monitoring_location_id=USGS-1')).status, 200);
+    assert.equal((await call('statistics/observationNormals', '?parameter_code=00060')).status, 404); // no station: would be the whole country
+    assert.equal((await call('statistics/observationIntervals', '?monitoring_location_id=USGS-1')).status, 404);
+    assert.equal((await call('statistics/observationNormals/extra', '?monitoring_location_id=USGS-1')).status, 404);
+    assert.equal((await call('constructor/items')).status, 404);
+    assert.equal(upstreamCalls.length, 1);
+});
+
 test('adds the server-side API key as a header, not in the URL', async () => {
     await call('latest-continuous/items', '?bbox=1,2,3,4');
     assert.equal(upstreamCalls[0].headers['x-api-key'], 'secret-key');

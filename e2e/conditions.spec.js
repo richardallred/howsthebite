@@ -1,4 +1,4 @@
-import { expect, test } from './support/fixtures.js';
+import { DEFAULT_POINTS, DEFAULT_SCORE, NOW, expect, test } from './support/fixtures.js';
 
 test.describe('first visit', () => {
     test('shows the default city with a score, six factors and a five-day forecast', async ({ page, app }) => {
@@ -7,18 +7,23 @@ test.describe('first visit', () => {
         await expect(page.getByRole('heading', { level: 1 })).toHaveText('Chicago, Illinois');
         await expect(page).toHaveTitle(/Chicago, Illinois/);
 
-        // The fixture is a perfect day on a new moon: every factor is maxed.
-        await expect(page.locator('#scoreValue')).toHaveText('100');
-        await expect(page.locator('#scoreBand')).toHaveText('Exceptional');
+        // Ideal water, wind and flow, but mid-morning under a bright sun: excellent, not exceptional.
+        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
+        await expect(page.locator('#scoreBand')).toHaveText('Excellent');
         await expect(page.locator('#scorePhrase')).toHaveText(/^The bite is \w+/);
-        await expect(page.locator('#scoreCard')).toHaveAttribute('data-band', 'exceptional');
+        await expect(page.locator('#scoreCard')).toHaveAttribute('data-band', 'excellent');
         await expect(page.locator('#scoreNow')).toHaveText('☀️ Clear · 72°F');
+        await expect(page.locator('#scoreCap')).toBeHidden(); // nothing is holding the score down
+        // Sunset in Chicago on 15 June is 8:28 PM; dawn the next day is the runner-up.
+        await expect(page.locator('#scoreBest')).toHaveText(/^Best times: 7:\d\d–9:\d\d PM · Tue 4:\d\d–\d:\d\d AM$/);
+        await expect(page.locator('#alerts')).toBeHidden();
         await expect(page.locator('#updatedAt')).toContainText('weather observed at Testville, Test Regional Airport just now');
 
         await expect(page.locator('.factor')).toHaveCount(6);
-        await expect(page.locator('.factor-points')).toHaveText([
-            /^20\/20/, /^18\/18/, /^17\/17/, /^15\/15/, /^15\/15/, /^15\/15/,
+        await expect(page.locator('.factor-label')).toHaveText([
+            'Water temperature', 'Light', 'Wind', 'River flow', 'Moon', 'Barometric pressure',
         ]);
+        await expect(page.locator('.factor-points')).toHaveText(DEFAULT_POINTS);
 
         await expect(page.locator('.forecast-day')).toHaveCount(5);
         await expect(page.locator('.forecast-name').first()).toContainText('Today');
@@ -55,10 +60,124 @@ test.describe('factor details', () => {
 
         await expect(app.factor('Wind').locator('.factor-value')).toHaveText('10 mph SW');
         await expect(app.factor('Wind')).toContainText('Gusts to 14 mph');
-        await expect(app.factor('Air temperature').locator('.factor-value')).toHaveText('72.0°F');
-        await expect(app.factor('Sky').locator('.factor-value')).toHaveText('Clear');
-        await expect(app.factor('Sky')).toContainText('50% humidity');
         await expect(app.factor('Moon').locator('.factor-value')).toContainText('New Moon');
+
+        const light = app.factor('Light');
+        await expect(light.locator('.factor-value')).toHaveText('Clear');
+        await expect(light).toContainText('Bright sun');
+        await expect(light).toContainText('Sunset 8:28 PM');
+
+        const flow = app.factor('River flow');
+        await expect(flow.locator('.factor-value')).toHaveText('1,250 cfs');
+        await expect(flow).toContainText('Normal for the date');
+        await expect(flow).toContainText('100% of the median for today');
+    });
+
+    test('the same conditions score higher in the evening and lower in the dead of night', async ({ page, api, app }) => {
+        const at = async (hoursLater) => {
+            api.weather = { now: NOW + hoursLater * 3600_000 };
+            await page.clock.setFixedTime(NOW + hoursLater * 3600_000);
+        };
+        await at(10); // 8 PM in Chicago, half an hour before sunset
+        await app.open();
+        const evening = Number(await page.locator('#scoreValue').textContent());
+        await expect(app.factor('Light').locator('.factor-value')).toHaveText('Evening light');
+        await expect(app.factor('Light').locator('.factor-points')).toHaveText(/^30\/30/);
+        await expect(app.factor('Light')).toContainText('Sunset 8:28 PM');
+        await expect(page.locator('#scoreBest')).toHaveText(/^Best times: now–9:\d\d PM/);
+
+        await at(15); // 1 AM
+        await page.getByRole('button', { name: 'Refresh conditions' }).click();
+        await expect(app.factor('Light').locator('.factor-value')).toHaveText('After dark');
+        await expect(app.factor('Light')).toContainText('Sunrise 5:16 AM');
+        const night = Number(await page.locator('#scoreValue').textContent());
+
+        expect(evening).toBeGreaterThan(Number(DEFAULT_SCORE));
+        expect(night).toBeLessThan(evening);
+    });
+
+    test('the species selector retunes the water temperature and is remembered', async ({ page, api, app }) => {
+        api.stations = api.stations.map((station) => (station.id === 'USGS-05500001'
+            ? { ...station, readings: { ...station.readings, '00010': 22.5 } } // 72.5°F: fine for bass, too warm for trout
+            : station));
+        await app.open();
+        const water = app.factor('Water temperature');
+        await expect(water).toContainText('Prime range for most species');
+
+        await page.getByRole('button', { name: 'Trout' }).click();
+        await expect(water).toContainText('Warm for trout');
+        await expect(page.locator('#scoreCap')).toHaveText('Held down by the water temperature');
+        expect(Number(await page.locator('#scoreValue').textContent())).toBeLessThan(40);
+
+        await page.getByRole('button', { name: 'Bass & panfish' }).click();
+        await expect(water).toContainText('Prime range for bass');
+        await expect(page.locator('#scoreCap')).toBeHidden();
+
+        await page.reload();
+        await app.loaded();
+        await expect(page.getByRole('button', { name: 'Bass & panfish' })).toHaveAttribute('aria-pressed', 'true');
+    });
+
+    test('a river running far above normal holds the score down', async ({ page, api, app }) => {
+        api.stations = api.stations.map((station) => (station.id === 'USGS-05500001' ? { ...station, medianCfs: 250 } : station));
+        await app.open();
+        const flow = app.factor('River flow');
+        await expect(flow).toContainText('Very high for the date');
+        await expect(flow).toContainText('500% of the median for today');
+        await expect(page.locator('#scoreCap')).toHaveText('Held down by the river flow');
+        await expect(page.locator('#levelStats')).toContainText('median for today 250 cfs');
+        expect(Number(await page.locator('#scoreValue').textContent())).toBeLessThan(40);
+        await expect(page.locator('#scoreBand')).toHaveText('Poor');
+    });
+
+    test('flow is left out, not guessed, when the gauge has no long-term record', async ({ page, api, app }) => {
+        api.stations = api.stations.map((station) => ({ ...station, normals: false }));
+        await app.open();
+        await expect(page.locator('.factor-label')).toHaveText(['Water temperature', 'Light', 'Wind', 'Moon', 'Barometric pressure']);
+        await expect(page.locator('#levelStats')).toContainText('1,250 cfs'); // still shown, just not scored
+    });
+
+    test('low dissolved oxygen is shown and drags the water score down', async ({ page, api, app }) => {
+        api.stations = api.stations.map((station) => (station.id === 'USGS-05500001'
+            ? { ...station, readings: { ...station.readings, '00300': 3.2, 63680: 64 } }
+            : station));
+        await app.open();
+        await expect(app.factor('Water temperature')).toContainText('Low oxygen (3.2 mg/L)');
+        await expect(page.locator('#levelStats')).toContainText('Dissolved oxygen3.2 mg/Llow');
+        await expect(page.locator('#levelStats')).toContainText('Turbidity64 FNUmuddy');
+    });
+});
+
+test.describe('weather alerts', () => {
+    test('a thunderstorm warning in effect caps the score and says why', async ({ page, api, app }) => {
+        api.alerts = [{ event: 'Severe Thunderstorm Warning', onsetHours: -0.5, endsHours: 1 }, { event: 'Freeze Warning' }];
+        await app.open();
+
+        await expect(page.locator('#alerts .alert')).toHaveText(['Severe Thunderstorm Warning until Mon 11:00 AM — stay off the water']);
+        await expect(page.locator('#alerts .alert')).toHaveAttribute('data-level', 'danger');
+        await expect(page.locator('#scoreValue')).toHaveText('15');
+        await expect(page.locator('#scoreCap')).toHaveText('Severe Thunderstorm Warning in effect');
+        // The factors still show what the conditions would otherwise be worth.
+        await expect(page.locator('.factor-points')).toHaveText(DEFAULT_POINTS);
+    });
+
+    test('an advisory is shown without changing the score, and an upcoming one says when it starts', async ({ page, api, app }) => {
+        api.alerts = [
+            { event: 'Lake Wind Advisory', onsetHours: 3, endsHours: 9 },
+            { event: 'Flood Advisory', onsetHours: -2, endsHours: 6 },
+        ];
+        await app.open();
+        await expect(page.locator('#alerts .alert')).toHaveText([
+            'Flood Advisory until Mon 4:00 PM', 'Lake Wind Advisory from Mon 1:00 PM',
+        ]);
+        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
+    });
+
+    test('an alerts outage never blocks the conditions', async ({ page, context, app }) => {
+        await context.route('**/api.weather.gov/alerts/**', (route) => route.fulfill({ status: 503, body: '{}', headers: { 'access-control-allow-origin': '*' } }));
+        await app.open();
+        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
+        await expect(page.locator('#alerts')).toBeHidden();
     });
 
     test('a stormy, windy, cold front day scores at the bottom of the scale', async ({ page, api, app }) => {
@@ -72,7 +191,7 @@ test.describe('factor details', () => {
         const score = Number(await page.locator('#scoreValue').textContent());
         expect(score).toBeLessThan(25);
         await expect(page.locator('#scoreBand')).toHaveText(/Very poor|Terrible/);
-        await expect(app.factor('Sky')).toContainText('stay off the water');
+        await expect(app.factor('Light')).toContainText('stay off the water');
         await expect(app.factor('Wind')).toContainText('Too windy');
         await expect(app.factor('Barometric pressure')).toContainText('Rising fast');
     });

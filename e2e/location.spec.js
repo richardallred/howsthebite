@@ -1,4 +1,4 @@
-import { expect, test } from './support/fixtures.js';
+import { DEFAULT_SCORE, expect, test } from './support/fixtures.js';
 
 test.describe('place search', () => {
     test('finds a town, narrows by state, and selects with the keyboard', async ({ page, app }) => {
@@ -111,7 +111,7 @@ test.describe('recent places and persistence', () => {
 
         await page.reload();
         await expect(page.getByRole('heading', { level: 1 })).toHaveText('Asheville, North Carolina');
-        await expect(page.locator('#scoreValue')).toHaveText('100');
+        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
         await expect(page.locator('#notice')).toBeHidden();
         expect(api.calls.length).toBe(callsBefore);
     });
@@ -150,7 +150,7 @@ test.describe('use my location, permission already granted', () => {
     test('a first visit goes straight to the device location', async ({ page, api }) => {
         await page.goto('/');
         await expect(page.getByRole('heading', { level: 1 })).toHaveText('Madison, Wisconsin');
-        await expect(page.locator('#scoreValue')).toHaveText('100');
+        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
         await expect(page.locator('#notice')).toBeHidden();
 
         // Coordinates are rounded to three decimals (about 100 m) before they leave the device…

@@ -1,9 +1,10 @@
 # 🎣 How's the Bite?
 
 A Progressive Web App that answers one question for anglers: **how good is the fishing right now?**
-Pick any US town, lake or river and get a 0–100 score built from live weather, barometric
-pressure trends, moon phase and real water temperature from the nearest USGS sensor, plus the
-current river level, flow or lake elevation.
+Pick any US town, lake or river and get a 0–100 score built from real water temperature at the
+nearest USGS sensor, the time of day, live weather, river flow compared with normal, and the moon,
+plus the current river level, flow or lake elevation. The weights follow what studies of angler
+catch rates have actually measured (see [How the score works](#how-the-score-works)).
 
 No framework and nothing to compile: plain HTML, CSS and ES modules. The app itself needs
 **no API keys**.
@@ -12,12 +13,17 @@ No framework and nothing to compile: plain HTML, CSS and ES modules. The app its
 
 ## Features
 
-- **Fishing score (0–100)** with a per-factor breakdown that shows exactly where the points came from
+- **Fishing score (0–100)** with a per-factor breakdown that shows exactly where the points came from,
+  tuned to what you are fishing for: all species, bass and panfish, walleye and pike, or trout
+- **Best times** for the next day and a half, from sunrise/sunset and the forecast
+- **Weather alerts** from the National Weather Service; thunderstorm and other dangerous-weather
+  warnings cap the score while they are in effect
 - **Live water temperature** from nearby USGS monitoring stations; pick a different station from the
   list or the map, or filter to lakes or rivers. When no sensor is nearby the app falls back to a
   clearly labelled estimate
-- **Water level and flow** from the nearest USGS gauge: river gage height and discharge, or lake
-  and reservoir surface elevation, with the 24-hour change
+- **Water level and flow** from the nearest USGS gauge: river gage height and discharge (with the
+  median for today's date), or lake and reservoir surface elevation, with the 24-hour change, and
+  dissolved oxygen and turbidity where the station measures them
 - **Current conditions** observed at the nearest weather station: air temperature, pressure with
   its 3-hour trend, wind and gusts, sky
 - **5-day forecast** with highs/lows, precipitation chance and wind
@@ -57,7 +63,7 @@ Without that file the preview still works; the proxy just calls USGS anonymously
 ## Tests
 
 ```bash
-npm test            # unit tests: scoring, trends, moon phase, sky, helpers, the USGS proxy
+npm test            # unit tests: scoring, sun and moon, alerts, trends, sky, helpers, the USGS proxy
 npm run test:e2e    # browser tests (Playwright): the whole app, desktop and phone layouts
 npm run test:all    # both
 ```
@@ -119,46 +125,107 @@ page loads a file that `SHELL` does not list.
 
 ### The USGS proxy
 
-`functions/api/usgs/[[path]].js` answers `GET /api/usgs/<collection>/items` by calling USGS:
+`functions/api/usgs/[[path]].js` answers `GET /api/usgs/<collection>/items` and
+`GET /api/usgs/statistics/observationNormals` by calling USGS:
 
 - **The key stays on the server.** Browsers never see it. Without the proxy every visitor has their
   own anonymous allowance (1,000 requests per hour per IP), which is fine for one person but not
   when many visitors share an address, and a key shipped in the page would be public.
-- **Answers are cached at Cloudflare's edge**: readings for 10 minutes, station names for a day.
+- **Answers are cached at Cloudflare's edge**: readings for 10 minutes, station names and
+  day-of-year flow statistics for a day.
   The app snaps its search area to a 0.1° grid (about 7 miles), so people near each other ask
   the identical question and share one upstream request.
 - **Outages are absorbed.** If USGS rate-limits or fails, the last good answer (up to six hours
   old) is served instead. Each reading carries its own timestamp, which the app shows.
-- **It is not an open proxy.** Only the three collections and the query parameters the app uses are
-  forwarded, only for GET, and the result limit is capped.
+- **It is not an open proxy.** Only the three collections, the one statistics endpoint and the
+  query parameters the app uses are forwarded, only for GET, and the result limit is capped.
 
 The `x-cache` response header reports `hit`, `miss` or `stale`.
 
 ## How the score works
 
-Six factors add up to 100 points. The logic lives in `js/core/scoring.js` and is covered by
-`tests/scoring.test.js`.
+The score rates **conditions**, not your odds. Wherever catch rates have been measured, the
+angler's skill, the bait and how many fish are in the water outweighed every environmental factor,
+so treat the number as "is this a good time to be out", not a prediction.
+
+The logic lives in `js/core/scoring.js` and is covered by `tests/scoring.test.js`.
 
 | Factor | Points | Best | How it is scored |
 |---|---|---|---|
-| Water temperature | 20 | 65–75°F | Bands: 58–78°F very good, 50–85°F good, 45–90°F fair. Measured readings get a small bonus when steady over 24 h (or warming when cold / cooling when hot) and a penalty for rapid swings. Estimates get no trend bonus. |
-| Barometric pressure | 18 | 30.00–30.20 inHg, slowly falling | Up to 10 for the level plus up to 8 for the 3-hour trend: slowly falling 8, falling fast 6, steady 5, slowly rising 2, rising fast 0. If no barometer is in reach the factor scores a neutral 9. |
-| Wind | 17 | 8–12 mph | A light chop is ideal; dead calm and anything over 25 mph score 0. |
-| Air temperature | 15 | 65–75°F | Comfort bands, nudged by the 24-hour trend. |
-| Sky | 15 | Clear | Clear 15, partly cloudy 12, mostly cloudy/overcast/fog 8, light precipitation 4, steady rain or snow 2, thunderstorms 0. |
-| Moon phase | 15 | New or full moon | 15 at new/full, falling to 5 at the quarters. |
+| Water temperature | 35 | Depends on the species setting | A smooth curve per species group: bass and panfish peak at 69–80°F, walleye and pike at 62–72°F, trout at 50–64°F, "all species" at 62–76°F. Trout lose most of their points by 70°F and all of them by 75°F. An estimate (no sensor nearby) is pulled toward the middle. Dissolved oxygen below about 5 mg/L (6 for trout) cuts the factor further where a station measures it. |
+| Light | 30 | The hour either side of sunset | From the sun's height, computed for the spot: evening low light 100%, early morning 75%, overcast day 68%, broken cloud 55%, bright sun 45%, night 35%, blended smoothly between. |
+| Wind | 12 | 5–12 mph | Calm still earns 75%. Points fall away above 15 mph and reach zero at 30. Gusts count (a gust is treated as 70% of a steady wind). |
+| River flow | 10 | Normal for the date | Current discharge against that gauge's own record for today's date (USGS day-of-year percentiles, at least 10 years). Normal flow scores full marks, low water a little less, very high water almost nothing. Left out for lakes and for gauges without a long record. |
+| Moon | 8 | New or full moon, overhead or underfoot | 35% always, up to 30% more near new/full moon, and 35% more within about an hour of the moon crossing overhead or underfoot. |
+| Barometric pressure | 5 | Steady or slowly falling | Trend only: slowly falling 5, steady or falling fast 4, rising 3, rising fast 1. The level itself earns nothing. |
+
+**Total.** The score is the share of the available points, so a lake (no flow factor) is scored
+out of 90 and scaled to 100.
+
+**Ceilings.** Good light cannot rescue unfishable water. Whichever of water temperature, river
+flow and wind scores worst sets a ceiling on the total: none at half marks or better, falling to
+10 when that factor scores zero. Thunderstorms at the nearest station, or a dangerous-weather
+warning in effect (severe thunderstorm, tornado, special marine, flash flood and similar), cap the
+score at 15. When a ceiling applies, the score card says which one.
 
 Overall rating: 85+ exceptional, 70+ excellent, 55+ good, 40+ fair, 25+ poor, 10+ very poor.
 
-The weights and bands are rules of thumb, not science. They are easy to tune in one file.
+### Why these weights
+
+They come from a review of measured evidence on angler catch rates. That evidence is thinner than
+fishing lore suggests, and most of it covers walleye, muskie and bass; the curves are informed
+judgement on top of it, not a fitted model.
+
+- **Water temperature** has the strongest basis: fish are cold-blooded, and each species feeds
+  within its own range. Idaho Fish and Game reported trout catch rates 77% lower above 73°F than
+  below 66°F, with far more fish dying after release. A 2,500-trip largemouth log (Manns,
+  In-Fisherman; not peer-reviewed) put catch per outing at 49–58°F at about 40% of the 69–78°F
+  peak. Temperature limits come from EPA criteria.
+- **Light** is the best-supported weather-related factor. In a 13-year compulsory creel survey on
+  Escanaba Lake, Wisconsin (Shaw, Renik & Sass 2021, PLOS ONE), predicted walleye trip success was
+  about 0.47 at dusk, 0.34 at dawn and 0.26 by day, and fell as solar radiation rose. The bass log
+  above shows the same order, with night slowest.
+- **Wind** showed no effect on walleye or bass catch in the studies that tested it, and about 40%
+  fewer muskie at 20 mph than in calm. It is scored mainly for what it does to boat control,
+  casting and safety.
+- **River flow**: Wisconsin DNR guide logs found smallmouth catch rates fell as discharge rose on
+  two of three rivers, while rising or falling stage over three days made no difference. So the
+  score uses how high the river is for the date and ignores the short-term trend.
+- **Moon**: across 340,000 muskie records (Vinson & Angradi 2014, PLOS ONE) the lunar effect was
+  about 5% overall and 10–19% in the datasets where it showed, and the authors could not separate
+  it from when anglers choose to fish. Moon overhead/underfoot raised trip success in the Escanaba
+  data. A seven-year trout study found no lunar effect at all.
+- **Barometric pressure** was not a significant predictor of catch in any of the three angling
+  datasets found that tested it (walleye and muskie in Wisconsin; largemouth bass in Michigan and
+  Illinois). The slow bite behind a cold front is near-universal testimony but has barely been
+  measured, so the trend keeps five points and the level none.
+- **Dropped: air temperature and sky as a "nice day" bonus.** Air temperature had no effect of its
+  own once water temperature and season are accounted for, and rain was not significant where
+  tested. The old score gave a clear sky the most points; the evidence points the other way.
+- **Dissolved oxygen** thresholds are EPA's (1986 criteria): feeding and growth suffer below
+  about 5 mg/L for warm-water fish and 6 mg/L for salmonids.
+
+Sources: [Shaw, Renik & Sass 2021](https://pmc.ncbi.nlm.nih.gov/articles/PMC8483380/) ·
+[Vinson & Angradi 2014](https://pmc.ncbi.nlm.nih.gov/articles/PMC4037224) ·
+[Idaho Fish and Game on trout and warm water](https://idfg.idaho.gov/blog/2022/06/some-perspective-trout-fishing-during-low-water-and-high-temperatures) ·
+[Manns, largemouth log](https://in-fisherman.com/editorial/moon-magic-largemouth-bass/154779) ·
+[Mell 1962, bass and weather](https://d.lib.msu.edu/etd/8317/FULL_TEXT/view) ·
+[Wisconsin DNR guide reports](https://dnr.wisconsin.gov/sites/default/files/topic/Fishing/Pubs_2014GuidetotheFuture.pdf) ·
+[EPA temperature criteria](https://archive.epa.gov/water/archive/web/html/vms53.html)
+
+The figures above were taken from summaries of these sources; check the originals before relying
+on any single number. The Escanaba Lake trip-level data is public and would be the place to start
+if you want to fit the weights rather than judge them.
 
 ## Data sources
 
 | Data | Source | Notes |
 |---|---|---|
-| Current weather, 72-hour history, forecast, place names for "use my location" | [US National Weather Service API](https://www.weather.gov/documentation/services-web-api) | Public domain, no key, US and territories only |
+| Current weather, 72-hour history, forecast, active alerts, place names for "use my location" | [US National Weather Service API](https://www.weather.gov/documentation/services-web-api) | Public domain, no key, US and territories only |
 | Town, lake and river search | [Photon](https://photon.komoot.io/) (OpenStreetMap data, hosted by komoot) | Free community service with a fair-use policy and no uptime guarantee |
-| Water temperature, level, flow | [USGS Water Data APIs](https://api.waterdata.usgs.gov/docs/ogcapi/) | Public domain. `latest-continuous`, `monitoring-locations` and `continuous` collections. Readings are provisional. |
+| Water temperature, level, flow, dissolved oxygen, turbidity | [USGS Water Data APIs](https://api.waterdata.usgs.gov/docs/ogcapi/) | Public domain. `latest-continuous`, `monitoring-locations` and `continuous` collections. Readings are provisional. Oxygen and turbidity are reported by a minority of stations. |
+| Normal flow for today's date | [USGS Statistics API](https://api.waterdata.usgs.gov/statistics/v0/docs) (`observationNormals`) | Public domain. Day-of-year percentiles from each gauge's approved record. The API is labelled beta by USGS. |
+| Sunrise, sunset, twilight, moon phase and position | Computed in the browser (`js/core/sun.js`, `js/core/moon.js`) | No request is made |
 | Map tiles | [OpenStreetMap](https://www.openstreetmap.org/copyright) via [Leaflet](https://leafletjs.com/) (vendored in `vendor/leaflet`) | Loaded only when the map scrolls into view |
 
 ### Where the weather readings come from
@@ -195,7 +262,7 @@ Bathymetry (depth maps) exists only in scattered state and federal datasets, wit
 There is no analytics. Your saved places and the last loaded conditions stay in your browser's
 local storage. To fetch conditions, coordinates rounded to about 100 m go to the National Weather
 Service; USGS (or this site's proxy in front of it) is only asked about a box roughly 130 miles
-across, snapped to a 7-mile grid. The text you type in the search box goes to Photon. Your
+across, snapped to a 7-mile grid, and then about the individual gauges it found there. The text you type in the search box goes to Photon. Your
 location is requested only when you press "Use my location".
 
 ## Project structure
@@ -215,12 +282,14 @@ js/
   storage.js            Guarded localStorage access (places, theme, last snapshot)
   api/
     http.js             fetch + JSON with timeout and cancellation
-    weather-api.js      NWS observations and forecast, Photon place search
-    usgs-api.js         USGS stations: water temperature, level, flow and their history
+    weather-api.js      NWS observations, forecast and alerts, Photon place search
+    usgs-api.js         USGS stations: water temperature, level, flow, their history and flow normals
   core/                 Pure logic with no DOM access (unit tested)
-    scoring.js          The fishing score
+    scoring.js          The fishing score and the best-times outlook
+    alerts.js           Which NWS alerts matter on the water
     trend.js            Time-based trend analysis
-    moon.js             Moon phase
+    sun.js              Sun position, sunrise and sunset
+    moon.js             Moon phase and overhead/underfoot position
     sky.js              NWS sky reports -> label, emoji, sky class
     util.js             Distance, formatting and other helpers
   ui/

@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { moonAge, moonInfo } from '../js/core/moon.js';
+import { summariseAlerts } from '../js/core/alerts.js';
+import { moonAge, moonInfo, moonTransit } from '../js/core/moon.js';
+import { sunAltitude, sunTimes } from '../js/core/sun.js';
 import { changeOver, classifyTrend, lastHours, valueAt } from '../js/core/trend.js';
 import {
     HOUR_MS, boundingBox, distanceMiles, niceTicks, prettySiteName, timeAgo,
@@ -132,4 +134,76 @@ test('compass points', () => {
     assert.equal(compassPoint(0), 'N');
     assert.equal(compassPoint(327), 'NW');
     assert.equal(compassPoint(359), 'N');
+});
+
+test('sunrise and sunset match published times to within two minutes', () => {
+    const minutes = (iso) => Date.parse(iso) / 60000;
+    const near = (actual, iso) => assert.ok(Math.abs(actual / 60000 - minutes(iso)) <= 2, `${new Date(actual).toISOString()} vs ${iso}`);
+
+    // Chicago, 15 June 2026 (CDT): sunrise 5:15 AM, sunset 8:28 PM.
+    const chicago = sunTimes(Date.parse('2026-06-15T15:00:00Z'), 41.8781, -87.6298);
+    near(chicago.sunrise, '2026-06-15T10:15:30Z');
+    near(chicago.sunset, '2026-06-16T01:28:00Z');
+    assert.ok(chicago.dawn < chicago.sunrise && chicago.sunset < chicago.dusk);
+    assert.ok(Math.abs(chicago.dayLengthHours - 15.2) < 0.1);
+
+    // Atlanta, 21 December 2026 (EST): sunrise 7:39 AM, sunset 5:33 PM.
+    const atlanta = sunTimes(Date.parse('2026-12-21T17:00:00Z'), 33.749, -84.388);
+    near(atlanta.sunrise, '2026-12-21T12:39:00Z');
+    near(atlanta.sunset, '2026-12-21T22:33:30Z');
+});
+
+test('sun altitude is high at solar noon, about zero at sunrise and negative at night', () => {
+    const { noon, sunrise } = sunTimes(Date.parse('2026-06-15T15:00:00Z'), 41.8781, -87.6298);
+    assert.ok(Math.abs(sunAltitude(noon, 41.8781, -87.6298) - 71.4) < 0.5); // 90 − latitude + declination
+    assert.ok(Math.abs(sunAltitude(sunrise, 41.8781, -87.6298)) < 1);
+    assert.ok(sunAltitude(Date.parse('2026-06-15T06:00:00Z'), 41.8781, -87.6298) < -20);
+});
+
+test('places with midnight sun report no sunrise or sunset instead of a wrong one', () => {
+    const utqiagvik = sunTimes(Date.parse('2026-06-21T20:00:00Z'), 71.29, -156.79);
+    assert.equal(utqiagvik.sunrise, null);
+    assert.equal(utqiagvik.sunset, null);
+    assert.equal(utqiagvik.dayLengthHours, null);
+    assert.ok(Number.isFinite(utqiagvik.noon));
+});
+
+test('the moon crosses overhead and underfoot about every 12.4 hours', () => {
+    // At new moon the moon keeps company with the sun: overhead near solar noon, underfoot near midnight.
+    const noon = sunTimes(Date.parse('2026-06-15T15:00:00Z'), 41.8781, -87.6298).noon;
+    const atNoon = moonTransit(noon, -87.6298);
+    assert.equal(atNoon.position, 'overhead');
+    assert.ok(atNoon.degreesAway < 15);
+    const atMidnight = moonTransit(noon - 12 * HOUR_MS, -87.6298);
+    assert.equal(atMidnight.position, 'underfoot');
+    assert.ok(atMidnight.degreesAway < 15);
+    assert.ok(moonTransit(noon + 6 * HOUR_MS, -87.6298).degreesAway > 60);
+});
+
+test('alerts: dangerous ones in effect are flagged, advisories are listed, the rest ignored', () => {
+    const now = Date.parse('2026-06-15T15:00:00Z');
+    const alert = (event, onsetHours, endsHours) => ({
+        event, onset: now + onsetHours * HOUR_MS, ends: endsHours === null ? null : now + endsHours * HOUR_MS,
+    });
+
+    const summary = summariseAlerts([
+        alert('Small Craft Advisory', -1, 5),
+        alert('Freeze Warning', -1, 5), // irrelevant on the water
+        alert('Severe Thunderstorm Warning', -0.5, 1),
+        alert('Severe Thunderstorm Warning', -0.2, 1), // duplicate event
+        alert('Flood Warning', -30, -1), // already over
+        alert('Wind Advisory', 30, 40), // too far ahead
+        alert('Tornado Watch', 2, 8), // coming up
+    ], now);
+    assert.equal(summary.hazard, 'Severe Thunderstorm Warning');
+    assert.deepEqual(summary.items.map((item) => [item.event, item.level, item.active]), [
+        ['Severe Thunderstorm Warning', 'danger', true],
+        ['Small Craft Advisory', 'caution', true],
+        ['Tornado Watch', 'caution', false],
+    ]);
+
+    // A warning that has been issued but has not started yet does not cap the score.
+    assert.equal(summariseAlerts([alert('Severe Thunderstorm Warning', 1, 2)], now).hazard, null);
+    assert.deepEqual(summariseAlerts(undefined, now), { hazard: null, items: [] });
+    assert.equal(summariseAlerts([{ event: 'Tornado Warning', onset: null, ends: null }], now).hazard, 'Tornado Warning');
 });

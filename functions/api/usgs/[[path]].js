@@ -1,6 +1,7 @@
 // Cloudflare Pages Function: caching proxy for the USGS Water Data API.
 //
-//   GET /api/usgs/<collection>/items?...  ->  https://api.waterdata.usgs.gov/ogcapi/v1/collections/<collection>/items?...
+//   GET /api/usgs/<collection>/items?...            ->  https://api.waterdata.usgs.gov/ogcapi/v1/collections/<collection>/items?...
+//   GET /api/usgs/statistics/observationNormals?... ->  https://api.waterdata.usgs.gov/statistics/v0/observationNormals?...
 //
 // Why it exists:
 //   * The API key stays on the server (Pages secret USGS_API_KEY) instead of in every browser.
@@ -10,10 +11,11 @@
 //     served instead of an error. Every reading carries its own timestamp, and the app
 //     shows it, so stale data is never presented as fresh.
 //
-// It is not an open proxy: only the three collections and the query parameters the
-// app uses are forwarded, and only for GET.
+// It is not an open proxy: only the three collections, the one statistics endpoint and
+// the query parameters the app uses are forwarded, and only for GET.
 
 const UPSTREAM = 'https://api.waterdata.usgs.gov/ogcapi/v1/collections';
+const STATISTICS_UPSTREAM = 'https://api.waterdata.usgs.gov/statistics/v0';
 
 /** Collection -> seconds an answer is considered fresh. Station names almost never change. */
 export const COLLECTIONS = {
@@ -26,6 +28,13 @@ export const ALLOWED_PARAMS = [
     'bbox', 'id', 'limit', 'monitoring_location_id', 'parameter_code', 'properties',
     'skipGeometry', 'time', 'time_series_id',
 ];
+
+/** Statistics endpoint -> seconds fresh. Day-of-year normals come from decades of record. */
+export const STATISTICS = {
+    observationNormals: 24 * 60 * 60,
+};
+
+export const STATISTICS_PARAMS = ['computation_type', 'end_date', 'monitoring_location_id', 'parameter_code', 'start_date'];
 
 const STALE_IF_ERROR_SECONDS = 6 * 60 * 60;
 const MAX_LIMIT = 5000;
@@ -40,9 +49,23 @@ const json = (body, status, headers = {}) => new Response(JSON.stringify(body), 
 /** The upstream URL for a request, or null if the request is not one the app makes. */
 export function upstreamUrl(requestUrl, pathSegments) {
     const [collection, items, ...extra] = pathSegments ?? [];
-    if (!(collection in COLLECTIONS) || items !== 'items' || extra.length) return null;
-
     const incoming = new URL(requestUrl).searchParams;
+
+    if (collection === 'statistics') {
+        if (!Object.hasOwn(STATISTICS, items) || extra.length) return null;
+        const url = new URL(`${STATISTICS_UPSTREAM}/${items}`);
+        for (const name of STATISTICS_PARAMS) {
+            const value = incoming.get(name);
+            if (value === null || value === '') continue;
+            if (value.length > 100) return null;
+            url.searchParams.set(name, value);
+        }
+        if (!url.searchParams.has('monitoring_location_id')) return null; // never the whole country
+        return { url, freshSeconds: STATISTICS[items] };
+    }
+
+    if (!Object.hasOwn(COLLECTIONS, collection ?? '') || items !== 'items' || extra.length) return null;
+
     const url = new URL(`${UPSTREAM}/${collection}/items`);
     url.searchParams.set('f', 'json');
     // Fixed order + whitelist => one cache entry per distinct question.

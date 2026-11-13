@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>How's the Bite? — Fishing Conditions</title>
-    <meta name="description" content="A 0–100 fishing score for any US lake or river, built from live weather, barometric pressure trends, moon phase and USGS water temperature.">
+    <meta name="description" content="A 0–100 fishing score for any US lake or river, built from USGS water temperature and river flow, time of day, live weather and moon phase.">
     <meta name="theme-color" content="#1d4ed8">
     <meta name="color-scheme" content="light dark">
     <link rel="manifest" href="manifest.json">
@@ -95,13 +95,25 @@
     <main class="wrap" id="main">
         <section class="section" id="conditions" aria-labelledby="conditionsTitle">
             <h2 class="visually-hidden" id="conditionsTitle">Current conditions</h2>
+            <ul class="alerts" id="alerts" aria-label="Weather alerts" hidden></ul>
+            <div class="species">
+                <span class="species-label" id="speciesLabel">Fishing for</span>
+                <div class="segmented" id="speciesGroup" role="group" aria-labelledby="speciesLabel">
+                    <button type="button" data-group="any" aria-pressed="true">All species</button>
+                    <button type="button" data-group="warm" aria-pressed="false">Bass &amp; panfish</button>
+                    <button type="button" data-group="cool" aria-pressed="false">Walleye &amp; pike</button>
+                    <button type="button" data-group="cold" aria-pressed="false">Trout</button>
+                </div>
+            </div>
             <div class="hero">
                 <div class="score-card" id="scoreCard" data-band="loading" aria-live="polite" aria-atomic="true">
                     <p class="score-kicker">Fishing score</p>
                     <p class="score-number"><span id="scoreValue">–</span><span class="score-outof">/100</span></p>
                     <p class="score-band" id="scoreBand">&nbsp;</p>
                     <p class="score-phrase" id="scorePhrase">Checking conditions…</p>
+                    <p class="score-cap" id="scoreCap"></p>
                     <p class="score-now" id="scoreNow"></p>
+                    <p class="score-best" id="scoreBest"></p>
                 </div>
                 <div class="factors" id="factors" aria-label="Score factors"></div>
             </div>
@@ -170,7 +182,12 @@
                 Place search by <a href="https://photon.komoot.io/" target="_blank" rel="noopener">Photon</a>, map data ©
                 <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors.
             </p>
-            <p>The score is a rule of thumb, not a promise. USGS readings are provisional. Check local conditions and regulations before you go.</p>
+            <p>
+                The score rates conditions, not your odds: water temperature and light count most, then wind, river flow
+                and the moon. Barometric pressure counts least, because studies of angler catch rates have found no effect.
+                Skill, bait and how many fish are there matter more than all of it.
+                USGS readings are provisional. Check local conditions and regulations before you go.
+            </p>
         </footer>
     </main>
 

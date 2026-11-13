@@ -5,7 +5,8 @@
 //   1. latest-continuous    — every sensor in a bounding box that has reported
 //                             recently, with its latest reading
 //   2. monitoring-locations — names and site types for the nearest of those
-// A further request per series (continuous) loads the last 48 hours for a chart.
+// A further request per series (continuous) loads the last 48 hours for a chart, and
+// one to the Statistics API says what a river gauge normally reads on today's date.
 
 import { API, APP } from '../config.js';
 import {
@@ -28,6 +29,10 @@ const PARAMETERS = {
     '62614': { measure: 'elevation', datum: 'NGVD 29' },
     '62615': { measure: 'elevation', datum: 'NAVD 88' },
     '72214': { measure: 'elevation', datum: 'IGLD' },
+    // Only a minority of stations carry these (roughly one gauge in six in the Southeast,
+    // far fewer in the north), so they are a bonus when present, never expected.
+    '00300': { measure: 'oxygen' }, // dissolved oxygen, mg/L
+    63680: { measure: 'turbidity' }, // FNU
 };
 
 // Site types that are open water an angler could fish (wells, springs, etc. are dropped).
@@ -42,15 +47,17 @@ const SITE_LABEL_OVERRIDES = { 'ST-CA': 'Canal', 'ST-DCH': 'Ditch', 'ST-TS': 'Ti
 let proxyAvailable = typeof document === 'undefined' ? false : null;
 
 /**
- * GET one USGS collection. Goes through the site's caching proxy when it is
- * deployed (see functions/api/usgs); otherwise straight to USGS. The first
- * request finds out which: a static host answers the proxy path with a 404
- * (or with an HTML page), and from then on requests go direct.
+ * GET from USGS. Goes through the site's caching proxy when it is deployed
+ * (see functions/api/usgs); otherwise straight to USGS. The first request
+ * finds out which: a static host answers the proxy path with a 404 (or with
+ * an HTML page), and from then on requests go direct.
+ *
+ * `path` is the proxy's path, `directUrl` the same resource at USGS.
  */
-async function usgsJson(name, params, { signal } = {}) {
+async function usgsRequest(path, directUrl, params, { signal } = {}) {
     if (proxyAvailable !== false) {
         try {
-            const url = buildUrl(new URL(`${API.USGS_PROXY}/${name}/items`, document.baseURI), params);
+            const url = buildUrl(new URL(`${API.USGS_PROXY}/${path}`, document.baseURI), params);
             const data = await fetchJson(url, { signal, timeoutMs: TIMEOUT_MS + 4000 });
             proxyAvailable = true;
             return data;
@@ -63,9 +70,11 @@ async function usgsJson(name, params, { signal } = {}) {
             proxyAvailable = false;
         }
     }
-    const url = buildUrl(`${API.USGS}/${name}/items`, { f: 'json', ...params, api_key: APP.USGS_API_KEY });
-    return fetchJson(url, { signal, timeoutMs: TIMEOUT_MS });
+    return fetchJson(buildUrl(directUrl, { ...params, api_key: APP.USGS_API_KEY }), { signal, timeoutMs: TIMEOUT_MS });
 }
+
+/** One collection of the OGC API (latest-continuous, monitoring-locations, continuous). */
+const usgsJson = (name, params, options) => usgsRequest(`${name}/items`, `${API.USGS}/${name}/items`, { f: 'json', ...params }, options);
 
 // The search box is snapped to a 0.1° grid (about 7 miles) and widened to match, so
 // people near each other ask the identical question and can share one cached answer.
@@ -80,6 +89,8 @@ function plausible(measure, value) {
     if (!isNum(value)) return false;
     if (measure === 'temp') return value > -5 && value < 60; // °C
     if (measure === 'flow') return value >= 0;
+    if (measure === 'oxygen') return value >= 0 && value < 25; // mg/L
+    if (measure === 'turbidity') return value >= 0 && value < 5000; // FNU
     return value > -500 && value < 20000; // feet
 }
 
@@ -88,6 +99,7 @@ function plausible(measure, value) {
  *   tempF + readingTime + timeSeriesId   water temperature
  *   level { type: 'gage'|'elevation', valueFt, time, timeSeriesId, parameterCode, datum }
  *   flow  { cfs, time }
+ *   oxygen { mgL, time }, turbidity { fnu, time }   where the station has those probes
  */
 export async function findStations(lat, lon, { signal, radiusMi = APP.STATION_RADIUS_MI } = {}) {
     const latest = await usgsJson('latest-continuous', {
@@ -125,6 +137,10 @@ export async function findStations(lat, lon, { signal, radiusMi = APP.STATION_RA
             }
         } else if (parameter.measure === 'flow') {
             if (!(station.flow?.time >= time)) station.flow = { cfs: value, time };
+        } else if (parameter.measure === 'oxygen') {
+            if (!(station.oxygen?.time >= time)) station.oxygen = { mgL: value, time };
+        } else if (parameter.measure === 'turbidity') {
+            if (!(station.turbidity?.time >= time)) station.turbidity = { fnu: value, time };
         } else if (!(station[parameter.measure]?.time >= time)) {
             station[parameter.measure] = {
                 type: parameter.measure,
@@ -217,3 +233,38 @@ export const fetchWaterHistory = (station, options) => fetchSeries(station.id, '
 
 /** Gage height or lake elevation (ft) history for a station that has a `level`. */
 export const fetchLevelHistory = (station, options) => fetchSeries(station.id, station.level.parameterCode, station.level.timeSeriesId, options);
+
+const PERCENTILES = ['5', '10', '25', '50', '75', '90', '95'];
+const MIN_YEARS_OF_RECORD = 10;
+
+/**
+ * What a gauge's flow normally is on one day of the year, from its whole approved record:
+ * { 5, 10, 25, 50, 75, 90, 95 } -> cfs, or null when the station has no usable record.
+ *
+ * @param {string} stationId  e.g. 'USGS-02334430'
+ * @param {string} monthDay   'MM-DD' in the station's local calendar
+ */
+export async function fetchFlowNormals(stationId, monthDay, { signal } = {}) {
+    const data = await usgsRequest('statistics/observationNormals', `${API.USGS_STATS}/observationNormals`, {
+        monitoring_location_id: stationId,
+        parameter_code: '00060',
+        computation_type: 'percentile',
+        start_date: monthDay,
+        end_date: monthDay,
+    }, { signal });
+
+    for (const feature of data.features ?? []) {
+        for (const series of feature.properties?.data ?? []) {
+            if (series.parameter_code !== '00060') continue;
+            for (const entry of series.values ?? []) {
+                if (entry.computation !== 'percentile' || !Array.isArray(entry.values) || !Array.isArray(entry.percentiles)) continue;
+                if (!(Number(entry.sample_count) >= MIN_YEARS_OF_RECORD)) continue; // too short a record to call anything "normal"
+                const byPercentile = Object.fromEntries(entry.percentiles.map((key, i) => [String(key), Number.parseFloat(entry.values[i])]));
+                if (PERCENTILES.every((key) => isNum(byPercentile[key]))) {
+                    return Object.fromEntries(PERCENTILES.map((key) => [key, byPercentile[key]]));
+                }
+            }
+        }
+    }
+    return null;
+}

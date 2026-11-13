@@ -4,12 +4,14 @@
 // results are applied only if they belong to the most recent request, so
 // switching locations quickly can never show data for the wrong place.
 
-import { fetchLevelHistory, fetchWaterHistory, findStations } from './api/usgs-api.js';
+import { fetchFlowNormals, fetchLevelHistory, fetchWaterHistory, findStations } from './api/usgs-api.js';
 import { HttpError, isAbort } from './api/http.js';
-import { OutsideCoverageError, fetchWeather, reverseGeocode, searchPlaces } from './api/weather-api.js';
+import { OutsideCoverageError, fetchAlerts, fetchWeather, reverseGeocode, searchPlaces } from './api/weather-api.js';
 import { APP } from './config.js';
+import { summariseAlerts } from './core/alerts.js';
 import { moonInfo } from './core/moon.js';
-import { estimateWaterTemp, scoreConditions } from './core/scoring.js';
+import { SPECIES_GROUPS, bestWindows, estimateWaterTemp, scoreConditions } from './core/scoring.js';
+import { sunTimes } from './core/sun.js';
 import { changeOver, classifyTrend, lastHours } from './core/trend.js';
 import { debounce, distanceMiles, isNum, roundCoord, timeAgo } from './core/util.js';
 import { compassPoint } from './core/sky.js';
@@ -28,6 +30,9 @@ const state = {
     waterHistory: [],
     levelHistory: [],
     waterFilter: storage.getWaterFilter(),
+    speciesGroup: storage.getSpeciesGroup(),
+    alerts: [],
+    flowNormals: null, // { stationId, monthDay, percentiles } for the river gauge in use
     loading: false,
     loadFailed: false,
 };
@@ -102,11 +107,30 @@ function observed(series, now, currentValue) {
     return points;
 }
 
+/** Flow counts toward the score only on moving water whose gauge has a long enough record. */
+const flowApplies = (gauge) => Boolean(gauge?.flow) && gauge.kind === 'river' && state.location?.kind !== 'lake';
+
+function flowInput(gauge) {
+    if (!flowApplies(gauge)) return null;
+    const normals = state.flowNormals;
+    if (normals?.stationId !== gauge.id || !normals.percentiles) return null;
+    return { cfs: gauge.flow.cfs, percentiles: normals.percentiles };
+}
+
+/** Forecast sky and wind for a time ahead; null for the next hour, where the observation is better. */
+function forecastAt(time, from) {
+    if (time - from < 60 * 60 * 1000) return null;
+    const period = (state.weather?.outlook ?? []).find((p) => p.start <= time && time < p.end);
+    if (!period) return null;
+    return isNum(period.windMph) ? { sky: period.sky, windMph: period.windMph } : { sky: period.sky };
+}
+
 function derive() {
     const { weather } = state;
     if (!weather) return null;
     const { current, hourly } = weather;
     const now = current.time;
+    const clock = Date.now(); // light and moon follow the clock, not the age of the weather report
 
     const pressure = observed(hourly.pressure, now, current.pressureInHg);
     const air = observed(hourly.temp, now, current.tempF);
@@ -115,20 +139,31 @@ function derive() {
         ? station.tempF
         : estimateWaterTemp(lastHours(hourly.temp, 72, now).map((point) => point.v), current.tempF);
 
-    const result = scoreConditions({
-        airTempF: current.tempF,
-        airChange24h: changeOver(air, APP.TEMP_TREND_HOURS),
+    const gauge = levelStation();
+    const alerts = summariseAlerts(state.alerts, clock);
+    const inputs = {
+        lat: state.location.lat,
+        lon: state.location.lon,
+        speciesGroup: state.speciesGroup,
         waterTempF,
         waterEstimated: !station,
         waterChange24h: station ? changeOver(state.waterHistory, APP.TEMP_TREND_HOURS) : null,
+        oxygenMgL: (station?.oxygen ?? gauge?.oxygen)?.mgL ?? null,
         pressureInHg: current.pressureInHg,
         pressureChange3h: changeOver(pressure, APP.PRESSURE_TREND_HOURS),
         windMph: current.windMph,
+        gustMph: current.gustMph,
         sky: current.sky.class,
-        date: new Date(now),
+        flow: flowInput(gauge),
+        hazard: alerts.hazard,
+    };
+    const result = scoreConditions({ ...inputs, date: new Date(clock) });
+    const windows = bestWindows(inputs, {
+        start: clock,
+        hours: APP.OUTLOOK_HOURS,
+        at: (time) => forecastAt(time, clock),
     });
 
-    const gauge = levelStation();
     const level = gauge && {
         station: gauge,
         trend: classifyTrend(
@@ -137,7 +172,7 @@ function derive() {
         ),
     };
 
-    return { result, pressure, air, station, waterTempF, level };
+    return { result, windows, alerts, clock, pressure, air, station, waterTempF, level };
 }
 
 // ---------------------------------------------------------------------------
@@ -145,6 +180,27 @@ function derive() {
 // ---------------------------------------------------------------------------
 
 const RATING_LABELS = { excellent: 'Excellent', good: 'Good', fair: 'Fair', poor: 'Poor' };
+
+const LIGHT_LABELS = { dawn: 'Early light', dusk: 'Evening light', night: 'After dark' };
+
+function clockTime(time, { withDay = false } = {}) {
+    const options = { hour: 'numeric', minute: '2-digit', ...(withDay ? { weekday: 'short' } : {}) };
+    try {
+        return new Intl.DateTimeFormat('en-US', { ...options, timeZone: state.weather?.timezone }).format(time);
+    } catch {
+        return new Intl.DateTimeFormat('en-US', options).format(time);
+    }
+}
+
+/** "Sunset 8:28 PM" or "Sunrise 5:16 AM", whichever comes next. */
+function nextSunEvent(clock) {
+    const { lat, lon } = state.location;
+    const today = sunTimes(clock, lat, lon);
+    if (today.sunrise && clock < today.sunrise) return `Sunrise ${clockTime(today.sunrise)}`;
+    if (today.sunset && clock < today.sunset) return `Sunset ${clockTime(today.sunset)}`;
+    const tomorrow = sunTimes(clock + 24 * 60 * 60 * 1000, lat, lon);
+    return tomorrow.sunrise ? `Sunrise ${clockTime(tomorrow.sunrise)}` : null;
+}
 
 function factorDisplay(factor, derived) {
     const { current } = state.weather;
@@ -156,12 +212,12 @@ function factorDisplay(factor, derived) {
                 value: `${derived.station ? '' : '≈ '}${derived.waterTempF.toFixed(1)}°F`,
                 extra: factor.trend,
             };
-        case 'pressure':
+        case 'light':
             return {
-                label: 'Barometric pressure',
-                iconName: 'gauge',
-                value: isNum(current.pressureInHg) ? `${current.pressureInHg.toFixed(2)} inHg` : '—',
-                extra: factor.trend,
+                label: 'Light',
+                iconName: 'sun',
+                value: LIGHT_LABELS[factor.phase] ?? current.sky.label,
+                extra: nextSunEvent(derived.clock),
             };
         case 'wind':
             return {
@@ -170,25 +226,40 @@ function factorDisplay(factor, derived) {
                 value: `${Math.round(current.windMph)} mph${isNum(current.windDirection) && current.windMph >= 1 ? ` ${compassPoint(current.windDirection)}` : ''}`,
                 extra: isNum(current.gustMph) ? `Gusts to ${Math.round(current.gustMph)} mph` : 'No gusts reported',
             };
-        case 'air':
+        case 'flow':
             return {
-                label: 'Air temperature',
-                iconName: 'thermometer',
-                value: `${current.tempF.toFixed(1)}°F`,
-                extra: factor.trend ?? (isNum(current.feelsLikeF) ? `Feels like ${Math.round(current.feelsLikeF)}°F` : null),
+                label: 'River flow',
+                iconName: 'waves',
+                value: formatFlow(derived.level.station.flow.cfs),
+                extra: factor.trend,
             };
-        case 'sky':
+        case 'pressure':
             return {
-                label: 'Sky',
-                iconName: 'cloud',
-                value: current.sky.label,
-                extra: isNum(current.humidity) ? `${Math.round(current.humidity)}% humidity` : null,
+                label: 'Barometric pressure',
+                iconName: 'gauge',
+                value: isNum(current.pressureInHg) ? `${current.pressureInHg.toFixed(2)} inHg` : '—',
+                extra: factor.trend,
             };
         default: {
-            const moon = moonInfo(new Date(current.time));
+            const moon = moonInfo(new Date(derived.clock));
             return { label: 'Moon', iconName: 'moon', value: `${moon.icon} ${moon.name}`, extra: factor.trend };
         }
     }
+}
+
+/** ["now–9:20 PM", "Tue 4:40–7:00 AM"] */
+function describeWindows(windows, clock) {
+    const dayKey = (time) => clockTime(time, { withDay: true }).split(' ')[0];
+    const today = dayKey(clock);
+    return windows.slice(0, 2).map((window) => {
+        if (window.start <= clock) return `now–${clockTime(window.end)}`;
+        const day = dayKey(window.start);
+        // "4:40–7:00 AM" when both ends share AM/PM, otherwise both in full.
+        const [from, fromHalf] = clockTime(window.start).split(/\s/);
+        const end = clockTime(window.end);
+        const range = end.endsWith(fromHalf) ? `${from}–${end}` : `${from} ${fromHalf}–${end}`;
+        return day === today ? range : `${day} ${range}`;
+    });
 }
 
 function renderScore(derived) {
@@ -199,6 +270,8 @@ function renderScore(derived) {
         setText('scoreBand', ' ');
         setText('scorePhrase', state.loadFailed ? 'Conditions unavailable' : 'Checking conditions…');
         setText('scoreNow', '');
+        setText('scoreCap', '');
+        setText('scoreBest', '');
         return;
     }
     const { result } = derived;
@@ -209,6 +282,31 @@ function renderScore(derived) {
     setText('scorePhrase', result.phrase);
     const feelsLike = isNum(current.feelsLikeF) ? ` · feels like ${Math.round(current.feelsLikeF)}°F` : '';
     setText('scoreNow', `${current.sky.emoji} ${current.sky.label} · ${Math.round(current.tempF)}°F${feelsLike}`);
+    setText('scoreCap', result.cap ? result.cap.reason : '');
+    // Each window is kept on one line; the list wraps between windows on a narrow card.
+    const best = describeWindows(derived.windows, derived.clock);
+    $('scoreBest').replaceChildren(...(best.length ? ['Best times: '] : []),
+        ...best.flatMap((text, index) => [index ? ' · ' : '', el('span', { class: 'nowrap' }, text)]));
+}
+
+function renderSpeciesGroup() {
+    for (const button of $('speciesGroup').querySelectorAll('button')) {
+        button.setAttribute('aria-pressed', String(button.dataset.group === state.speciesGroup));
+    }
+}
+
+function renderAlerts(derived) {
+    const container = $('alerts');
+    const items = derived?.alerts.items ?? [];
+    container.hidden = items.length === 0;
+    container.replaceChildren(...items.map((item) => {
+        let when = '';
+        if (!item.active && item.onset) when = ` from ${clockTime(item.onset, { withDay: true })}`;
+        else if (item.ends) when = ` until ${clockTime(item.ends, { withDay: true })}`;
+        return el('li', { class: 'alert', dataset: { level: item.level } },
+            el('strong', null, item.event), when,
+            item.level === 'danger' && item.active ? ' — stay off the water' : '');
+    }));
 }
 
 function renderFactors(derived) {
@@ -334,6 +432,9 @@ function renderLevel(derived) {
 
     const { station, trend } = level;
     const isElevation = station.level.type === 'elevation';
+    const median = flowInput(station)?.percentiles[50];
+    const oxygen = station.oxygen ?? derived.station?.oxygen ?? null;
+    const turbidity = station.turbidity ?? derived.station?.turbidity ?? null;
     const stat = (label, value, hint) => el('div', { class: 'level-stat' },
         el('dt', null, label),
         el('dd', null, el('strong', null, value), hint ? el('span', null, hint) : null));
@@ -349,8 +450,13 @@ function renderLevel(derived) {
         stat(station.kind === 'lake' ? 'Lake level' : 'River level',
             `${station.level.valueFt.toFixed(2)} ft`,
             isElevation ? `elevation, ${station.level.datum}` : 'gage height'),
-        station.flow && stat('Flow', formatFlow(station.flow.cfs)),
+        station.flow && stat('Flow', formatFlow(station.flow.cfs),
+            isNum(median) ? `median for today ${formatFlow(median)}` : null),
         stat('24-hour change', change, trendWord + (trend.rapid ? ' fast' : '')),
+        // Reported by a minority of stations; shown when this one (or the temperature station) has them.
+        oxygen && stat('Dissolved oxygen', `${oxygen.mgL.toFixed(1)} mg/L`, oxygen.mgL < 5 ? 'low' : null),
+        turbidity && stat('Turbidity', `${turbidity.fnu < 10 ? turbidity.fnu.toFixed(1) : Math.round(turbidity.fnu)} FNU`,
+            turbidity.fnu < 10 ? 'clear' : turbidity.fnu < 50 ? 'stained' : 'muddy'),
     ];
     stats.replaceChildren(...items.filter(Boolean)); // replaceChildren would print a null as text
 
@@ -421,7 +527,9 @@ function renderRecents() {
 function render() {
     const derived = derive();
     renderLocation();
+    renderAlerts(derived);
     renderScore(derived);
+    renderSpeciesGroup();
     renderFactors(derived);
     renderForecast();
     renderStations(derived);
@@ -473,13 +581,43 @@ async function loadHistories(signal) {
     };
     const station = selectedStation();
     const gauge = levelStation();
-    const [waterHistory, levelHistory] = await Promise.all([
+    const [waterHistory, levelHistory, flowNormals] = await Promise.all([
         station ? fetchWaterHistory(station, { signal }).catch(orEmpty) : [],
         gauge ? fetchLevelHistory(gauge, { signal }).catch(orEmpty) : [],
+        loadFlowNormals(gauge, signal),
     ]);
     if (signal.aborted) throw new DOMException('Superseded', 'AbortError');
     state.waterHistory = waterHistory;
     state.levelHistory = levelHistory;
+    state.flowNormals = flowNormals;
+}
+
+/** Today's date as the gauge's own calendar has it: 'MM-DD'. */
+function monthDay() {
+    const options = { year: 'numeric', month: '2-digit', day: '2-digit' };
+    try {
+        return new Intl.DateTimeFormat('en-CA', { ...options, timeZone: state.weather?.timezone }).format(Date.now()).slice(5);
+    } catch {
+        return new Intl.DateTimeFormat('en-CA', options).format(Date.now()).slice(5);
+    }
+}
+
+/**
+ * Normal flow for today's date at the river gauge in use. Optional: without it
+ * the flow factor is simply left out of the score. Reused while the gauge and
+ * the date stay the same, since the answer cannot change.
+ */
+async function loadFlowNormals(gauge, signal) {
+    if (!flowApplies(gauge)) return null;
+    const today = monthDay();
+    const known = state.flowNormals;
+    if (known?.percentiles && known.stationId === gauge.id && known.monthDay === today) return known;
+    try {
+        return { stationId: gauge.id, monthDay: today, percentiles: await fetchFlowNormals(gauge.id, today, { signal }) };
+    } catch (error) {
+        if (isAbort(error)) throw error;
+        return null;
+    }
 }
 
 async function load() {
@@ -495,9 +633,10 @@ async function load() {
     state.loading = true;
     renderUpdatedAt();
 
-    const [weatherResult, waterResult] = await Promise.allSettled([
+    const [weatherResult, waterResult, alertsResult] = await Promise.allSettled([
         fetchWeather(location.lat, location.lon, { signal }),
         loadWater(location, signal),
+        fetchAlerts(location.lat, location.lon, { signal }),
     ]);
     if (signal.aborted) return; // a newer load() owns the screen now
 
@@ -519,6 +658,7 @@ async function load() {
 
     state.weather = weatherResult.value;
     state.loadFailed = false;
+    state.alerts = alertsResult.status === 'fulfilled' ? alertsResult.value : []; // alerts are a bonus, never a blocker
     if (waterResult.status === 'fulfilled') {
         state.stations = waterResult.value.stations;
         state.stationsError = null;
@@ -553,6 +693,8 @@ function saveSnapshot() {
         selectedStationId: state.selectedStationId,
         waterHistory: state.waterHistory,
         levelHistory: state.levelHistory,
+        flowNormals: state.flowNormals,
+        alerts: state.alerts,
     });
 }
 
@@ -563,6 +705,8 @@ function restoreSnapshot() {
     state.stations = Array.isArray(snapshot.stations) ? snapshot.stations : [];
     state.waterHistory = Array.isArray(snapshot.waterHistory) ? snapshot.waterHistory : [];
     state.levelHistory = Array.isArray(snapshot.levelHistory) ? snapshot.levelHistory : [];
+    state.flowNormals = snapshot.flowNormals ?? null;
+    state.alerts = Array.isArray(snapshot.alerts) ? snapshot.alerts : [];
     state.selectedStationId = pickStation(state.location)?.id ?? null;
     if (state.selectedStationId !== snapshot.selectedStationId) {
         state.waterHistory = [];
@@ -587,6 +731,8 @@ function setLocation(place) {
     state.selectedStationId = null;
     state.waterHistory = [];
     state.levelHistory = [];
+    state.flowNormals = null;
+    state.alerts = [];
     state.loadFailed = false;
     storage.setLocation(location);
     storage.addRecent(location);
@@ -615,6 +761,13 @@ async function selectStation(stationId, { remember = true, force = false } = {})
     }
     render();
     saveSnapshot();
+}
+
+function setSpeciesGroup(group) {
+    if (group === state.speciesGroup || !(group in SPECIES_GROUPS)) return;
+    state.speciesGroup = group;
+    storage.setSpeciesGroup(group);
+    render();
 }
 
 function setWaterFilter(filter) {
@@ -895,6 +1048,10 @@ function init() {
     $('waterFilter').addEventListener('click', (event) => {
         const filter = event.target.closest('button')?.dataset.filter;
         if (filter) setWaterFilter(filter);
+    });
+    $('speciesGroup').addEventListener('click', (event) => {
+        const group = event.target.closest('button')?.dataset.group;
+        if (group) setSpeciesGroup(group);
     });
 
     const saved = storage.getLocation();

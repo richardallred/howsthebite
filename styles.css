@@ -37,6 +37,8 @@
     --notice-error-border: #fecaca;
     --notice-info-bg: #eff6ff;
     --notice-info-border: #bfdbfe;
+    --notice-warn-bg: #fffbeb;
+    --notice-warn-border: #fde68a;
 
     --radius: 14px;
     --radius-sm: 10px;
@@ -76,6 +78,8 @@
     --notice-error-border: #7f1d1d;
     --notice-info-bg: #172554;
     --notice-info-border: #1e40af;
+    --notice-warn-bg: #3a2a08;
+    --notice-warn-border: #854d0e;
 }
 
 /* ---------- Base ---------- */
@@ -403,6 +407,39 @@ button, input { font: inherit; color: inherit; }
 .score-phrase { font-size: 1.0625rem; }
 .score-now { margin-top: 10px; font-size: 0.9375rem; opacity: 0.95; }
 .score-now:empty { display: none; }
+.score-cap {
+    margin-top: 6px;
+    padding: 3px 12px;
+    border-radius: 999px;
+    background: rgb(0 0 0 / 0.28);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+.score-cap:empty { display: none; }
+.score-best { font-size: 0.9375rem; font-weight: 600; }
+.score-best:empty { display: none; }
+.nowrap { white-space: nowrap; }
+
+/* Weather alerts and the species selector sit above the score. */
+.alerts { display: grid; gap: 8px; margin-bottom: 12px; padding: 0; list-style: none; }
+.alert {
+    padding: 10px 14px;
+    border: 1px solid var(--notice-warn-border);
+    border-left: 4px solid var(--rating-fair);
+    border-radius: var(--radius-sm);
+    background: var(--notice-warn-bg);
+    font-size: 0.9375rem;
+}
+.alert[data-level="danger"] { border-color: var(--notice-error-border); border-left-color: var(--rating-poor); background: var(--notice-error-bg); }
+
+.species { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 12px; }
+.species-label { font-size: 0.875rem; font-weight: 600; color: var(--text-2); }
+.species .segmented { max-width: 100%; overflow-x: auto; }
+.species .segmented button { padding: 0 12px; white-space: nowrap; }
+@media (max-width: 479px) {
+    /* Four labels do not fit on one line of a phone: two rows of two. */
+    .species .segmented { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; border-radius: 22px; }
+}
 
 .factors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 

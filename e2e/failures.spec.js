@@ -1,4 +1,4 @@
-import { expect, test } from './support/fixtures.js';
+import { DEFAULT_SCORE, expect, test } from './support/fixtures.js';
 
 test.describe('when the weather service fails', () => {
     test('a first visit shows an error with a retry, and never invents numbers', async ({ page, api }) => {
@@ -12,7 +12,7 @@ test.describe('when the weather service fails', () => {
 
         api.restore('nws');
         await page.getByRole('button', { name: 'Try again' }).click();
-        await expect(page.locator('#scoreValue')).toHaveText('100');
+        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
         await expect(page.locator('#notice')).toBeHidden();
     });
 
@@ -24,7 +24,7 @@ test.describe('when the weather service fails', () => {
         await page.getByRole('button', { name: 'Refresh conditions' }).click();
 
         await expect(page.locator('#noticeText')).toHaveText("Couldn't load the weather. Showing conditions from just now.");
-        await expect(page.locator('#scoreValue')).toHaveText('100');
+        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
         await expect(page.locator('.factor')).toHaveCount(6);
     });
 });
@@ -49,8 +49,8 @@ test.describe('weather coverage', () => {
 
         await expect(page.locator('#updatedAt')).toContainText('weather observed at Rocky Ridge just now, pressure at Farfield, Farfield Municipal Airport');
         await expect(app.factor('Barometric pressure').locator('.factor-value')).toHaveText('30.03 inHg');
-        await expect(app.factor('Sky').locator('.factor-value')).toHaveText('Clear'); // from the airport's sky sensor
-        await expect(page.locator('#scoreValue')).toHaveText('100');
+        await expect(app.factor('Light').locator('.factor-value')).toHaveText('Clear'); // from the airport's sky sensor
+        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
         // Only the stations that were needed were read: the nearest one, then the airport.
         expect(api.count('nws', '/stations/RKYM8/observations')).toBe(1);
         expect(api.count('nws', '/stations/TS123/observations')).toBe(0);
@@ -64,10 +64,10 @@ test.describe('weather coverage', () => {
         const pressure = app.factor('Barometric pressure');
         await expect(pressure.locator('.factor-value')).toHaveText('—');
         await expect(pressure).toContainText('No barometer reporting nearby');
-        await expect(pressure.locator('.factor-points')).toHaveText(/^9\/18/);
+        await expect(pressure.locator('.factor-points')).toHaveText(/^3\/5/);
         await expect(page.locator('#pressureChart .chart-empty')).toHaveText('No barometer is reporting near here.');
-        await expect(app.factor('Sky').locator('.factor-value')).toHaveText('Sunny'); // today's forecast period
-        await expect(page.locator('#scoreValue')).toHaveText('91');
+        await expect(app.factor('Light').locator('.factor-value')).toHaveText('Sunny'); // today's forecast period
+        await expect(page.locator('#scoreValue')).toHaveText(String(Number(DEFAULT_SCORE) - 2)); // 3/5 instead of 5/5
     });
 
     test('a brief NWS error is retried once and the visitor never sees it', async ({ page, context, api, app }) => {
@@ -77,7 +77,7 @@ test.describe('weather coverage', () => {
             return route.fallback();
         });
         await app.open();
-        await expect(page.locator('#scoreValue')).toHaveText('100');
+        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
         await expect(page.locator('#notice')).toContainText('Showing Chicago'); // only the first-visit hint, no error
         expect(api.count('nws', '/forecast')).toBe(1); // the retry reached the normal mock
     });
@@ -129,6 +129,6 @@ test.describe('place name lookup', () => {
         api.weather = { place: null };
         await page.goto('/');
         await expect(page.getByRole('heading', { level: 1 })).toHaveText('My location');
-        await expect(page.locator('#scoreValue')).toHaveText('100');
+        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
     });
 });

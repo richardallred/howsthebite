@@ -99,6 +99,15 @@ export const storage = {
         write('waterFilter', filter);
     },
 
+    /** Which fish the score is tuned for: 'any', 'warm', 'cool' or 'cold' (see SPECIES_GROUPS in scoring.js). */
+    getSpeciesGroup() {
+        const group = read('species');
+        return ['warm', 'cool', 'cold'].includes(group) ? group : 'any';
+    },
+    setSpeciesGroup(group) {
+        write('species', group);
+    },
+
     /** The station the user picked by hand for a location, if any. */
     getPreferredStation(loc) {
         return read('stations', {})?.[locationKey(loc)] ?? null;

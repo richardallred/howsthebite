@@ -7,6 +7,7 @@
 //   /gridpoints/{office}/{x},{y}/forecast  -> 7-day forecast in 12-hour periods
 //   /gridpoints/{office}/{x},{y}/stations  -> observation stations, nearest first
 //   /stations/{id}/observations            -> what that station actually measured (current + history)
+//   /alerts/active?point={lat},{lon}       -> warnings and advisories in effect for the spot
 
 import { API, US_STATES } from '../config.js';
 import { describeSky } from '../core/sky.js';
@@ -187,8 +188,27 @@ async function observe(stations, signal) {
     return { now, primary, barometer };
 }
 
+const windNumbers = (text) => (String(text ?? '').match(/\d+/g) ?? []).map(Number);
 /** "12 to 15 mph" -> 15 */
-const maxWind = (text) => Math.max(0, ...(String(text ?? '').match(/\d+/g) ?? []).map(Number));
+const maxWind = (text) => Math.max(0, ...windNumbers(text));
+/** "12 to 15 mph" -> 13.5 */
+const typicalWind = (text) => {
+    const numbers = windNumbers(text);
+    return numbers.length ? numbers.reduce((sum, n) => sum + n, 0) / numbers.length : null;
+};
+
+/** The forecast periods reduced to what the score can use for the hours ahead. */
+function outlookFrom(periods) {
+    return (periods ?? [])
+        .map((period) => ({
+            start: Date.parse(period.startTime),
+            end: Date.parse(period.endTime),
+            sky: describeSky({ text: period.shortForecast, icon: period.icon, preferIcon: true }).class,
+            windMph: typicalWind(period.windSpeed),
+        }))
+        .filter((period) => isNum(period.start) && isNum(period.end))
+        .slice(0, 6); // three days is as far as the outlook looks
+}
 
 /** NWS 12-hour periods -> one entry per local calendar day. */
 function dailyFrom(periods, timezone) {
@@ -282,7 +302,29 @@ export async function fetchWeather(lat, lon, { signal } = {}) {
             pressure: barometer ? seriesOf(barometer.observations, 'pressureInHg') : [],
         },
         daily: dailyFrom(periods, point.timezone),
+        outlook: outlookFrom(periods),
     };
+}
+
+/**
+ * Weather alerts in effect (or issued and about to start) for a coordinate:
+ * [{ event, severity, headline, onset, ends }] with epoch-ms times (ends may be null).
+ */
+export async function fetchAlerts(lat, lon, { signal } = {}) {
+    // No retry and a short timeout: alerts must never hold up the rest of the page.
+    const data = await fetchJson(`${API.NWS}/alerts/active?point=${lat.toFixed(4)},${lon.toFixed(4)}`, {
+        signal, timeoutMs: 6000, headers: { Accept: 'application/geo+json' },
+    });
+    return (data.features ?? [])
+        .map(({ properties: p }) => ({
+            event: String(p?.event ?? ''),
+            severity: p?.severity ?? null,
+            headline: p?.headline ?? null,
+            onset: Date.parse(p?.onset ?? p?.effective) || null,
+            // `ends` is when the hazard is over; `expires` is only when the message goes stale.
+            ends: Date.parse(p?.ends ?? p?.expires) || null,
+        }))
+        .filter((alert) => alert.event);
 }
 
 /**

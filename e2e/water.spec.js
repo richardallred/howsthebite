@@ -136,10 +136,12 @@ test.describe('USGS caching proxy', () => {
 
         expect(api.count('usgs')).toBe(0);
         const proxied = api.calls.filter((call) => call.service === 'proxy').map((call) => new URL(call.url));
-        expect(proxied.map((url) => url.pathname)).toEqual([
-            '/api/usgs/latest-continuous/items', '/api/usgs/monitoring-locations/items',
+        expect(proxied.map((url) => url.pathname).sort()).toEqual([
             '/api/usgs/continuous/items', '/api/usgs/continuous/items',
+            '/api/usgs/latest-continuous/items', '/api/usgs/monitoring-locations/items',
+            '/api/usgs/statistics/observationNormals',
         ]);
+        await expect(app.factor('River flow')).toContainText('Normal for the date');
         for (const url of proxied) expect(url.searchParams.has('api_key')).toBe(false);
     });
 
@@ -165,4 +167,6 @@ test('a searched lake takes its level from the lake gauge even when the thermome
     await expect(page.locator('#levelStats')).toContainText('Lake level');
     await expect(page.locator('#levelStats')).toContainText('759.32 ft');
     await expect(page.locator('#levelSource')).toContainText('USGS gauge: Clear Lake at Test Dam, IL');
+    // River flow says nothing about a lake, so it is not scored there.
+    await expect(page.locator('.factor-label')).toHaveText(['Water temperature', 'Light', 'Wind', 'Moon', 'Barometric pressure']);
 });

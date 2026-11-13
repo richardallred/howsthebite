@@ -1,4 +1,4 @@
-import { expect, test } from './support/fixtures.js';
+import { DEFAULT_SCORE, expect, test } from './support/fixtures.js';
 
 // Runs in the "mobile" project (Pixel 7 viewport, touch).
 
@@ -9,7 +9,7 @@ test('fits a phone screen without horizontal scrolling', async ({ page, app }) =
 
     // The location button collapses to an icon but keeps its accessible name.
     await expect(page.locator('#locateBtn span')).toBeHidden();
-    await expect(page.locator('#scoreValue')).toHaveText('100');
+    await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
     await expect(page.locator('.factor')).toHaveCount(6);
 });
 

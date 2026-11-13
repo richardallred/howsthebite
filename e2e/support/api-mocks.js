@@ -2,9 +2,15 @@
 //
 // The payloads are generated relative to a pinned clock (NOW) and are shaped
 // exactly like the real APIs, so the app's own parsing code is exercised.
-// The default scenario is a perfect fishing day; tests override pieces of it.
+// The default scenario is ideal water, wind and river flow on a bright mid-morning,
+// which scores DEFAULT_SCORE; tests override pieces of it.
 
 export const NOW = Date.parse('2026-06-15T15:00:00Z'); // 10:00 in Chicago, on a new moon
+
+// What the default scenario scores: every factor at full marks except the light
+// (bright sun, mid-morning: 14/30) and the moon (new, but not overhead: 5/8).
+export const DEFAULT_SCORE = '81';
+export const DEFAULT_POINTS = [/^35\/35/, /^14\/30/, /^12\/12/, /^10\/10/, /^5\/8/, /^5\/5/];
 
 const HOUR = 3600_000;
 const DAY = 24 * HOUR;
@@ -19,9 +25,10 @@ const fToC = (f) => ((f - 32) * 5) / 9;
 const icon = (code, when = 'day') => `${NWS}/icons/land/${when}/${code}?size=medium`;
 
 export const DEFAULT_WEATHER = {
+    now: NOW, // when the newest observation was taken; move it along with the page clock to test other times of day
     tempF: 72,
     pressureInHg: 30.03,
-    pressureChangePer3h: -0.04, // slowly falling: the best case for the score
+    pressureChangePer3h: -0.04, // slowly falling: full marks for the (small) pressure factor
     windMph: 10,
     gustMph: 14,
     windDirection: 225,
@@ -64,8 +71,8 @@ export function observationsResponse(url, overrides) {
     const station = w.stations.find((entry) => entry.id === id) ?? w.stations[0];
     const quantity = (value, unitCode) => ({ unitCode, value, qualityControl: value === null ? 'Z' : 'V' });
     const features = [];
-    for (let t = NOW; t >= NOW - 72 * HOUR; t -= HOUR) {
-        const hoursFromNow = (t - NOW) / HOUR;
+    for (let t = w.now; t >= w.now - 72 * HOUR; t -= HOUR) {
+        const hoursFromNow = (t - w.now) / HOUR;
         // 24-hour cycle, so "same time yesterday" equals now and the air trend is steady.
         const tempF = w.tempF + 8 * Math.sin((2 * Math.PI * hoursFromNow) / 24);
         const pressure = w.pressureInHg + (w.pressureChangePer3h / 3) * hoursFromNow;
@@ -130,6 +137,24 @@ export function forecastResponse(overrides) {
     return { properties: { periods } };
 }
 
+/** Active alerts as NWS sends them. `alerts` is a list of { event, onsetHours, endsHours } relative to NOW. */
+export function alertsResponse(alerts) {
+    return {
+        features: (alerts ?? []).map((alert, index) => ({
+            id: `urn:test:alert:${index}`,
+            geometry: null,
+            properties: {
+                event: alert.event,
+                severity: alert.severity ?? 'Severe',
+                headline: `${alert.event} issued for the test area`,
+                onset: new Date(NOW + (alert.onsetHours ?? -1) * HOUR).toISOString(),
+                ends: alert.endsHours === null ? null : new Date(NOW + (alert.endsHours ?? 2) * HOUR).toISOString(),
+                expires: new Date(NOW + HOUR).toISOString(),
+            },
+        })),
+    };
+}
+
 // ---------------------------------------------------------------------------
 // USGS Water Data
 // ---------------------------------------------------------------------------
@@ -159,6 +184,8 @@ export const DEFAULT_STATIONS = [
     },
 ];
 
+const UNITS = { '00010': 'degC', '00060': 'ft^3/s', '00300': 'mg/l', 63680: 'FNU' };
+
 const seriesId = (stationId, parameter) => `ts-${stationId}-${parameter}`;
 
 // Every place a test can be "at". The app snaps its USGS search box to a grid, so the
@@ -187,12 +214,47 @@ export function latestContinuousResponse(url, stations) {
                     parameter_code: parameter,
                     time: new Date(NOW - 15 * 60_000).toISOString(),
                     value: String(value),
-                    unit_of_measure: parameter === '00010' ? 'degC' : parameter === '00060' ? 'ft^3/s' : 'ft',
+                    unit_of_measure: UNITS[parameter] ?? 'ft',
                 },
             });
         }
     }
     return { type: 'FeatureCollection', features, numberReturned: features.length, links: [] };
+}
+
+/**
+ * Day-of-year flow percentiles, shaped like the USGS Statistics API. By default a
+ * station's median equals its current flow (a perfectly normal day); a station can set
+ * `medianCfs` to be above or below normal, or `normals: false` to have no record.
+ */
+export function flowNormalsResponse(url, stations) {
+    const station = stations.find((s) => s.id === url.searchParams.get('monitoring_location_id'));
+    const flow = station?.readings['00060'];
+    if (!station || flow === undefined || station.normals === false) return { type: 'FeatureCollection', features: [] };
+    const median = station.medianCfs ?? flow;
+    const day = url.searchParams.get('start_date');
+    return {
+        type: 'FeatureCollection',
+        features: [{
+            type: 'Feature',
+            geometry: null,
+            properties: {
+                monitoring_location_id: station.id,
+                data: [{
+                    parameter_code: '00060',
+                    unit_of_measure: 'ft^3/s',
+                    values: [{
+                        time_of_year: day,
+                        time_of_year_type: 'day_of_year',
+                        values: [0.3, 0.4, 0.65, 1, 1.7, 2.6, 3.5].map((factor) => (median * factor).toFixed(1)),
+                        percentiles: ['5', '10', '25', '50', '75', '90', '95'],
+                        sample_count: 60,
+                        computation: 'percentile',
+                    }],
+                }],
+            },
+        }],
+    };
 }
 
 export function monitoringLocationsResponse(url, stations) {
