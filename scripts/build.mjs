@@ -4,7 +4,8 @@
 // served, so that tests, tooling, docs and node_modules never get published.
 // Cloudflare Pages runs it as the build command (see wrangler.toml).
 
-import { cp, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -37,6 +38,26 @@ if (missing.length) {
     process.exit(1);
 }
 
+// Name the offline cache after the content being published. Any change to any file then
+// changes sw.js, which is how browsers notice a new version (and the app reloads itself
+// when one takes over). Nobody has to remember to bump a version number.
+async function contentHash(dir, hash = createHash('sha256')) {
+    const entries = (await readdir(dir, { withFileTypes: true })).sort((a, b) => (a.name < b.name ? -1 : 1));
+    for (const entry of entries) {
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) await contentHash(path, hash);
+        else if (path !== join(dist, 'sw.js')) hash.update(entry.name).update(await readFile(path));
+    }
+    return hash;
+}
+const version = (await contentHash(dist)).update(sw).digest('hex').slice(0, 12);
+const cacheLine = /const CACHE = '[^']*';/;
+if (!cacheLine.test(sw)) {
+    console.error('sw.js has no "const CACHE = \'...\';" line to stamp with the build version');
+    process.exit(1);
+}
+await writeFile(join(dist, 'sw.js'), sw.replace(cacheLine, `const CACHE = 'htb-shell-${version}';`));
+
 async function count(dir) {
     let files = 0;
     for (const entry of await readdir(dir, { withFileTypes: true })) {
@@ -44,4 +65,4 @@ async function count(dir) {
     }
     return files;
 }
-console.log(`Built dist/ (${await count(dist)} files)`);
+console.log(`Built dist/ (${await count(dist)} files, version ${version})`);

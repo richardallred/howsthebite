@@ -1046,8 +1046,28 @@ function initInstallPrompt() {
 
 function registerServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js').catch(() => { /* offline support is optional */ });
+
+    // A new version of the service worker takes over as soon as it is installed, but this
+    // page would go on running the scripts it loaded earlier: an open tab, or the installed
+    // app, can otherwise sit on an old version for days. So when control changes hands,
+    // reload once. (Not on the very first install, when there is no older version to replace.)
+    const hadController = Boolean(navigator.serviceWorker.controller);
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!hadController || reloading) return;
+        reloading = true;
+        window.location.reload();
+    });
+
+    window.addEventListener('load', async () => {
+        try {
+            const registration = await navigator.serviceWorker.register('sw.js');
+            // Browsers only look for a new version on a page load, so also look whenever
+            // the app comes back into view.
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') registration.update().catch(() => { /* offline */ });
+            });
+        } catch { /* offline support is optional */ }
     });
 }
 

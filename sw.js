@@ -6,7 +6,9 @@
 //   good data (with its real timestamp) and shows that when offline; serving a
 //   stale API response from here would make old data look fresh.
 //
-// Bump CACHE when the list of shell files changes.
+// The build (scripts/build.mjs) replaces CACHE with a name derived from the published
+// files, so every release that changes anything is seen as a new version. The value
+// here is only used when the source tree is served directly (npm start, the tests).
 
 const CACHE = 'htb-shell-v6';
 

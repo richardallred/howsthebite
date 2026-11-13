@@ -121,9 +121,15 @@ Function there is no proxy, which the app detects on its first request, and it t
 directly. `_headers` is a Cloudflare/Netlify convention; elsewhere set the same headers in that
 host's own way.
 
-When you add, rename or remove a file the page loads, update `SHELL` and bump `CACHE` in `sw.js`.
-The build fails if `SHELL` lists a file that is not published, and a browser test fails if the
-page loads a file that `SHELL` does not list.
+When you add, rename or remove a file the page loads, update `SHELL` in `sw.js`. The build fails
+if `SHELL` lists a file that is not published, and a browser test fails if the page loads a file
+that `SHELL` does not list.
+
+**How visitors get a new version.** The build names the offline cache after a hash of the
+published files, so any change makes `sw.js` differ and browsers see a new version. The app looks
+for one on every page load and whenever it comes back into view, and reloads itself once when the
+new version takes over. Without that, an open tab or an installed app would keep running the
+scripts it loaded earlier, possibly for days.
 
 ### The USGS proxy
 
