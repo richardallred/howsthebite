@@ -3,8 +3,8 @@
 // Same conventions as the history charts (charts.js): a 2px line with a light wash,
 // hairline grid, crosshair and tooltip by pointer, touch or arrow keys, and a
 // "View data" table. Added here: a fixed 0–100 scale, shaded nights so the time of
-// day reads at a glance, a named label under each day, and each day's best moment
-// marked with its score.
+// day reads at a glance, a named label under each day, each day's best moment
+// marked with its score, and a bar under the axis for each of the moon's major periods.
 
 import { HOUR_MS } from '../core/util.js';
 import { formatter, nearestIndex } from './charts.js';
@@ -23,11 +23,13 @@ const clock = (t, timezone) => formatter(timezone, { hour: 'numeric', minute: '2
  *   samples: [{ t, score, band: { label }, cap }] from scoreSeries()
  *   options.days:   [{ label, start, end, peak: { t, score } }]  one per calendar day, in order
  *   options.nights: [{ start, end }]  sunset to sunrise
+ *   options.moon:   [{ t, position: 'overhead'|'underfoot', start, end }]  major periods; empty where the moon is not scored
  */
 export function createOutlookChart(container) {
     let samples = [];
     let days = [];
     let nights = [];
+    let moon = [];
     let timezone = 'UTC';
     let emptyText = 'The outlook will appear with the conditions.';
     let geometry = null;
@@ -36,13 +38,11 @@ export function createOutlookChart(container) {
     const plot = el('div', { class: 'chart-plot outlook-plot', tabindex: '0', role: 'img' });
     const tooltip = el('div', { class: 'chart-tooltip', hidden: true });
     const empty = el('p', { class: 'chart-empty', hidden: true });
+    const tableHead = el('tr');
     const tableBody = el('tbody');
     const details = el('details', { class: 'chart-data' },
         el('summary', null, 'View data'),
-        el('table', null,
-            el('thead', null, el('tr', null,
-                el('th', { scope: 'col' }, 'Time'), el('th', { scope: 'col' }, 'Rating'), el('th', { scope: 'col' }, 'Score'))),
-            tableBody));
+        el('table', null, el('thead', null, tableHead), tableBody));
     container.replaceChildren(el('div', { class: 'chart-frame' }, plot, tooltip), empty, details);
 
     function draw() {
@@ -80,6 +80,13 @@ export function createOutlookChart(container) {
                 svg('line', { class: 'chart-grid', x1: MARGIN.left, x2: MARGIN.left + innerW, y1: y(tick), y2: y(tick) }),
                 svg('text', { class: 'chart-tick', x: MARGIN.left - 8, y: y(tick), 'text-anchor': 'end', 'dominant-baseline': 'middle' }, String(tick)),
             );
+        }
+        // The moon's major periods: a short bar just under the axis, clear of the line and the day names.
+        for (const period of moon) {
+            if (period.end <= t0 || period.start >= t1) continue;
+            root.append(svg('rect', {
+                class: 'outlook-moon', x: x(period.start), y: baseline + 3, width: Math.max(2, x(period.end) - x(period.start)), height: 4, rx: 2,
+            }));
         }
         days.forEach((day, index) => {
             const left = x(day.start);
@@ -137,6 +144,8 @@ export function createOutlookChart(container) {
             el('span', null, index === 0 ? `Now, ${clock(sample.t, timezone)}` : dateTime(sample.t, timezone)),
         ];
         if (sample.cap) lines.push(el('span', null, sample.cap));
+        const period = moon.find((entry) => entry.start <= sample.t && sample.t <= entry.end);
+        if (period) lines.push(el('span', null, `Moon ${period.position}`));
         tooltip.replaceChildren(...lines);
         tooltip.hidden = false;
         tooltip.style.left = `${px}px`;
@@ -198,22 +207,33 @@ export function createOutlookChart(container) {
         let nextTime = -Infinity;
         for (const sample of samples) {
             if (sample.t >= nextTime) {
-                rows.push(el('tr', null,
-                    el('td', null, dateTime(sample.t, timezone)), el('td', null, sample.band.label), el('td', null, String(sample.score))));
+                rows.push(sample);
                 nextTime = sample.t + 2 * HOUR_MS - 60_000;
             }
         }
-        tableBody.replaceChildren(...rows);
+        // Each crossing of the moon is named, with its time, in the row whose two hours it falls in.
+        const crossings = new Map();
+        for (const period of moon) {
+            if (period.t > samples[samples.length - 1].t) continue; // begins on the chart, peaks beyond it
+            const row = rows.findLast((sample) => sample.t <= period.t) ?? rows[0];
+            crossings.set(row, `${period.position === 'overhead' ? 'Overhead' : 'Underfoot'} ${clock(period.t, timezone)}`);
+        }
+        const columns = ['Time', 'Rating', 'Score', ...(moon.length ? ['Moon'] : [])];
+        tableHead.replaceChildren(...columns.map((name) => el('th', { scope: 'col' }, name)));
+        tableBody.replaceChildren(...rows.map((sample) => el('tr', null,
+            el('td', null, dateTime(sample.t, timezone)), el('td', null, sample.band.label), el('td', null, String(sample.score)),
+            moon.length ? el('td', null, crossings.get(sample) ?? '') : null)));
     }
 
     const observer = new ResizeObserver(() => draw());
     observer.observe(plot);
 
     return {
-        update(nextSamples, { timezone: tz, days: nextDays = [], nights: nextNights = [], emptyText: text } = {}) {
+        update(nextSamples, { timezone: tz, days: nextDays = [], nights: nextNights = [], moon: nextMoon = [], emptyText: text } = {}) {
             samples = nextSamples ?? [];
             days = nextDays;
             nights = nextNights;
+            moon = nextMoon;
             if (tz) timezone = tz;
             if (text) emptyText = text;
             describe();

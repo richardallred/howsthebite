@@ -19,7 +19,7 @@ import { OutsideCoverageError, fetchAlerts, fetchWeather, reverseGeocode, search
 import { APP } from './config.js';
 import { summariseAlerts } from './core/alerts.js';
 import { colourAdvice, lureConditions, lurePatterns, recommendLures } from './core/lures.js';
-import { moonInfo } from './core/moon.js';
+import { majorPeriods, moonInfo } from './core/moon.js';
 import { coordinateName, placeHref, placeMeta, placePath, readPlaceUrl, slugify } from './core/place-url.js';
 import { SPECIES_GROUPS, bestWindows, estimateWaterTemp, scoreConditions, scoreSeries } from './core/scoring.js';
 import { DEFAULT_LABELS, chooseSpecies, regionalSpecies, saltSpeciesOptions, speciesOptions } from './core/species.js';
@@ -219,7 +219,7 @@ function nextLocalMidnight(time) {
 /**
  * The score from now to the end of the day after tomorrow, with what the chart needs to
  * explain it: one entry per calendar day (its best moment, and the stretch around it that
- * stays within 4 points) and the nights to shade.
+ * stays within 4 points), the nights to shade and, where the moon is scored, its major periods.
  */
 function deriveOutlook(inputs, clock) {
     const end = nextLocalMidnight(clock) + OUTLOOK_DAYS_AHEAD * DAY_MS;
@@ -259,7 +259,9 @@ function deriveOutlook(inputs, clock) {
         const { sunrise } = sunTimes(noon + DAY_MS, lat, lon);
         if (sunset && sunrise && sunrise > clock && sunset < end) nights.push({ start: Math.max(sunset, clock), end: Math.min(sunrise, end) });
     }
-    return { samples, days, nights, end };
+    // Salt water has no moon factor (the tide carries the moon's pull there), so nothing is marked.
+    const moon = inputs.mode === 'fresh' ? majorPeriods(clock, end, lon) : [];
+    return { samples, days, nights, moon, end };
 }
 
 // A change in level that matters to where fish sit: a lake up or down by 0.15 ft or more in a day
@@ -393,6 +395,14 @@ function nextSunEvent(clock) {
     return tomorrow.sunrise ? `Sunrise ${clockTime(tomorrow.sunrise)}` : null;
 }
 
+/** "Overhead 1:32 PM" for the next major period, or "Overhead now, until 2:32 PM" during one. */
+function nextMajorPeriod(clock) {
+    const [period] = majorPeriods(clock, clock + 13 * 60 * 60 * 1000, state.location.lon); // they come every 12.4 hours
+    if (!period) return null;
+    const name = period.position === 'overhead' ? 'Overhead' : 'Underfoot';
+    return period.start <= clock ? `${name} now, until ${clockTime(period.end)}` : `${name} ${clockTime(period.t)}`;
+}
+
 function factorDisplay(factor, derived) {
     const { current } = state.weather;
     switch (factor.id) {
@@ -452,7 +462,8 @@ function factorDisplay(factor, derived) {
             };
         default: {
             const moon = moonInfo(new Date(derived.clock));
-            return { label: 'Moon', iconName: 'moon', value: moon.name, valueIcon: moonGlyph(moon.fraction), extra: factor.trend };
+            const extra = [nextMajorPeriod(derived.clock), factor.trend].filter(Boolean).join(' · ');
+            return { label: 'Moon', iconName: 'moon', value: moon.name, valueIcon: moonGlyph(moon.fraction), extra };
         }
     }
 }
@@ -775,8 +786,8 @@ function renderOutlook(derived) {
         setText('outlookNote', '');
         return;
     }
-    const { samples, days, nights } = derived.outlook;
-    outlookChart.update(samples, { timezone: state.weather.timezone, days, nights });
+    const { samples, days, nights, moon } = derived.outlook;
+    outlookChart.update(samples, { timezone: state.weather.timezone, days, nights, moon });
     setText('outlookRange', days.length > 1 ? `now to ${days[days.length - 1].label} night` : 'the rest of today');
 
     list.replaceChildren(...days.map((day) => el('li', { class: 'outlook-day', dataset: { band: day.peak.band.key } },
@@ -795,7 +806,8 @@ function renderOutlook(derived) {
         ? 'The water temperature is assumed to stay as it is now'
         : 'Water temperature and river flow are assumed to stay as they are now';
     setText('outlookNote', `Sky and wind follow the Weather Service's forecast${derived.mode === 'surf' ? ', as does the surf' : ''}; ${calculated}. `
-        + `${held}, so treat the later days as a rough guide. Shaded bands are night.`);
+        + `${held}, so treat the later days as a rough guide. Shaded bands are night.`
+        + `${moon.length ? ' Bars under the chart are the two hours around the moon crossing overhead or underfoot.' : ''}`);
 }
 
 function renderForecast() {
