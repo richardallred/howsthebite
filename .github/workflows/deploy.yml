@@ -82,6 +82,9 @@ jobs:
     environment:
       name: ${{ github.event_name == 'pull_request' && 'preview' || 'production' }}
       url: ${{ steps.deploy.outputs.url }}
+    permissions:
+      contents: read
+      pull-requests: write # the preview link comment
     steps:
       - uses: actions/checkout@v4
 
@@ -123,6 +126,7 @@ jobs:
             url=${alias_url:-$deployment_url}
           fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
 
           {
             echo "### Deployed to ${{ github.event_name == 'pull_request' && 'preview' || 'production' }}"
@@ -148,6 +152,37 @@ jobs:
           echo "$headers"
           exit 1
 
+      # One comment per PR, edited in place on every push rather than re-posted.
+      - name: Comment the preview link on the PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        with:
+          script: |
+            const marker = '<!-- howsthebite-preview -->';
+            const { URL, DEPLOYMENT_URL, SHA } = process.env;
+            const body = [
+              marker,
+              '### Preview deployed',
+              '',
+              `**${URL}**`,
+              '',
+              `This commit (\`${SHA.slice(0, 7)}\`) on its own: ${DEPLOYMENT_URL}`,
+              '',
+              '<sub>Updated on every push. Deleted when this PR is merged or closed.</sub>',
+            ].join('\n');
+            const issue_number = context.payload.pull_request.number;
+            const comments = await github.paginate(github.rest.issues.listComments, { ...context.repo, issue_number });
+            const existing = comments.find((c) => c.user.type === 'Bot' && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number, body });
+            }
+
   cleanup-preview:
     name: Delete preview
     runs-on: ubuntu-latest
@@ -158,6 +193,7 @@ jobs:
     permissions:
       contents: read
       deployments: write
+      pull-requests: write # update the preview link comment
     steps:
       - uses: actions/checkout@v4
 
@@ -187,3 +223,21 @@ jobs:
               await github.rest.repos.createDeploymentStatus({ ...context.repo, deployment_id: d.id, state: 'inactive' });
             }
             core.info(`Marked ${mine.length} deployment(s) for PR #${pr.number} inactive`);
+
+      - name: Update the preview comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- howsthebite-preview -->';
+            const pr = context.payload.pull_request;
+            const comments = await github.paginate(github.rest.issues.listComments, { ...context.repo, issue_number: pr.number });
+            const existing = comments.find((c) => c.user.type === 'Bot' && c.body.includes(marker));
+            if (!existing) return;
+            const body = [
+              marker,
+              '### Preview deleted',
+              '',
+              `The preview for this PR was removed when it was ${pr.merged ? 'merged' : 'closed'}.`,
+              pr.merged ? 'The change is deploying to https://howsthebite.io.' : '',
+            ].join('\n');
+            await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body });

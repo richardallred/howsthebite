@@ -127,9 +127,10 @@ push to `main`, and deploys only when they pass:
 
 - **Pull requests** deploy a preview to `https://pr-<number>.howsthebite.pages.dev` (and a
   per-commit `https://<hash>.howsthebite.pages.dev`). Previews never touch `howsthebite.io`. The
-  link appears on the PR as **View deployment** and in the run summary. Each new push to the PR
-  updates the same address. Pull requests from forks are tested but not deployed, because GitHub
-  does not give them the secrets.
+  link is posted as a comment on the PR (one comment, edited on each push), and also appears as
+  **View deployment** and in the run summary. Each new push to the PR updates the same address.
+  Pull requests from forks are tested but not deployed, because GitHub does not give them the
+  secrets.
 - **Merging or closing a PR** deletes its preview deployments
   (`scripts/delete-preview-deployments.mjs`; only previews on that PR's `pr-<number>` branch,
   never production). To clean up by hand:
