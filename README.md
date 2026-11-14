@@ -44,6 +44,11 @@ No framework and nothing to compile: plain HTML, CSS and ES modules. The app its
   hover/touch/keyboard read-outs and a data table for each
 - **Place search** for towns ("Asheville, NC") and for lakes, reservoirs and rivers by name
   ("Lake Norman", "French Broad River"), recent places, and optional "use my location"
+- **A link for every place**: each place has its own address
+  (`/fishing/35.6,-82.55/asheville-north-carolina`) that can be bookmarked, reloaded or shared,
+  with the kind of water and the fish carried along so a friend sees the same score. **Share**
+  opens the phone's share sheet, or copies the link on a computer. Back and Forward move between
+  the places you have looked at
 - **Installable and offline-capable**: the app shell is cached by a service worker and the last
   loaded conditions are shown (with their real timestamp) when you have no signal
 - Light and dark themes, responsive from phone to desktop, keyboard and screen-reader friendly
@@ -52,12 +57,14 @@ No framework and nothing to compile: plain HTML, CSS and ES modules. The app its
 
 ```bash
 npm install
-npm start           # plain static server at http://localhost:8000
+npm start           # static server at http://localhost:8000 (scripts/serve.mjs, no dependencies)
 ```
 
-Any static server works (`python3 -m http.server 8000`, VS Code Live Server, …). The page has to be
-served over `http://localhost` or HTTPS; opening `index.html` from disk will not work because
-browsers block ES modules and service workers on `file://`.
+Any static server will show the home page (`python3 -m http.server 8000`, VS Code Live Server, …),
+but only `npm start` and `npm run preview` also serve place addresses (`/fishing/…`), so reloading
+one elsewhere gives a 404. The page has to be served over `http://localhost` or HTTPS; opening
+`index.html` from disk will not work because browsers block ES modules and service workers on
+`file://`.
 
 To run it the way it runs in production, with the security headers and the USGS proxy:
 
@@ -113,24 +120,64 @@ One-time setup:
 
 After that, `npm run deploy` publishes a new version.
 
-**Deploy on every push instead** (optional): in the Cloudflare dashboard choose Workers & Pages →
-Create → Pages → Connect to Git, pick the repository, and set *Build command* `npm run build` and
-*Build output directory* `dist`. Add `USGS_API_KEY` under Settings → Variables and Secrets. Each
-push to the production branch then deploys, and other branches get preview URLs.
+### Automatic deploys (GitHub Actions)
+
+`.github/workflows/deploy.yml` runs the unit and browser tests on every pull request and every
+push to `main`, and deploys only when they pass:
+
+- **Pull requests** deploy a preview to `https://pr-<number>.howsthebite.pages.dev` (and a
+  per-commit `https://<hash>.howsthebite.pages.dev`). Previews never touch `howsthebite.io`. The
+  link is posted as a comment on the PR (one comment, edited on each push), and also appears as
+  **View deployment** and in the run summary. Each new push to the PR updates the same address.
+  Pull requests from forks are tested but not deployed, because GitHub does not give them the
+  secrets.
+- **Merging or closing a PR** deletes its preview deployments
+  (`scripts/delete-preview-deployments.mjs`; only previews on that PR's `pr-<number>` branch,
+  never production). To clean up by hand:
+  `node scripts/delete-preview-deployments.mjs --branch pr-12 --dry-run`, then without
+  `--dry-run`, with `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` set.
+- **Pushes to `main`** (including merged PRs) deploy to production.
+- **Re-deploy by hand**: Actions → CI/CD → Run workflow.
+
+One-time setup:
+
+1. **Create an API token**: Cloudflare dashboard → My Profile → API Tokens → Create Token →
+   Custom token, with the permission *Account → Cloudflare Pages → Edit* for your account.
+2. **Add two repository secrets** (GitHub → Settings → Secrets and variables → Actions), or from
+   the terminal:
+
+   ```bash
+   gh secret set CLOUDFLARE_API_TOKEN       # paste the token
+   gh secret set CLOUDFLARE_ACCOUNT_ID      # the ID shown by `npx wrangler whoami`
+   ```
+3. **Give previews the USGS key** (optional): previews use Pages' separate *preview* environment,
+   which has its own secrets. Without a key their proxy calls USGS anonymously, which works but
+   has a lower rate limit: `npx wrangler pages secret put USGS_API_KEY --env preview`.
+
+The project was created by direct upload, so Cloudflare's own Git integration (Connect to Git)
+is not available for it. GitHub Actions does the same job. `npm run deploy` still works for a
+manual production deploy.
 
 Checking a deployment:
 
 ```bash
 curl -sI https://<your-site>/ | grep -i content-security-policy          # headers are applied
 curl -s -o /dev/null -D - "https://<your-site>/api/usgs/monitoring-locations/items?id=USGS-05536137" | grep -i x-cache
+curl -s https://<your-site>/fishing/35.6,-82.55/asheville-north-carolina | grep -E '<title>|canonical'
+curl -sI https://<your-site>/fishing/35.6,-82.55/asheville-north-carolina | grep -i content-security-policy
 ```
 
 The second command should print `x-cache: miss` the first time and `x-cache: hit` when repeated.
+The third should print a title and canonical address naming Asheville, and the fourth shows that
+place pages carry the security headers too.
 
-Other static hosts (GitHub Pages, Netlify, S3, …) work too: publish `dist/`. Without the Pages
-Function there is no proxy, which the app detects on its first request, and it then talks to USGS
-directly. `_headers` is a Cloudflare/Netlify convention; elsewhere set the same headers in that
-host's own way.
+Other static hosts (GitHub Pages, Netlify, S3, …) work too: publish `dist/` at the root of a
+domain (the page uses absolute paths such as `/styles.css`, so it cannot live in a subfolder).
+Without the Pages Functions there is no proxy, which the app detects on its first request, and it
+then talks to USGS directly. Place addresses need the host to serve `index.html` for `/fishing/*`
+(on Netlify, a `_redirects` line `/fishing/* /index.html 200`); the app then reads the place from
+the address, but their pages are not written with the place's title and meta tags. `_headers` is a
+Cloudflare/Netlify convention; elsewhere set the same headers in that host's own way.
 
 When you add, rename or remove a file the page loads, update `SHELL` in `sw.js`. The build fails
 if `SHELL` lists a file that is not published, and a browser test fails if the page loads a file
@@ -213,7 +260,8 @@ Amazon turns out to be a poor fit.
   `screenshots/share-card.png`, 1200×630) and `WebSite`/`WebApplication` structured data.
   `robots.txt` allows everything and points to `sitemap.xml`.
 - These use the absolute address `https://howsthebite.io/`. If the domain ever changes, change it
-  in `index.html`, `robots.txt`, `sitemap.xml` and `functions/_middleware.js`.
+  in `index.html`, `robots.txt`, `sitemap.xml` and `functions/_middleware.js`. Place pages take
+  their canonical address from the canonical link in `index.html`.
 - `functions/_middleware.js` permanently redirects page loads on the old address,
   `howsthebite.pages.dev`, to the same path on `howsthebite.io`, so search engines move their
   index and any links to the new domain. Files fetched by an already-open page or the installed
@@ -221,8 +269,27 @@ Amazon turns out to be a poor fit.
   browser per address and do not carry over. Per-deployment preview addresses are not redirected.
   `_routes.json` limits Functions to page loads and the `/api/` proxies, so scripts, styles and
   images never invoke a Worker (Functions count against the Workers request allowance).
-- Search engines have no saved place and no location permission, so they see the default city.
-  The page title therefore stays as the site's own title until a visitor picks a place.
+- Search engines have no saved place and no location permission, so on the home page they see the
+  default city. The page title therefore stays as the site's own title there, and the address
+  stays `/`.
+- **Place pages.** Every place has its own address, `/fishing/<lat>,<lon>/<name>`
+  (`js/core/place-url.js`). `functions/fishing/[[path]].js` serves it as `index.html` with the
+  place written into the title ("Asheville, North Carolina Fishing Forecast"), the description,
+  the canonical address, the Open Graph tags and the `<h1>`, so search engines and link previews
+  (which mostly run no scripts) see the place. It streams the file through HTMLRewriter, so it
+  costs about what serving the file does. The app sets the same title and canonical address when
+  a visitor moves between places.
+  - One address per place: coordinates are rounded to 2 decimals (about 1 km, which also keeps a
+    shared link from giving away exactly where someone was standing) and the name is a lower-case
+    slug. Anything close (more decimals, capitals, a trailing slash) is redirected permanently to
+    that form. The canonical address leaves out the query string (`water`, `mode`, `fish`, and
+    `name` when the slug cannot spell the name exactly, as with "St. Louis").
+  - Addresses that cannot name a place get the 404 page, and places outside the Weather
+    Service's coverage are served with `X-Robots-Tag: noindex`.
+  - `tests/place-url.test.js` fails if `index.html` loses one of the elements the function
+    rewrites, or gains a relative path (which would break under `/fishing/…`).
+  - `sitemap.xml` lists only the home page. Place pages are found through links people share;
+    to have particular waters indexed, add their addresses to the sitemap.
 - The "Fishing questions, answered" section is plain HTML so it can be indexed. Each answer ends
   with links to the studies behind it (the same ones listed under "Why these weights" and "Salt
   water"). Keep its figures in line with `js/core/scoring.js` and those sections when the score
@@ -559,6 +626,7 @@ js/
     moon.js             Moon phase and overhead/underfoot position
     sky.js              NWS sky reports -> label, emoji, sky class
     util.js             Distance, formatting and other helpers
+    place-url.js        Place addresses (/fishing/<lat>,<lon>/<name>): build, read, page titles
   ui/
     charts.js           SVG line chart with tooltip, keyboard support and data table
     outlook-chart.js    The score outlook chart: shaded nights, day labels, each day's best moment
@@ -568,9 +636,12 @@ js/
 data/
   coops-stations.json   NOAA tide and water-temperature stations (built by scripts/update-coops-stations.mjs)
 functions/
+  _middleware.js        Cloudflare Pages Function: redirects the old pages.dev address
+  fishing/[[path]].js   Cloudflare Pages Function: place pages with the place in their title and meta tags
   api/usgs/[[path]].js  Cloudflare Pages Function: caching proxy for the USGS API
   api/sst.js            Cloudflare Pages Function: satellite sea-surface temperature
 scripts/build.mjs       Copies the publishable files to dist/
+scripts/serve.mjs       Local static server (npm start, browser tests) that also serves place addresses
 tests/                  Unit tests (node --test)
 e2e/                    Browser tests (Playwright)
   support/api-mocks.js  Fixture responses for every external service
