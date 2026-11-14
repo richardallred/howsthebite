@@ -28,6 +28,8 @@ No framework and nothing to compile: plain HTML, CSS and ES modules. The app its
   light, wind, clarity and tide right now
 - **Score outlook**: a chart of the score from now to the end of the day after tomorrow, with
   each day's best time, so you can pick when to go
+- **Solunar major periods** in fresh water: the Moon tile gives the next time the moon is overhead
+  or underfoot, and the outlook chart marks each one
 - **Best times** for the next day and a half, from sunrise/sunset, the tide and the forecast
 - **Weather alerts** from the National Weather Service; thunderstorm and other dangerous-weather
   warnings cap the score while they are in effect
@@ -374,6 +376,10 @@ the day after tomorrow (`scoreSeries` in `js/core/scoring.js`). Its first point 
 at the top of the page.
 
 - **Calculated exactly:** the sun (light), the moon, and in salt water the tide.
+- **Marked, not scored again:** in fresh water a bar under the chart shows each major period, the
+  hour either side of the moon crossing overhead or underfoot. The Moon factor already counts
+  them; the bars are there so you can see when one falls at dawn or dusk. Minor periods (moonrise
+  and moonset) are left out, because no catch data supports them.
 - **From forecasts:** sky and wind from the Weather Service's hour-by-hour forecast (the 12-hour
   forecast if that fails to load), and off a beach the wave-height forecast.
 - **Assumed to hold:** water temperature and river flow stay as they are now. That is the main
@@ -524,7 +530,8 @@ judgement on top of it, not a fitted model.
 - **Moon**: across 340,000 muskie records (Vinson & Angradi 2014, PLOS ONE) the lunar effect was
   about 5% overall and 10–19% in the datasets where it showed, and the authors could not separate
   it from when anglers choose to fish. Moon overhead/underfoot raised trip success in the Escanaba
-  data. A seven-year trout study found no lunar effect at all.
+  data. A seven-year trout study found no lunar effect at all. The times of those crossings are
+  shown on the Moon tile and the outlook chart, which changes nothing in the score.
 - **Barometric pressure** was not a significant predictor of catch in any of the three angling
   datasets found that tested it (walleye and muskie in Wisconsin; largemouth bass in Michigan and
   Illinois). The slow bite behind a cold front is near-universal testimony but has barely been
@@ -560,7 +567,7 @@ if you want to fit the weights rather than judge them.
 | Wave-height forecast off a beach | NWS forecast grid (`api.weather.gov/gridpoints`) | Used when the beach forecast has no surf height. A beach's own grid cell is land, so the app looks a few miles out in each direction for one over open water and remembers it. |
 | Sea-surface temperature where no station is near | NASA JPL MUR analysis via [NOAA CoastWatch ERDDAP](https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.html), through `/api/sst` | Free to use and redistribute. About a day and a half old, and a degree or two warm inside bays; labelled a satellite estimate. |
 | Which sport fish live in the region | [GBIF occurrence search](https://techdocs.gbif.org/en/openapi/v1/occurrence) | No key. Counts only, restricted to CC0 and CC BY records. Free service with no uptime guarantee; the app falls back to a latitude rule without it. |
-| Sunrise, sunset, twilight, moon phase and position | Computed in the browser (`js/core/sun.js`, `js/core/moon.js`) | No request is made |
+| Sunrise, sunset, twilight, moon phase and position | Computed in the browser (`js/core/sun.js`, `js/core/moon.js`) | No request is made. The overhead and underfoot times shown agree with the US Naval Observatory's to within a minute. |
 | Map tiles | [OpenStreetMap](https://www.openstreetmap.org/copyright) via [Leaflet](https://leafletjs.com/) (vendored in `vendor/leaflet`) | Loaded only when the map scrolls into view |
 
 ### Where the weather readings come from
@@ -643,13 +650,13 @@ js/
     season.js           Where each fish is in its year: pre-spawn, spawn, the fall feed…
     water-trend.js      The last month of water temperature: direction, cold snaps, against normal
     sun.js              Sun position, sunrise and sunset
-    moon.js             Moon phase and overhead/underfoot position
+    moon.js             Moon phase, overhead/underfoot position and the times of the major periods
     sky.js              NWS sky reports -> label, emoji, sky class
     util.js             Distance, formatting and other helpers
     place-url.js        Place addresses (/fishing/<lat>,<lon>/<name>): build, read, page titles
   ui/
     charts.js           SVG line chart with tooltip, keyboard support and data table
-    outlook-chart.js    The score outlook chart: shaded nights, day labels, each day's best moment
+    outlook-chart.js    The score outlook chart: shaded nights, day labels, each day's best moment, major periods
     map.js              Lazy-loaded Leaflet station map
     theme.js            Light/dark toggle
     dom.js              Tiny DOM-building helpers

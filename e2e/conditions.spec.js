@@ -62,6 +62,8 @@ test.describe('factor details', () => {
         await expect(app.factor('Wind').locator('.factor-value')).toHaveText('10 mph SW');
         await expect(app.factor('Wind')).toContainText('Gusts to 14 mph');
         await expect(app.factor('Moon').locator('.factor-value')).toContainText('New Moon');
+        // The next major period: the Naval Observatory puts the moon overhead in Chicago at 1:32 PM this day.
+        await expect(app.factor('Moon').locator('.factor-extra')).toHaveText(/^Overhead 1:3[123] PM · \d+% illuminated$/);
 
         const light = app.factor('Light');
         await expect(light.locator('.factor-value')).toHaveText('Clear');
