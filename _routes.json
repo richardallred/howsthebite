@@ -1,0 +1,6 @@
+{
+    "version": 1,
+    "description": "Run Functions only for page loads (the old-address redirect) and the data proxies. Static files are served without invoking a Worker.",
+    "include": ["/", "/index.html", "/api/*"],
+    "exclude": []
+}

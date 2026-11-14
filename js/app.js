@@ -854,7 +854,9 @@ function renderCharts(derived) {
 
 function renderLocation() {
     setText('locationName', state.location?.name ?? 'Choose a location');
-    document.title = state.location ? `${state.location.name} — How's the Bite?` : "How's the Bite?";
+    // The page's own title stays while a first visit shows the default city, so search engines
+    // (which have no saved place) index the site for what it is, not for Chicago.
+    if (!state.location?.fallback) document.title = `${state.location?.name ?? 'Fishing forecast'} — How's the Bite?`;
     renderUpdatedAt();
     renderRecents();
 }
@@ -1567,7 +1569,7 @@ function init() {
     });
 
     const saved = storage.getLocation();
-    state.location = saved ?? { ...APP.DEFAULT_LOCATION };
+    state.location = saved ?? { ...APP.DEFAULT_LOCATION, fallback: true };
 
     const restored = restoreSnapshot();
     render();

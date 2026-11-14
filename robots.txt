@@ -1,0 +1,6 @@
+# Everything on the site may be crawled. The sitemap uses absolute URLs: update it,
+# and the canonical and og: tags in index.html, if the site moves to its own domain.
+User-agent: *
+Allow: /
+
+Sitemap: https://howsthebite.io/sitemap.xml

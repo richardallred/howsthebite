@@ -5,7 +5,8 @@ test.describe('first visit', () => {
         await app.open();
 
         await expect(page.getByRole('heading', { level: 1 })).toHaveText('Chicago, Illinois');
-        await expect(page).toHaveTitle(/Chicago, Illinois/);
+        // The default city is a stand-in, so the page keeps the title search engines should index.
+        await expect(page).toHaveTitle("Fishing Forecast and Best Times to Fish Today — How's the Bite?");
 
         // Ideal water, wind and flow, but mid-morning under a bright sun: excellent, not exceptional.
         await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);

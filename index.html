@@ -3,14 +3,57 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>How's the Bite? — Fishing Conditions</title>
-    <meta name="description" content="A 0–100 fishing score for any US lake, river, bay or beach, built from water temperature, time of day, tides, surf, river flow and live weather, with lure suggestions for the conditions.">
+    <title>Fishing Forecast and Best Times to Fish Today — How's the Bite?</title>
+    <meta name="description" content="Free fishing forecast for any US lake, river, bay or beach: a 0–100 score with the best times to fish today and the next two days, from live water temperature, tides, wind, river flow and weather, plus lure suggestions.">
+    <link rel="canonical" href="https://howsthebite.io/">
+
+    <!-- How links to the site look when shared. Absolute URLs: update them if the site moves to its own domain. -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="How's the Bite?">
+    <meta property="og:title" content="How's the Bite? — Fishing forecast for any US lake, river or beach">
+    <meta property="og:description" content="A 0–100 fishing score with the best times to fish today and the next two days, from live water temperature, tides, wind and weather.">
+    <meta property="og:url" content="https://howsthebite.io/">
+    <meta property="og:image" content="https://howsthebite.io/screenshots/share-card.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="How's the Bite? fishing forecast: a 0–100 score from water temperature, light, tide, wind and weather.">
+    <meta property="og:locale" content="en_US">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <!-- Structured data for search engines. A data block, not a script, so the CSP does not apply to it. -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@graph": [
+            {
+                "@type": "WebSite",
+                "@id": "https://howsthebite.io/#website",
+                "name": "How's the Bite?",
+                "alternateName": "How's the Bite",
+                "url": "https://howsthebite.io/"
+            },
+            {
+                "@type": "WebApplication",
+                "name": "How's the Bite?",
+                "url": "https://howsthebite.io/",
+                "description": "A 0–100 fishing score for any US lake, river, bay or beach, with the best times to fish today and the next two days and lure suggestions for the conditions.",
+                "applicationCategory": "SportsApplication",
+                "operatingSystem": "Any",
+                "browserRequirements": "Requires JavaScript",
+                "isAccessibleForFree": true,
+                "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+                "inLanguage": "en-US",
+                "isPartOf": { "@id": "https://howsthebite.io/#website" }
+            }
+        ]
+    }
+    </script>
     <meta name="theme-color" content="#eceee8">
     <meta name="color-scheme" content="light dark">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <link rel="icon" href="favicon.ico" sizes="any">
-    <link rel="apple-touch-icon" href="icons/icon-192x192.png">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <link rel="preload" href="fonts/archivo-variable.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="fonts/instrument-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 
@@ -239,6 +282,80 @@
             </div>
         </section>
 
+        <!-- Plain text in the page itself, so it is there for search engines and for anyone curious
+             about the score. Keep the answers in line with js/core/scoring.js and the README. -->
+        <section class="section panel" id="questions" aria-labelledby="questionsTitle">
+            <div class="panel-head">
+                <h2 class="panel-title" id="questionsTitle">Fishing questions, answered</h2>
+                <p class="panel-sub">What catch-rate studies say, and how the score uses it.</p>
+            </div>
+            <div class="faq">
+                <details>
+                    <summary>When is the best time of day to go fishing?</summary>
+                    <p>Around sunset, then early morning. In a 13-year survey of every angler on Escanaba Lake, Wisconsin,
+                        the predicted chance of a successful walleye trip was about 47% at dusk, 34% at dawn and 26% by day,
+                        and it fell as the sun got brighter. An overcast day fishes better than a bright one. In salt water,
+                        moving tide matters as much as the light, and shore anglers in a Mississippi survey caught about as
+                        well at night as by day. The forecast above works out the best times for today and the next two
+                        days wherever you are.</p>
+                </details>
+                <details>
+                    <summary>What water temperature is best for fishing?</summary>
+                    <p>It depends on the fish. Roughly: largemouth bass and panfish 69–80°F, walleye and pike 62–72°F,
+                        trout and salmon 50–64°F. Trout feed poorly once the water passes the mid-60s; Idaho Fish and Game
+                        reported catch rates 77% lower above 73°F than below 66°F, and trout caught in warm water are more
+                        likely to die after release. In salt water: snook and tarpon 74–86°F, redfish and seatrout
+                        65–82°F, striped bass and bluefish 55–70°F. Water temperature carries the most weight in the score.</p>
+                </details>
+                <details>
+                    <summary>Does barometric pressure affect fishing?</summary>
+                    <p>Less than its reputation suggests. In the three angling datasets that tested it (walleye and muskie
+                        in Wisconsin, largemouth bass in Michigan and Illinois), pressure was not a significant predictor of
+                        catch. The slow bite after a cold front is widely reported but has barely been measured, so the
+                        score gives the pressure trend 5 points out of 100 and the reading itself none.</p>
+                </details>
+                <details>
+                    <summary>Does the moon affect fishing?</summary>
+                    <p>A little. Across 340,000 muskie records the moon's effect was about 5% overall, and a seven-year
+                        trout study found none. Fishing while the moon was overhead or underfoot (the "major periods" of
+                        solunar tables) did raise trip success in the Escanaba Lake walleye data. The moon is worth
+                        8 points of the freshwater score.</p>
+                </details>
+                <details>
+                    <summary>Is wind good or bad for fishing?</summary>
+                    <p>Studies of walleye and bass found no effect on catch, while muskie catches fell about 40% at 20 mph
+                        compared with calm. A light breeze of 5–12 mph scores best here; points fall away above 15 mph and
+                        are gone at 30, mostly because of boat control, casting and safety.</p>
+                </details>
+                <details>
+                    <summary>Is fishing good in the rain?</summary>
+                    <p>Rain itself was not a significant factor in the studies that tested it, and the cloud that comes with
+                        it cuts the light, which helps. Lightning is another matter: thunderstorms, or a severe-weather
+                        warning, hold the score at 15 or below.</p>
+                </details>
+                <details>
+                    <summary>Is an incoming or outgoing tide better for fishing?</summary>
+                    <p>Moving water matters more than its direction. Tagged flounder, redfish and striped bass move and feed
+                        with the tide, but which stage is best varies by species and place. The inshore score gives full
+                        marks at mid-tide and 40% at slack water, and the tides table shows the next highs and lows from
+                        NOAA.</p>
+                </details>
+                <details>
+                    <summary>How does river flow affect fishing?</summary>
+                    <p>High water for the time of year hurts. Wisconsin guide logs showed smallmouth catch rates falling as
+                        river discharge rose, while whether the river was rising or falling over three days made no
+                        difference. The score compares the nearest USGS gauge with its own record for the date: normal flow
+                        scores best and a flood scores almost nothing.</p>
+                </details>
+                <details>
+                    <summary>How accurate is the fishing score?</summary>
+                    <p>It rates conditions, not your odds. Wherever catch rates have been measured, skill, bait and how many
+                        fish are in the water outweighed every weather factor, so read the score as "is this a good time to
+                        be out". It is built from public data: National Weather Service observations, forecasts and alerts,
+                        USGS water gauges, NOAA tide predictions and satellite sea temperatures.</p>
+                </details>
+            </div>
+        </section>
         <footer class="app-footer">
             <p>
                 Data from the <a href="https://www.weather.gov/" target="_blank" rel="noopener">National Weather Service</a>,

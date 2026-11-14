@@ -200,6 +200,27 @@ Links to search results are allowed only beside original content relevant to the
 suggestions and the score are. Bass Pro Shops also runs an affiliate programme for tackle if
 Amazon turns out to be a poor fit.
 
+### Search engines and link previews
+
+- `index.html` carries the canonical URL, Open Graph tags (the preview image is
+  `screenshots/share-card.png`, 1200×630) and `WebSite`/`WebApplication` structured data.
+  `robots.txt` allows everything and points to `sitemap.xml`.
+- These use the absolute address `https://howsthebite.io/`. If the domain ever changes, change it
+  in `index.html`, `robots.txt`, `sitemap.xml` and `functions/_middleware.js`.
+- `functions/_middleware.js` permanently redirects page loads on the old address,
+  `howsthebite.pages.dev`, to the same path on `howsthebite.io`, so search engines move their
+  index and any links to the new domain. Files fetched by an already-open page or the installed
+  app are not redirected, so those keep working until their next load. Saved places live in the
+  browser per address and do not carry over. Per-deployment preview addresses are not redirected.
+  `_routes.json` limits Functions to page loads and the `/api/` proxies, so scripts, styles and
+  images never invoke a Worker (Functions count against the Workers request allowance).
+- Search engines have no saved place and no location permission, so they see the default city.
+  The page title therefore stays as the site's own title until a visitor picks a place.
+- The "Fishing questions, answered" section is plain HTML so it can be indexed. Keep its figures
+  in line with `js/core/scoring.js` and the sections above when the score changes.
+- Cloudflare marks every preview and per-deployment address (`<hash>.howsthebite.pages.dev`)
+  `noindex`, so only the production address is indexed.
+
 ## How the score works
 
 The score rates **conditions**, not your odds. Wherever catch rates have been measured, the

@@ -14,7 +14,7 @@ const dist = join(root, 'dist');
 
 const PUBLISH = [
     'index.html', '404.html', 'styles.css', 'sw.js', 'manifest.json',
-    'favicon.ico', 'favicon.svg', '_headers',
+    'favicon.ico', 'favicon.svg', '_headers', 'robots.txt', 'sitemap.xml', '_routes.json',
     'icons', 'fonts', 'js', 'data', 'vendor', 'screenshots',
 ];
 

@@ -16,6 +16,7 @@ test.describe('place search', () => {
         await app.loaded();
 
         await expect(page.getByRole('heading', { level: 1 })).toHaveText('Asheville, North Carolina');
+        await expect(page).toHaveTitle("Asheville, North Carolina — How's the Bite?");
         await expect(input).toHaveValue('');
         await expect(page.locator('#searchResults')).toBeHidden();
         await expect(page.locator('#notice')).toBeHidden(); // the first-visit hint goes away
@@ -150,6 +151,7 @@ test.describe('use my location, permission already granted', () => {
     test('a first visit goes straight to the device location', async ({ page, api }) => {
         await page.goto('/');
         await expect(page.getByRole('heading', { level: 1 })).toHaveText('Madison, Wisconsin');
+        await expect(page).toHaveTitle("Madison, Wisconsin — How's the Bite?");
         await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
         await expect(page.locator('#notice')).toBeHidden();
 
