@@ -227,6 +227,12 @@ const RULES = {
         during(['fall'], 9, always, 'Cut shad near bait schools and below dams', 'cut bait catfish rig',
             'Fish fresh-cut shad near schools of bait, below dams and on flats next to the channel.',
             'Cooling water and dying shad set off a fall feeding binge', ['bottom', 'bait']),
+        rule(6, all(not(coolish), any(dark, lowLight)), 'Live baitfish near logjams and deep cover', 'flathead catfish rig circle hook',
+            'A lively shad, bullhead or sunfish on a heavy slip-sinker rig beside wood and deep holes; check whether local rules allow live sunfish as bait.',
+            'Flathead catfish hunt live fish, mostly after dark in warm water', { best: ['summer'], tags: ['bottom', 'bait'] }),
+        rule(5, not(cold), 'Chicken liver on the bottom', 'catfish bait holder hooks',
+            'Thread it on a bait-holder or treble hook, or wrap it in thread or mesh so it stays on the cast.',
+            'A cheap, smelly standby for channel catfish in warm water', { tags: ['bottom', 'bait'] }),
         rule(4, always, 'Nightcrawlers on the bottom', 'catfish hooks slip sinker',
             'A gob of nightcrawlers on a slip-sinker rig.',
             'A dependable bait for channel catfish anywhere', { tags: ['bottom', 'bait'] }),
@@ -583,7 +589,7 @@ const ALIASES = { muskie: 'pike', fluke: 'flounder', halibut: 'flounder', corbin
 
 /** Whose temperature range each fish is judged against (see SPECIES_GROUPS in scoring.js). */
 const THERMAL_GROUP = {
-    bass: 'warm', panfish: 'warm', catfish: 'warm',
+    bass: 'warm', panfish: 'warm', catfish: 'catfish',
     walleye: 'cool', pike: 'cool', muskie: 'cool', smallmouth: 'cool', perch: 'cool', sauger: 'cool',
     trout: 'cold', salmon: 'cold',
     snook: 'tropical', pompano: 'tropical',

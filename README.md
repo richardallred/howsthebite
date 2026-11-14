@@ -15,7 +15,7 @@ No framework and nothing to compile: plain HTML, CSS and ES modules. The app its
 ## Features
 
 - **Fishing score (0–100)** with a per-factor breakdown that shows exactly where the points came from,
-  tuned to what you are fishing for: all species, bass and panfish, walleye and pike, or trout
+  tuned to what you are fishing for: all species, bass and panfish, catfish, walleye and pike, or trout
 - **Only the fish that live there are offered**: the choices come from occurrence records for the
   region, so there is no walleye option in south Florida and no bass option in Alaska
 - **Salt water too**: near the coast, switch between Freshwater, Inshore (bays, flats, marsh,
@@ -307,12 +307,31 @@ The logic lives in `js/core/scoring.js` and is covered by `tests/scoring.test.js
 
 | Factor | Points | Best | How it is scored |
 |---|---|---|---|
-| Water temperature | 35 | Depends on the species setting | A smooth curve per species group: bass and panfish peak at 69–80°F, walleye and pike at 62–72°F, trout at 50–64°F, "all species" at 62–76°F. Trout lose most of their points by 70°F and all of them by 75°F. An estimate (no sensor nearby) is pulled toward the middle. Dissolved oxygen below about 5 mg/L (6 for trout) cuts the factor further where a station measures it. |
-| Light | 30 | The hour either side of sunset | From the sun's height, computed for the spot: evening low light 100%, early morning 75%, overcast day 68%, broken cloud 55%, bright sun 45%, night 35%, blended smoothly between. |
+| Water temperature | 35 | Depends on the species setting | A smooth curve per species group: bass and panfish peak at 69–80°F, catfish at 72–86°F, walleye and pike at 62–72°F, trout at 50–64°F, "all species" at 62–76°F. Trout lose most of their points by 70°F and all of them by 75°F. An estimate (no sensor nearby) is pulled toward the middle. Dissolved oxygen below about 5 mg/L (6 for trout) cuts the factor further where a station measures it. |
+| Light | 30 | The hour either side of sunset | From the sun's height, computed for the spot: evening low light 100%, early morning 75%, overcast day 68%, broken cloud 55%, bright sun 45%, night 35%, blended smoothly between. For catfish, night earns 85% and bright sun 40% (see below). |
 | Wind | 12 | 5–12 mph | Calm still earns 75%. Points fall away above 15 mph and reach zero at 30. Gusts count (a gust is treated as 70% of a steady wind). |
-| River flow | 10 | Normal for the date | Current discharge against that gauge's own record for today's date (USGS day-of-year percentiles, at least 10 years). Normal flow scores full marks, low water a little less, very high water almost nothing. Left out for lakes and for gauges without a long record. |
+| River flow | 10 | Normal for the date | Current discharge against that gauge's own record for today's date (USGS day-of-year percentiles, at least 10 years). Normal flow scores full marks, low water a little less, very high water almost nothing. For catfish, flow up to the 85th percentile still scores full marks. Left out for lakes and for gauges without a long record. |
 | Moon | 8 | New or full moon, overhead or underfoot | 35% always, up to 30% more near new/full moon, and 35% more within about an hour of the moon crossing overhead or underfoot. |
 | Barometric pressure | 5 | Steady or slowly falling | Trend only: slowly falling 5, steady or falling fast 4, rising 3, rising fast 1. The level itself earns nothing. |
+
+**Catfish.** Catfish are scored on their own rather than with bass, because three things differ:
+
+- *Water temperature.* Channel catfish grow best at 79–84°F (26–29°C) and poorly below 70°F,
+  according to the US Fish and Wildlife Service habitat suitability model ([McMahon & Terrell
+  1982](https://www.usgs.gov/publications/habitat-suitability-index-models-channel-catfish)). Their
+  curve peaks at 72–86°F, warmer than bass. Blue catfish keep feeding in winter, so cold water
+  never scores quite nothing.
+- *Light.* No study has compared catfish catch rates by day and by night. In a 24-hour creel survey
+  of two Ohio reservoirs (Parrett et al. 1999), over half of the channel catfish harvest, and of
+  the effort spent on them, came after dark. Agency guides agree that catfish feed most at night
+  and in low light. So the catfish light curve does not mark night down (85%, against 35% for
+  other fresh-water fish), and it marks bright sun down a little more (40%).
+- *River flow.* Catfish find food by smell, and agency guides send anglers out on rising, stained
+  water after rain. Flow somewhat above normal therefore costs catfish nothing. Floods still score
+  near zero. This is a rule of thumb, not a measured effect.
+
+Catfish are offered wherever bass are (everywhere but Alaska). They are not part of "All
+species", which stands for the leading fish of each temperature group.
 
 **Species on offer.** The species setting only lists fish recorded around the place you are
 looking at (`js/core/species.js`). The app asks [GBIF](https://www.gbif.org/) how many openly
@@ -323,10 +342,11 @@ licensed records of 19 sport fish exist since 1990 in a box about 140 miles acro
   make a fishery.
 - The button is named for what is actually there: "Walleye & pike" in Minnesota, "Smallmouth"
   around Dallas, "Perch" near Savannah, "Pike" and "Trout & salmon" in Alaska.
-- Bass and panfish are offered everywhere except Alaska, without consulting the counts: they live
-  in every other state, including thinly surveyed country with few records.
-- Where a single group lives (Florida, the Gulf coast), there is no choice to make and the score
-  says which fish it used.
+- Bass and panfish, and catfish, are offered everywhere except Alaska, without consulting the
+  counts: they live in every other state, including thinly surveyed country with few records.
+- Where bass and panfish are the only temperature group (Florida, the Gulf coast), there is no
+  "All species": bass and panfish is the default, with catfish beside it. Where a single group
+  lives and nothing else is offered, the score says which fish it used.
 - Your saved preference is kept: where those fish are not recorded the score uses "All species"
   and says so, and the preference applies again wherever they do live.
 - With fewer than 20 records in all, or if the lookup fails, the app assumes by latitude instead:
