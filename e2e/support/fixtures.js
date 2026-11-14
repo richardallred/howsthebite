@@ -10,9 +10,9 @@ import { test as base, expect } from '@playwright/test';
 
 import {
     BLANK_TILE, DEFAULT_POINTS, DEFAULT_SCORE, DEFAULT_SPECIES, DEFAULT_STATIONS, NOW, alertsResponse, beachResponse,
-    continuousResponse, coopsResponse, flowNormalsResponse, forecastResponse, gbifResponse, hourlyForecastResponse, latestContinuousResponse,
+    continuousResponse, coopsResponse, dailyResponse, flowNormalsResponse, forecastResponse, gbifResponse, hourlyForecastResponse, latestContinuousResponse,
     marineZonesResponse, monitoringLocationsResponse, observationsResponse, photonResponse, pointResponse, sstResponse,
-    stationsResponse, waveGridResponse,
+    stationsResponse, tempNormalsResponse, waveGridResponse,
 } from './api-mocks.js';
 
 export { DEFAULT_POINTS, DEFAULT_SCORE, NOW, expect };
@@ -71,7 +71,11 @@ export const test = base.extend({
             if (collection === 'latest-continuous') return json(route, latestContinuousResponse(url, api.stations));
             if (collection === 'monitoring-locations') return json(route, monitoringLocationsResponse(url, api.stations));
             if (collection === 'continuous') return json(route, continuousResponse(url, api.stations));
-            if (collection === 'observationNormals') return json(route, flowNormalsResponse(url, api.stations));
+            if (collection === 'daily') return json(route, dailyResponse(url, api.stations));
+            if (collection === 'observationNormals') {
+                const temperature = url.searchParams.get('parameter_code') === '00010';
+                return json(route, (temperature ? tempNormalsResponse : flowNormalsResponse)(url, api.stations));
+            }
             api.unexpected.push(url.href);
             return route.abort('blockedbyclient');
         };
@@ -91,7 +95,7 @@ export const test = base.extend({
         await context.route((url) => url.pathname.endsWith('/api/sst'), (route) => {
             api.calls.push({ service: 'sst', url: route.request().url() });
             if (!api.proxy) return respond(route, 404, { error: 'Not found' });
-            return json(route, sstResponse(api.coast));
+            return json(route, sstResponse(api.coast, new URL(route.request().url())));
         });
 
         await context.route((url) => url.hostname !== 'localhost', (route) => {

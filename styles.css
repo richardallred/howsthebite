@@ -719,6 +719,33 @@ button, input { font: inherit; color: inherit; }
 .lure-why { grid-column: 1 / -1; font-size: 0.875rem; color: var(--ink-2); line-height: 1.4; }
 .lure-shop { grid-column: 2; grid-row: 2; align-self: baseline; font-size: 0.8125rem; font-weight: 500; white-space: nowrap; }
 
+.lure-season-tag { color: var(--water); }
+.lure-adjust { grid-column: 1 / -1; font-size: 0.8125rem; color: var(--muted); line-height: 1.4; }
+
+/* Where the fish are in their year, and how the water has been changing. */
+.lure-pattern {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px 28px;
+    padding: 14px 20px 16px;
+    border-top: 1px solid var(--line);
+}
+.lure-season { min-width: 0; }
+.lure-kicker { font: 500 0.6875rem/1.4 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.lure-kicker strong { font-weight: 500; color: var(--accent); }
+.lure-pattern-text { margin-top: 4px; font-size: 0.9375rem; line-height: 1.45; max-width: 62ch; }
+.lure-situation { margin-top: 8px; padding-left: 10px; border-left: 2px solid var(--accent); font-size: 0.875rem; color: var(--ink-2); line-height: 1.4; max-width: 62ch; }
+.lure-also { margin-top: 8px; font-size: 0.8125rem; color: var(--muted); }
+.lure-trend { min-width: 0; display: grid; align-content: start; gap: 4px; }
+.lure-trend-head { font: 500 0.6875rem/1.4 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.spark { display: block; width: 100%; max-width: 220px; height: 44px; overflow: visible; }
+.spark-line { fill: none; stroke: var(--series-water); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.spark-dot { fill: var(--series-water); }
+.spark-ends { display: flex; justify-content: space-between; max-width: 220px; font: 400 0.75rem/1.3 var(--font-mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.lure-trend-facts { font-size: 0.8125rem; color: var(--ink-2); line-height: 1.45; }
+.lure-trend-facts li { list-style: none; }
+.lure-trend-source { font-size: 0.75rem; color: var(--muted); }
+
 .lure-disclosure { padding: 10px 20px 14px; font-size: 0.75rem; color: var(--muted); }
 .lures:has(+ .lure-disclosure[hidden]) .lure:nth-last-child(-n + 2) { border-bottom: 0; }
 
@@ -960,6 +987,13 @@ button, input { font: inherit; color: inherit; }
 .faq details[open] summary::after { content: "−"; }
 .faq summary:hover { color: var(--accent); }
 .faq summary:focus-visible { outline-offset: -4px; }
+.faq details p.faq-sources {
+    margin-top: -6px;
+    font-size: 0.75rem;
+    line-height: 1.55;
+    color: var(--muted);
+}
+.faq-sources a { color: var(--ink-2); }
 .faq details p {
     max-width: 72ch;
     padding: 0 20px 16px;
@@ -1046,6 +1080,7 @@ button, input { font: inherit; color: inherit; }
     .wrap { padding-inline: max(24px, env(safe-area-inset-left)) max(24px, env(safe-area-inset-right)); }
     .lures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .lure:nth-child(odd) { border-right: 1px solid var(--line); }
+    .lure-pattern { grid-template-columns: minmax(0, 1fr) minmax(200px, 240px); }
 }
 
 @media (min-width: 768px) {
@@ -1074,7 +1109,7 @@ button, input { font: inherit; color: inherit; }
     #locateBtn { width: 40px; padding: 0; }
     .location-bar { padding-top: 20px; }
     .score-number { font-size: 5.5rem; }
-    .panel-head, .lure, .lure-foot, .level-card, #outlookCard { padding-inline: 16px; }
+    .panel-head, .lure, .lure-foot, .lure-pattern, .level-card, #outlookCard { padding-inline: 16px; }
     .factor { padding-inline: 16px; grid-template-areas: "label value" "note note" "foot foot"; }
     .factor-foot { justify-content: flex-start; padding-left: 25px; margin-top: 4px; }
     .meter { flex: 1; width: auto; }

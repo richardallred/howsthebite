@@ -5,21 +5,25 @@
 // switching locations quickly can never show data for the wrong place.
 
 import {
-    fetchBeachForecast, fetchCoastWaterTemp, fetchSeaSurfaceTemp, fetchTides, fetchWaveForecast, nearestCoastStations, waveHeightAt,
+    fetchBeachForecast, fetchCoastWaterTemp, fetchCoastWaterTempHistory, fetchSeaSurfaceTemp, fetchTides, fetchWaveForecast,
+    nearestCoastStations, waveHeightAt,
 } from './api/coast-api.js';
 import { fetchSpeciesCounts, speciesRegionKey } from './api/species-api.js';
-import { fetchFlowNormals, fetchLevelHistory, fetchWaterHistory, findStations } from './api/usgs-api.js';
+import {
+    fetchDailyWaterTemps, fetchFlowNormals, fetchLevelHistory, fetchTempNormals, fetchWaterHistory, findStations,
+} from './api/usgs-api.js';
 import { HttpError, isAbort } from './api/http.js';
 import { OutsideCoverageError, fetchAlerts, fetchWeather, reverseGeocode, searchPlaces } from './api/weather-api.js';
 import { APP } from './config.js';
 import { summariseAlerts } from './core/alerts.js';
-import { colourAdvice, lureConditions, recommendLures } from './core/lures.js';
+import { colourAdvice, lureConditions, lurePatterns, recommendLures } from './core/lures.js';
 import { moonInfo } from './core/moon.js';
 import { SPECIES_GROUPS, bestWindows, estimateWaterTemp, scoreConditions, scoreSeries } from './core/scoring.js';
 import { DEFAULT_LABELS, chooseSpecies, regionalSpecies, saltSpeciesOptions, speciesOptions } from './core/species.js';
 import { sunTimes } from './core/sun.js';
 import { upcomingTides } from './core/tides.js';
-import { changeOver, classifyTrend, lastHours } from './core/trend.js';
+import { changeOver, classifyTrend, frontState, lastHours } from './core/trend.js';
+import { dailyMeans, describeWaterTrend, summariseWaterTrend } from './core/water-trend.js';
 import { debounce, distanceMiles, isNum, roundCoord, timeAgo } from './core/util.js';
 import { compassPoint } from './core/sky.js';
 import { locationKey, storage } from './storage.js';
@@ -46,12 +50,14 @@ const state = {
     coast: null, // tides, coastal water temperature and surf for the current location; null inland or not yet known
     alerts: [],
     flowNormals: null, // { stationId, monthDay, percentiles } for the river gauge in use
+    waterTrend: null, // { key, source, daily, normal, at, failed }: the last few weeks of water temperature behind the lure picks
     loading: false,
     loadFailed: false,
 };
 
 let loadController = null;
 let historyController = null;
+let trendController = null;
 let charts = null;
 let outlookChart = null;
 let stationMap = null;
@@ -253,6 +259,17 @@ function deriveOutlook(inputs, clock) {
     return { samples, days, nights, end };
 }
 
+// A change in level that matters to where fish sit: a lake up or down by 0.15 ft or more in a day
+// (new cover flooded, or the bank left dry), or a river rising or falling fast.
+const LAKE_LEVEL_SHIFT_FT = 0.15;
+
+function levelShift(level) {
+    const trend = level?.trend;
+    if (!trend || !['rising', 'falling'].includes(trend.direction)) return null;
+    const big = level.station.kind === 'lake' ? Math.abs(trend.delta) >= LAKE_LEVEL_SHIFT_FT : trend.rapid;
+    return big ? trend.direction : null;
+}
+
 function derive() {
     const { weather } = state;
     if (!weather) return null;
@@ -308,6 +325,16 @@ function derive() {
 
     const factor = (id) => result.factors.find((entry) => entry.id === id);
     const tide = factor('tide')?.state ?? null;
+
+    const level = gauge && {
+        station: gauge,
+        trend: classifyTrend(
+            changeOver(state.levelHistory, APP.TEMP_TREND_HOURS),
+            gauge.kind === 'lake' ? { steadyBelow: 0.03, rapidAbove: 0.25 } : { steadyBelow: 0.05, rapidAbove: 0.5 },
+        ),
+    };
+
+    const waterTrend = waterMeasured ? currentWaterTrend(clock) : null;
     const lureInput = lureConditions({
         mode,
         waterTempF,
@@ -318,19 +345,19 @@ function derive() {
         flowPercentile: factor('flow')?.percentile ?? null,
         tide: tide && (tide.slack ? 'slack' : tide.direction),
         waveFt: surf?.heightFt ?? null,
+        date: new Date(clock),
+        trend: waterTrend,
+        front: frontState(pressure, air),
+        level: levelShift(level),
     });
+    const patterns = lurePatterns(species.targets, lureInput);
     const lures = {
         species,
         picks: recommendLures(species.targets, lureInput, { limit: 4 }),
-        colour: colourAdvice(lureInput),
-    };
-
-    const level = gauge && {
-        station: gauge,
-        trend: classifyTrend(
-            changeOver(state.levelHistory, APP.TEMP_TREND_HOURS),
-            gauge.kind === 'lake' ? { steadyBelow: 0.03, rapidAbove: 0.25 } : { steadyBelow: 0.05, rapidAbove: 0.5 },
-        ),
+        colour: colourAdvice(lureInput, patterns[0]?.season?.forage ?? null),
+        patterns,
+        trend: waterTrend,
+        trendLoading: waterMeasured && !waterTrend && Boolean(trendSource()) && state.waterTrend?.key !== trendSource()?.key,
     };
 
     return { result, windows, outlook, lures, alerts, clock, pressure, air, station, waterTempF, level, mode, salt, seaTemp, surf, tide };
@@ -616,10 +643,87 @@ function shopUrl(query, tag) {
     return url.href;
 }
 
+const capitalise = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+
+const TREND_SOURCES = {
+    sensor: 'Daily means from the USGS sensor',
+    'tide-station': 'Hourly readings from the NOAA tide station',
+    satellite: 'Satellite sea-surface temperature, about a day behind',
+};
+
+/** The last few weeks of water temperature as a small line, with the first and last values under it. */
+function sparkline(daily) {
+    const width = 220;
+    const height = 44;
+    const pad = 3;
+    const values = daily.map((entry) => entry.v);
+    let min = Math.min(...values);
+    let max = Math.max(...values);
+    if (max - min < 4) [min, max] = [(min + max) / 2 - 2, (min + max) / 2 + 2]; // a flat month should look flat
+    const start = Date.parse(daily[0].day);
+    const span = Math.max(1, Date.parse(daily[daily.length - 1].day) - start);
+    const x = (entry) => pad + ((Date.parse(entry.day) - start) / span) * (width - 2 * pad);
+    const y = (value) => pad + (1 - (value - min) / (max - min)) * (height - 2 * pad);
+    const first = daily[0];
+    const last = daily[daily.length - 1];
+    const days = Math.round(span / (24 * 60 * 60 * 1000));
+    return [
+        svg('svg', {
+            class: 'spark', viewBox: `0 0 ${width} ${height}`, role: 'img',
+            'aria-label': `Daily water temperature over the last ${days} days, from ${first.v.toFixed(1)}°F to ${last.v.toFixed(1)}°F`,
+        },
+        svg('polyline', { class: 'spark-line', points: daily.map((entry) => `${x(entry).toFixed(1)},${y(entry.v).toFixed(1)}`).join(' ') }),
+        svg('circle', { class: 'spark-dot', cx: x(last).toFixed(1), cy: y(last.v).toFixed(1), r: 3 })),
+        el('p', { class: 'spark-ends', 'aria-hidden': 'true' },
+            el('span', null, `${first.v.toFixed(1)}°F`), el('span', null, `${last.v.toFixed(1)}°F`)),
+    ];
+}
+
+function trendPanel(lures, derived) {
+    const { trend, trendLoading } = lures;
+    if (trend) {
+        return el('div', { class: 'lure-trend' },
+            el('p', { class: 'lure-trend-head' }, `Water, last ${trend.days} days`),
+            sparkline(trend.daily),
+            el('ul', { class: 'lure-trend-facts' }, describeWaterTrend(trend).map((phrase) => el('li', null, phrase))),
+            el('p', { class: 'lure-trend-source' }, TREND_SOURCES[trend.source]));
+    }
+    let text = 'No temperature history from this source, so the season is judged from the date and today\'s reading.';
+    if (trendLoading) text = 'Loading the last few weeks of water temperature…';
+    else if (!(derived.station || derived.seaTemp)) text = 'No sensor nearby, so the season is judged from the date and an estimated water temperature.';
+    return el('div', { class: 'lure-trend' },
+        el('p', { class: 'lure-trend-head' }, 'Water trend'),
+        el('p', { class: 'lure-trend-source' }, text));
+}
+
+/** Where the leading fish is in its year, what has changed lately, and the water temperature behind it. */
+function renderLurePattern(derived) {
+    const box = $('lurePattern');
+    const patterns = derived?.lures.patterns ?? [];
+    const lead = patterns.find((entry) => entry.season);
+    if (!lead) {
+        box.hidden = true;
+        box.replaceChildren();
+        return;
+    }
+    const others = patterns.filter((entry) => entry !== lead && entry.season);
+    box.hidden = false;
+    box.replaceChildren(
+        el('div', { class: 'lure-season' },
+            el('p', { class: 'lure-kicker' }, `${capitalise(lead.target)} · `, el('strong', null, lead.season.label)),
+            el('p', { class: 'lure-pattern-text' }, `${lead.season.pattern}.`),
+            lead.situations.map((text) => el('p', { class: 'lure-situation' }, `${text}.`)),
+            others.length > 0 && el('p', { class: 'lure-also' },
+                others.map((entry) => `${capitalise(entry.target)}: ${entry.season.label.toLowerCase()}`).join(' · '))),
+        trendPanel(derived.lures, derived),
+    );
+}
+
 function renderLures(derived) {
     const list = $('lureList');
     const tag = affiliateTag();
     $('affiliateDisclosure').hidden = !tag;
+    renderLurePattern(derived);
     if (!derived) {
         list.replaceChildren();
         setText('lureSummary', state.loadFailed ? 'Suggestions need the current conditions.' : 'Suggestions will appear with the conditions.');
@@ -629,14 +733,15 @@ function renderLures(derived) {
     const { picks, colour, species } = derived.lures;
     const fish = species.id === 'any' ? 'the fish found around here' : species.label.toLowerCase();
     setText('lureSummary', picks.length
-        ? `Picked for ${fish} in the ${derived.salt ? 'water temperature, light, tide and wind' : 'water temperature, light, wind and clarity'} right now.`
+        ? `Picked for ${fish} from where they are in their year (the date, the water temperature and which way it has been heading), what has changed lately (a cold snap, a front, rising or falling water), and the ${derived.salt ? 'light, tide and wind' : 'light, wind and clarity'} right now.`
         : `There are no suggestions yet for ${fish}.`);
     list.replaceChildren(...picks.map((pick) => el('li', { class: 'lure' },
-        el('p', { class: 'lure-target' }, `For ${pick.target}`),
+        el('p', { class: 'lure-target' }, `For ${pick.target}`, pick.season && el('span', { class: 'lure-season-tag' }, ` · ${pick.season}`)),
         el('div', { class: 'lure-name' },
             el('h3', null, pick.name),
             tip('How to fish it', el('span', { class: 'lure-how' }, pick.how))),
         el('p', { class: 'lure-why' }, `${pick.why}.`),
+        pick.note && el('p', { class: 'lure-adjust' }, `${pick.note}.`),
         pick.query && el('a', {
             class: 'lure-shop',
             href: shopUrl(pick.query, tag),
@@ -998,6 +1103,91 @@ async function loadFlowNormals(gauge, signal) {
     }
 }
 
+/**
+ * Where the last few weeks of water temperature come from for what is on screen: the
+ * selected USGS sensor's daily means (and its normals for the date), the tide station
+ * whose thermometer gives the reading, or the satellite cell off the coast. Null when
+ * the water temperature is an estimate from air temperature, which has no useful history.
+ * `key` changes with the source and the date, so a day-old trend is fetched again.
+ */
+function trendSource() {
+    if (!state.location) return null;
+    const { lat, lon } = state.location;
+    const today = monthDay();
+    const days = APP.WATER_TREND_DAYS;
+    if (modeChoice().mode === 'fresh') {
+        const station = selectedStation();
+        if (!station) return null;
+        return {
+            key: `usgs:${station.id}:${today}`,
+            source: 'sensor',
+            load: async (signal) => {
+                const [daily, normal] = await Promise.all([
+                    fetchDailyWaterTemps(station, { signal, days }),
+                    fetchTempNormals(station.id, today, { signal }).catch((error) => {
+                        if (isAbort(error)) throw error;
+                        return null; // normals are a bonus
+                    }),
+                ]);
+                return { daily, normal };
+            },
+        };
+    }
+    const reading = state.coast?.waterTemp;
+    if (reading?.kind === 'station') {
+        return {
+            key: `coops:${reading.stationId}:${today}`,
+            source: 'tide-station',
+            load: async (signal) => ({ daily: dailyMeans(await fetchCoastWaterTempHistory(reading.stationId, { signal, days })), normal: null }),
+        };
+    }
+    if (!state.coast?.tidal) return null;
+    return {
+        key: `sst:${lat},${lon}:${today}`,
+        source: 'satellite',
+        load: async (signal) => ({ daily: (await fetchSeaSurfaceTemp(lat, lon, { signal, days }))?.daily ?? [], normal: null }),
+    };
+}
+
+/** The water-temperature trend for what is on screen, once it has loaded. */
+function currentWaterTrend(clock) {
+    const known = state.waterTrend;
+    if (!known?.daily?.length || known.key !== trendSource()?.key) return null;
+    return summariseWaterTrend(known.daily, { source: known.source, normal: known.normal, now: clock });
+}
+
+/**
+ * Load the water-temperature trend behind the lure picks. It is a refinement, so it runs after
+ * the page has drawn and redraws when it lands; a failure is remembered for a while rather
+ * than retried on every redraw.
+ */
+async function loadWaterTrend() {
+    if (!state.weather) return;
+    const wanted = trendSource();
+    const known = state.waterTrend;
+    if (!wanted) return;
+    if (known?.key === wanted.key && !(known.failed && Date.now() - known.at > APP.STALE_AFTER_MS)) return;
+    if (trendController?.key === wanted.key) return; // already on its way
+
+    trendController?.abort();
+    const controller = new AbortController();
+    controller.key = wanted.key;
+    trendController = controller;
+    let result;
+    try {
+        result = { ...(await wanted.load(controller.signal)), failed: false };
+    } catch (error) {
+        if (isAbort(error)) return;
+        result = { daily: [], normal: null, failed: true };
+    } finally {
+        if (trendController === controller) trendController = null;
+    }
+    if (controller.signal.aborted || trendSource()?.key !== wanted.key) return;
+    state.waterTrend = { key: wanted.key, source: wanted.source, at: Date.now(), ...result };
+    render();
+    saveSnapshot();
+}
+
 const COAST_TEMP_MAX_MI = 30;
 
 /**
@@ -1024,7 +1214,14 @@ async function loadCoast(location, signal) {
     const temperatureFrom = async () => {
         for (const station of stations.temp) {
             const reading = await fetchCoastWaterTemp(station.id, { signal });
-            if (reading) return { ...reading, source: `NOAA station ${prettyStation(station.name)}, ${station.distanceMi.toFixed(1)} mi away, read ${timeAgo(reading.time)}` };
+            if (reading) {
+                return {
+                    ...reading,
+                    kind: 'station',
+                    stationId: station.id,
+                    source: `NOAA station ${prettyStation(station.name)}, ${station.distanceMi.toFixed(1)} mi away, read ${timeAgo(reading.time)}`,
+                };
+            }
         }
         return null;
     };
@@ -1035,10 +1232,10 @@ async function loadCoast(location, signal) {
     if (signal.aborted) throw new DOMException('Superseded', 'AbortError');
 
     let waterTemp = measured;
-    if (!waterTemp && isNum(beach?.waterTempF)) waterTemp = { tempF: beach.waterTempF, time: Date.now(), source: `NWS forecast for ${beachName(beach)}` };
+    if (!waterTemp && isNum(beach?.waterTempF)) waterTemp = { tempF: beach.waterTempF, time: Date.now(), kind: 'beach', source: `NWS forecast for ${beachName(beach)}` };
     if (!waterTemp) {
         const satellite = await quiet(fetchSeaSurfaceTemp(lat, lon, { signal }));
-        if (satellite) waterTemp = { ...satellite, source: `satellite estimate from ${timeAgo(satellite.time)}` };
+        if (satellite) waterTemp = { ...satellite, kind: 'satellite', source: `satellite estimate from ${timeAgo(satellite.time)}` };
     }
 
     const surf = beach === undefined ? Boolean(hint?.surf) : beach !== null;
@@ -1152,6 +1349,7 @@ async function load() {
     render();
     saveSnapshot();
     loadWaves();
+    loadWaterTrend();
 }
 
 function saveSnapshot() {
@@ -1164,6 +1362,7 @@ function saveSnapshot() {
         waterHistory: state.waterHistory,
         levelHistory: state.levelHistory,
         flowNormals: state.flowNormals,
+        waterTrend: state.waterTrend?.failed ? null : state.waterTrend,
         alerts: state.alerts,
         coast: state.coast,
     });
@@ -1177,6 +1376,7 @@ function restoreSnapshot() {
     state.waterHistory = Array.isArray(snapshot.waterHistory) ? snapshot.waterHistory : [];
     state.levelHistory = Array.isArray(snapshot.levelHistory) ? snapshot.levelHistory : [];
     state.flowNormals = snapshot.flowNormals ?? null;
+    state.waterTrend = Array.isArray(snapshot.waterTrend?.daily) ? snapshot.waterTrend : null;
     state.alerts = Array.isArray(snapshot.alerts) ? snapshot.alerts : [];
     state.coast = snapshot.coast ?? null;
     state.selectedStationId = pickStation(state.location)?.id ?? null;
@@ -1204,6 +1404,7 @@ function setLocation(place) {
     state.waterHistory = [];
     state.levelHistory = [];
     state.flowNormals = null;
+    state.waterTrend = null;
     state.alerts = [];
     state.coast = null;
     state.loadFailed = false;
@@ -1234,6 +1435,7 @@ async function selectStation(stationId, { remember = true, force = false } = {})
     }
     render();
     saveSnapshot();
+    loadWaterTrend();
 }
 
 function setSpeciesGroup(group) {
@@ -1256,6 +1458,7 @@ function setMode(mode) {
     storage.setMode(mode);
     render();
     loadWaves();
+    loadWaterTrend();
 }
 
 function setWaterFilter(filter) {

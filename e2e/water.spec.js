@@ -133,13 +133,14 @@ test.describe('USGS caching proxy', () => {
         await expect(app.factor('Water temperature').locator('.factor-value')).toHaveText('68.0°F');
         await expect(page.locator('#levelStats')).toContainText('3.42 ft');
         await expect(page.locator('#waterChart .chart-line')).toHaveCount(1);
+        await expect(page.locator('.lure-trend-head')).toHaveText('Water, last 30 days'); // the month behind the lure picks
 
         expect(api.count('usgs')).toBe(0);
         const proxied = api.calls.filter((call) => call.service === 'proxy').map((call) => new URL(call.url));
         expect(proxied.map((url) => url.pathname).sort()).toEqual([
-            '/api/usgs/continuous/items', '/api/usgs/continuous/items',
+            '/api/usgs/continuous/items', '/api/usgs/continuous/items', '/api/usgs/daily/items',
             '/api/usgs/latest-continuous/items', '/api/usgs/monitoring-locations/items',
-            '/api/usgs/statistics/observationNormals',
+            '/api/usgs/statistics/observationNormals', '/api/usgs/statistics/observationNormals', // flow, then water temperature
         ]);
         await expect(app.factor('River flow')).toContainText('Normal for the date');
         for (const url of proxied) expect(url.searchParams.has('api_key')).toBe(false);

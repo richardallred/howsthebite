@@ -268,3 +268,74 @@ export async function fetchFlowNormals(stationId, monthDay, { signal } = {}) {
     }
     return null;
 }
+
+const DAILY_MEAN = '00003';
+
+/**
+ * Daily mean water temperature (°F) at a station over the last `days`, oldest first:
+ * [{ day: 'YYYY-MM-DD', v }]. USGS computes these from the station's own sensor, usually
+ * through yesterday. A station with sensors at more than one depth has more than one daily
+ * series; the one with the most days is used.
+ */
+export async function fetchDailyWaterTemps(station, { signal, days = APP.WATER_TREND_DAYS } = {}) {
+    const data = await usgsJson('daily', {
+        monitoring_location_id: station.id,
+        parameter_code: '00010',
+        statistic_id: DAILY_MEAN,
+        time: `P${days}D`,
+        properties: 'time_series_id,time,value,unit_of_measure',
+        skipGeometry: true,
+        limit: 500,
+    }, { signal });
+
+    const bySeries = new Map();
+    for (const feature of data.features ?? []) {
+        const props = feature.properties ?? {};
+        const value = Number.parseFloat(props.value);
+        const day = String(props.time ?? '').slice(0, 10);
+        if (!plausible('temp', value) || !/^\d{4}-\d{2}-\d{2}$/.test(day)) continue;
+        const key = props.time_series_id ?? '';
+        if (!bySeries.has(key)) bySeries.set(key, new Map());
+        bySeries.get(key).set(day, toFahrenheit(value, props.unit_of_measure));
+    }
+    const longest = [...bySeries.values()].sort((a, b) => b.size - a.size)[0];
+    return longest ? [...longest].map(([day, v]) => ({ day, v })).sort((a, b) => (a.day < b.day ? -1 : 1)) : [];
+}
+
+const MIN_YEARS_OF_TEMPERATURE = 5; // temperature records are much younger than flow records
+
+/**
+ * What a station's daily mean water temperature normally is on one day of the year:
+ * { p25, p50, p75 } in °F, or null when the station has too short a record.
+ *
+ * @param {string} stationId  e.g. 'USGS-01646500'
+ * @param {string} monthDay   'MM-DD'
+ */
+export async function fetchTempNormals(stationId, monthDay, { signal } = {}) {
+    const data = await usgsRequest('statistics/observationNormals', `${API.USGS_STATS}/observationNormals`, {
+        monitoring_location_id: stationId,
+        parameter_code: '00010',
+        computation_type: 'percentile',
+        start_date: monthDay,
+        end_date: monthDay,
+    }, { signal });
+
+    let best = null;
+    for (const feature of data.features ?? []) {
+        for (const series of feature.properties?.data ?? []) {
+            if (series.parameter_code !== '00010' || series.parent_statistic_id !== DAILY_MEAN) continue;
+            for (const entry of series.values ?? []) {
+                if (entry.computation !== 'percentile' || !Array.isArray(entry.values) || !Array.isArray(entry.percentiles)) continue;
+                const years = Number(entry.sample_count);
+                if (!(years >= MIN_YEARS_OF_TEMPERATURE) || (best && best.years >= years)) continue;
+                const at = (percentile) => {
+                    const value = Number.parseFloat(entry.values[entry.percentiles.map(String).indexOf(percentile)]);
+                    return plausible('temp', value) ? toFahrenheit(value, series.unit_of_measure) : null;
+                };
+                const normal = { p25: at('25'), p50: at('50'), p75: at('75') };
+                if (isNum(normal.p25) && isNum(normal.p50) && isNum(normal.p75)) best = { years, normal };
+            }
+        }
+    }
+    return best?.normal ?? null;
+}

@@ -43,9 +43,9 @@ const call = (path, query = '', env = { USGS_API_KEY: 'secret-key' }) => onReque
     params: { path: path.split('/') },
 });
 
-test('forwards only the three collections the app uses', async () => {
+test('forwards only the four collections the app uses', async () => {
     assert.equal((await call('latest-continuous/items', '?bbox=1,2,3,4')).status, 200);
-    assert.equal((await call('daily/items')).status, 404);
+    assert.equal((await call('field-measurements/items')).status, 404);
     assert.equal((await call('latest-continuous')).status, 404);
     assert.equal((await call('latest-continuous/items/extra')).status, 404);
     assert.equal((await call('../../secrets/items')).status, 404);
@@ -61,6 +61,16 @@ test('whitelists and normalises query parameters, and never forwards a client ke
         'https://api.waterdata.usgs.gov/ogcapi/v1/collections/continuous/items?f=json&limit=5000&monitoring_location_id=USGS-1&time=PT48H');
     assert.equal(upstreamUrl('https://x.test/a?limit=abc', ['continuous', 'items']), null);
     assert.equal(upstreamUrl(`https://x.test/a?id=${'x'.repeat(3000)}`, ['monitoring-locations', 'items']), null);
+});
+
+test('forwards daily means with their statistic, cached for an hour', () => {
+    const { url, freshSeconds } = upstreamUrl(
+        'https://x.test/api/usgs/daily/items?monitoring_location_id=USGS-1&parameter_code=00010&statistic_id=00003&time=P30D&limit=500',
+        ['daily', 'items'],
+    );
+    assert.equal(url.href,
+        'https://api.waterdata.usgs.gov/ogcapi/v1/collections/daily/items?f=json&limit=500&monitoring_location_id=USGS-1&parameter_code=00010&statistic_id=00003&time=P30D');
+    assert.equal(freshSeconds, 60 * 60);
 });
 
 test('forwards the day-of-year flow statistics, for one station at a time, and caches them for a day', async () => {

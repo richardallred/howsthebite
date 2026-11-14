@@ -194,11 +194,12 @@
                         <span class="tip-text" role="tooltip" id="luresTip">
                             <span class="tip-para" id="lureSummary">Suggestions will appear with the conditions.</span>
                             <span class="tip-para" id="lureColour"></span>
-                            <span class="tip-para lure-note">Rules of thumb from fishery agencies and guides, not based on measured catch rates.</span>
+                            <span class="tip-para lure-note">Rules of thumb from fishery agencies and guides, not based on measured catch rates. Seasonal timing varies from one water to the next by a week or two.</span>
                         </span>
                     </span>
                 </div>
             </div>
+            <div class="lure-pattern" id="lurePattern" hidden></div>
             <ul class="lures" id="lureList"></ul>
             <p class="lure-disclosure" id="affiliateDisclosure" hidden>As an Amazon Associate I earn from qualifying purchases.</p>
         </section>
@@ -298,6 +299,7 @@
                         moving tide matters as much as the light, and shore anglers in a Mississippi survey caught about as
                         well at night as by day. The forecast above works out the best times for today and the next two
                         days wherever you are.</p>
+                    <p class="faq-sources">Sources: <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC8483380/" target="_blank" rel="noopener">Shaw, Renik &amp; Sass 2021</a> · <a href="https://gsmfc.org/publications/GSMFC%20Number%20113.pdf" target="_blank" rel="noopener">Mississippi shore creel survey</a></p>
                 </details>
                 <details>
                     <summary>What water temperature is best for fishing?</summary>
@@ -306,6 +308,7 @@
                         reported catch rates 77% lower above 73°F than below 66°F, and trout caught in warm water are more
                         likely to die after release. In salt water: snook and tarpon 74–86°F, redfish and seatrout
                         65–82°F, striped bass and bluefish 55–70°F. Water temperature carries the most weight in the score.</p>
+                    <p class="faq-sources">Sources: <a href="https://idfg.idaho.gov/blog/2022/06/some-perspective-trout-fishing-during-low-water-and-high-temperatures" target="_blank" rel="noopener">Idaho Fish and Game</a> · <a href="https://archive.epa.gov/water/archive/web/html/vms53.html" target="_blank" rel="noopener">EPA temperature criteria</a> · <a href="https://www.saltwatersportsman.com/techniques/rigs-and-tips/bob-stearns-ultimate-guide-fish-temperature-preferences" target="_blank" rel="noopener">Salt Water Sportsman temperature guide</a></p>
                 </details>
                 <details>
                     <summary>Does barometric pressure affect fishing?</summary>
@@ -313,6 +316,7 @@
                         in Wisconsin, largemouth bass in Michigan and Illinois), pressure was not a significant predictor of
                         catch. The slow bite after a cold front is widely reported but has barely been measured, so the
                         score gives the pressure trend 5 points out of 100 and the reading itself none.</p>
+                    <p class="faq-sources">Sources: <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC8483380/" target="_blank" rel="noopener">Shaw, Renik &amp; Sass 2021</a> · <a href="https://d.lib.msu.edu/etd/8317/FULL_TEXT/view" target="_blank" rel="noopener">Mell 1962 (Michigan bass)</a> · <a href="https://thekeep.eiu.edu/theses/3035" target="_blank" rel="noopener">Burkett 1981 (Illinois bass)</a></p>
                 </details>
                 <details>
                     <summary>Does the moon affect fishing?</summary>
@@ -320,25 +324,29 @@
                         trout study found none. Fishing while the moon was overhead or underfoot (the "major periods" of
                         solunar tables) did raise trip success in the Escanaba Lake walleye data. The moon is worth
                         8 points of the freshwater score.</p>
+                    <p class="faq-sources">Sources: <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC4037224" target="_blank" rel="noopener">Vinson &amp; Angradi 2014</a> · <a href="https://link.springer.com/article/10.1007/s42452-023-05379-8" target="_blank" rel="noopener">Quigley et al. 2023 (trout)</a> · <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC8483380/" target="_blank" rel="noopener">Shaw, Renik &amp; Sass 2021</a></p>
                 </details>
                 <details>
                     <summary>Is wind good or bad for fishing?</summary>
-                    <p>Studies of walleye and bass found no effect on catch, while muskie catches fell about 40% at 20 mph
-                        compared with calm. A light breeze of 5–12 mph scores best here; points fall away above 15 mph and
+                    <p>Wind speed made no difference to walleye catches on Escanaba Lake, and wind direction and waves made
+                        none to bass in a Michigan study, while muskie catches fell about 40% at 20 mph compared with calm. A light breeze of 5–12 mph scores best here; points fall away above 15 mph and
                         are gone at 30, mostly because of boat control, casting and safety.</p>
+                    <p class="faq-sources">Sources: <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC8483380/" target="_blank" rel="noopener">Shaw, Renik &amp; Sass 2021</a> · <a href="https://d.lib.msu.edu/etd/8317/FULL_TEXT/view" target="_blank" rel="noopener">Mell 1962 (Michigan bass)</a></p>
                 </details>
                 <details>
                     <summary>Is fishing good in the rain?</summary>
-                    <p>Rain itself was not a significant factor in the studies that tested it, and the cloud that comes with
+                    <p>Rain itself was not a significant factor for walleye or muskie in the Escanaba Lake study, and the cloud that comes with
                         it cuts the light, which helps. Lightning is another matter: thunderstorms, or a severe-weather
                         warning, hold the score at 15 or below.</p>
+                    <p class="faq-sources">Sources: <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC8483380/" target="_blank" rel="noopener">Shaw, Renik &amp; Sass 2021</a></p>
                 </details>
                 <details>
                     <summary>Is an incoming or outgoing tide better for fishing?</summary>
-                    <p>Moving water matters more than its direction. Tagged flounder, redfish and striped bass move and feed
-                        with the tide, but which stage is best varies by species and place. The inshore score gives full
+                    <p>Moving water matters more than its direction. Tagged summer flounder and red drum move with the tide,
+                        but which stage is best varies by species and place. The inshore score gives full
                         marks at mid-tide and 40% at slack water, and the tides table shows the next highs and lows from
                         NOAA.</p>
+                    <p class="faq-sources">Sources: <a href="https://bioone.org/journals/marine-and-coastal-fisheries/volume-6/issue-6/19425120.2014.893468/Small-Scale-Vertical-Movements-of-Summer-Flounder-Relative-to-Diurnal/10.1080/19425120.2014.893468.full" target="_blank" rel="noopener">summer flounder tagging</a> · <a href="https://ui.adsabs.harvard.edu/abs/2007FisME..14..183D/abstract" target="_blank" rel="noopener">Dresser &amp; Kneib 2007 (red drum)</a></p>
                 </details>
                 <details>
                     <summary>How does river flow affect fishing?</summary>
@@ -346,13 +354,15 @@
                         river discharge rose, while whether the river was rising or falling over three days made no
                         difference. The score compares the nearest USGS gauge with its own record for the date: normal flow
                         scores best and a flood scores almost nothing.</p>
+                    <p class="faq-sources">Sources: <a href="https://dnr.wisconsin.gov/sites/default/files/topic/Fishing/Pubs_2014GuidetotheFuture.pdf" target="_blank" rel="noopener">Wisconsin DNR guide reports</a></p>
                 </details>
                 <details>
                     <summary>How accurate is the fishing score?</summary>
-                    <p>It rates conditions, not your odds. Wherever catch rates have been measured, skill, bait and how many
-                        fish are in the water outweighed every weather factor, so read the score as "is this a good time to
+                    <p>It rates conditions, not your odds. Where catch rates have been measured, the angler's skill and bait
+                        outweighed every weather factor, so read the score as "is this a good time to
                         be out". It is built from public data: National Weather Service observations, forecasts and alerts,
                         USGS water gauges, NOAA tide predictions and satellite sea temperatures.</p>
+                    <p class="faq-sources">Sources: <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC8483380/" target="_blank" rel="noopener">Shaw, Renik &amp; Sass 2021</a> · <a href="https://dnr.wisconsin.gov/sites/default/files/topic/Research/live_vs_artificial_bait.pdf" target="_blank" rel="noopener">Wisconsin DNR on live and artificial bait</a></p>
                 </details>
             </div>
         </section>

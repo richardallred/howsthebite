@@ -190,17 +190,63 @@ test.describe('surf', () => {
 });
 
 test.describe('lure suggestions', () => {
+    test('the season and the last month of water temperature are shown above the picks', async ({ page, app }) => {
+        await app.open();
+        const pattern = page.locator('#lurePattern');
+        await expect(pattern.locator('.lure-kicker')).toHaveText('Bass · Spawn');
+        await expect(pattern.locator('.lure-pattern-text')).toContainText('Bass are on beds');
+        await expect(pattern.locator('.lure-also')).toHaveText('Walleye: summer · Trout: summer');
+        await expect(pattern.locator('.lure-trend-head')).toHaveText('Water, last 30 days');
+        await expect(pattern.locator('.spark')).toHaveAttribute('aria-label', /from 68\.0°F to 68\.0°F/);
+        await expect(pattern.locator('.lure-trend-facts')).toHaveText('Steady over 14 days');
+        await expect(pattern.locator('.lure-trend-source')).toHaveText('Daily means from the USGS sensor');
+        // The default barometer is falling 0.16 inHg in 12 hours.
+        await expect(pattern.locator('.lure-situation')).toHaveText('The barometer is falling ahead of a front, which often brings a burst of feeding.');
+    });
+
+    test('a cold snap, against a warmer normal, slows the picks down and says why', async ({ page, api, app }) => {
+        api.stations = api.stations.map((station) => (station.id === 'USGS-05500001'
+            ? { ...station, readings: { ...station.readings, '00010': 17 }, dailyFromC: 21, dailyLastThreeC: 17, normalC: 21 }
+            : station));
+        await app.open();
+        const pattern = page.locator('#lurePattern');
+        await expect(pattern.locator('.lure-trend-facts li')).toHaveText([
+            'Down 7.2°F in 14 days', 'Cold snap: down 7.2°F in 3 days', '7.2°F colder than usual for the date',
+        ]);
+        await expect(pattern.locator('.lure-situation').first()).toContainText('The water has dropped fast');
+        await expect(page.locator('.lure-adjust')).toHaveText(['A slower presentation suits the sudden chill.']); // said once, not on every pick
+    });
+
+    test('salt water reads the month from the tide station', async ({ page, api, app }) => {
+        api.coast = { waterTempFromF: 84 };
+        await openGalveston(app, 'Inshore');
+        const pattern = page.locator('#lurePattern');
+        await expect(pattern.locator('.lure-kicker')).toHaveText(/^Redfish · /);
+        await expect(pattern.locator('.lure-trend-source')).toHaveText('Hourly readings from the NOAA tide station');
+        await expect(pattern.locator('.lure-trend-facts li').first()).toHaveText(/^Down \d\.\d°F in 14 days$/);
+    });
+
+    test('with no sensor, the season comes from the date and the estimate', async ({ page, api, app }) => {
+        api.stations = [];
+        await app.open();
+        await expect(page.locator('#lurePattern .lure-kicker')).toHaveText(/^Bass · /);
+        await expect(page.locator('#lurePattern .lure-trend-source')).toHaveText(/^No sensor nearby/);
+        expect(api.count('usgs', '/daily/')).toBe(0);
+    });
+
     test('fresh water: picks for the local fish and the conditions, each with a plain Amazon search link', async ({ page, app }) => {
         await app.open();
-        await expect(page.locator('#lureSummary')).toHaveText('Picked for the fish found around here in the water temperature, light, wind and clarity right now.');
-        // 68°F, bright sun, a light breeze. "All species" takes the leading fish of each group: two picks for bass, one each for walleye and trout.
-        await expect(page.locator('.lure-target')).toHaveText(['For bass', 'For bass', 'For walleye', 'For trout']);
-        await expect(page.locator('.lure h3').first()).toHaveText('Plastic worm or jig');
+        await expect(page.locator('#lureSummary')).toContainText('Picked for the fish found around here from where they are in their year');
+        await expect(page.locator('#lureSummary')).toContainText('the light, wind and clarity right now.');
+        // Mid-June, 68°F and warming, bright sun, a light breeze: bass are on their beds. "All species" takes the
+        // leading fish of each group: two picks for bass, one each for walleye and trout.
+        await expect(page.locator('.lure-target')).toHaveText(['For bass · Spawn', 'For bass · Spawn', 'For walleye · Summer', /^For trout/]);
+        await expect(page.locator('.lure h3').first()).toHaveText('Soft-plastic lizard or creature bait');
 
         // In a browser tab the links carry the Associates tag, and say so beside the link and on the page.
         const link = page.locator('.lure-shop').first();
         await expect(link).toHaveText('Find it on Amazon (paid link)');
-        await expect(link).toHaveAttribute('href', 'https://www.amazon.com/s?k=texas+rig+soft+plastic+worm&tag=howsthebite-20');
+        await expect(link).toHaveAttribute('href', 'https://www.amazon.com/s?k=soft+plastic+lizard+bass&tag=howsthebite-20');
         await expect(link).toHaveAttribute('rel', 'sponsored nofollow noopener');
         await expect(link).toHaveAttribute('target', '_blank');
         await expect(page.locator('#affiliateDisclosure')).toHaveText('As an Amazon Associate I earn from qualifying purchases.');
@@ -222,7 +268,7 @@ test.describe('lure suggestions', () => {
         await app.open();
         const link = page.locator('.lure-shop').first();
         await expect(link).toHaveText('Find it on Amazon');
-        await expect(link).toHaveAttribute('href', 'https://www.amazon.com/s?k=texas+rig+soft+plastic+worm');
+        await expect(link).toHaveAttribute('href', 'https://www.amazon.com/s?k=soft+plastic+lizard+bass');
         await expect(link).toHaveAttribute('rel', 'nofollow noopener');
         await expect(page.locator('#affiliateDisclosure')).toBeHidden();
     });
@@ -244,12 +290,13 @@ test.describe('lure suggestions', () => {
 
     test('salt water: suggestions follow the tide and the kind of fishing', async ({ page, app }) => {
         await openGalveston(app, 'Inshore');
-        await expect(page.locator('#lureSummary')).toContainText('redfish & seatrout in the water temperature, light, tide and wind');
-        await expect(page.locator('.lure-target')).toHaveText(['For redfish', 'For redfish', 'For speckled trout', 'For flounder']);
+        await expect(page.locator('#lureSummary')).toContainText('Picked for redfish & seatrout from where they are in their year');
+        await expect(page.locator('#lureSummary')).toContainText('the light, tide and wind right now.');
+        await expect(page.locator('.lure-target')).toHaveText([/^For redfish/, /^For redfish/, /^For speckled trout/, /^For flounder/]);
         await expect(page.locator('.lure h3').first()).toHaveText('Gold spoon, weedless in grass'); // the tide is running
 
         await page.getByRole('button', { name: 'Surf', exact: true }).click();
-        await expect(page.locator('.lure-target')).toHaveText(['For redfish', 'For redfish', 'For whiting', 'For whiting']);
+        await expect(page.locator('.lure-target')).toHaveText([/^For redfish/, /^For redfish/, /^For whiting/, /^For whiting/]);
         await expect(page.locator('.lure h3').first()).toHaveText('Cut mullet or crab on a fish-finder rig');
     });
 });

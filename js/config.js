@@ -50,6 +50,7 @@ export const APP = {
 
     // History / trends
     HISTORY_HOURS: 48,
+    WATER_TREND_DAYS: 30, // daily water temperatures behind the seasonal lure picks
     PRESSURE_TREND_HOURS: 3,
     TEMP_TREND_HOURS: 24,
     FORECAST_DAYS: 5,

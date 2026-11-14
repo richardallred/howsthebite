@@ -94,6 +94,21 @@ export async function fetchCoastWaterTemp(stationId, { signal, now = Date.now() 
     }
 }
 
+/**
+ * Hourly water temperature at a station over the last `days`, oldest first: [{ t, v }] in °F.
+ * CO-OPS serves up to a year of hourly values in one request; a month is about 35 KB.
+ */
+export async function fetchCoastWaterTempHistory(stationId, { signal, days = 30, now = Date.now() } = {}) {
+    const data = await coops({
+        product: 'water_temperature', interval: 'h', station: stationId,
+        begin_date: stamp(now - days * 24 * HOUR_MS), range: days * 24,
+    }, signal);
+    return (data.data ?? [])
+        .map((entry) => ({ t: gmt(entry.t), v: Number.parseFloat(entry.v) }))
+        .filter((point) => isNum(point.t) && isNum(point.v) && point.v >= 28 && point.v <= 100)
+        .sort((a, b) => a.t - b.t);
+}
+
 // ---------------------------------------------------------------------------
 // NWS beach forecast
 // ---------------------------------------------------------------------------
@@ -251,13 +266,23 @@ let sstProxyAvailable = typeof document === 'undefined' ? false : null;
 /**
  * Satellite sea-surface temperature near a point: { tempF, time }, or null when the
  * proxy is not deployed (plain static hosting) or has no reading for the spot.
+ * With `days`, the reading also carries `daily`: that cell's daily values, [{ day, v }] oldest first.
  */
-export async function fetchSeaSurfaceTemp(lat, lon, { signal } = {}) {
+export async function fetchSeaSurfaceTemp(lat, lon, { signal, days = null } = {}) {
     if (sstProxyAvailable === false) return null;
     try {
-        const data = await fetchJson(buildUrl(new URL(API.SST_PROXY, document.baseURI), { lat: lat.toFixed(2), lon: lon.toFixed(2) }), { signal, timeoutMs: TIMEOUT_MS + 4000 });
+        const params = { lat: lat.toFixed(2), lon: lon.toFixed(2) };
+        if (days) params.days = days;
+        const data = await fetchJson(buildUrl(new URL(API.SST_PROXY, document.baseURI), params), { signal, timeoutMs: TIMEOUT_MS + 4000 });
         sstProxyAvailable = true;
-        return isNum(data?.tempF) && isNum(data?.time) ? { tempF: data.tempF, time: data.time } : null;
+        if (!isNum(data?.tempF) || !isNum(data?.time)) return null;
+        const reading = { tempF: data.tempF, time: data.time };
+        if (days) {
+            reading.daily = (Array.isArray(data.series) ? data.series : [])
+                .filter((point) => isNum(point?.t) && isNum(point?.tempF))
+                .map((point) => ({ day: new Date(point.t).toISOString().slice(0, 10), v: point.tempF }));
+        }
+        return reading;
     } catch (error) {
         if (isAbort(error)) throw error;
         const notDeployed = (error instanceof HttpError && [404, 405].includes(error.status)) || error instanceof SyntaxError;

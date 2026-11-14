@@ -11,7 +11,7 @@
 //     served instead of an error. Every reading carries its own timestamp, and the app
 //     shows it, so stale data is never presented as fresh.
 //
-// It is not an open proxy: only the three collections, the one statistics endpoint and
+// It is not an open proxy: only the four collections, the one statistics endpoint and
 // the query parameters the app uses are forwarded, and only for GET.
 
 const UPSTREAM = 'https://api.waterdata.usgs.gov/ogcapi/v1/collections';
@@ -21,12 +21,13 @@ const STATISTICS_UPSTREAM = 'https://api.waterdata.usgs.gov/statistics/v0';
 export const COLLECTIONS = {
     'latest-continuous': 10 * 60,
     continuous: 10 * 60,
+    daily: 60 * 60, // daily means: a new value once a day
     'monitoring-locations': 24 * 60 * 60,
 };
 
 export const ALLOWED_PARAMS = [
     'bbox', 'id', 'limit', 'monitoring_location_id', 'parameter_code', 'properties',
-    'skipGeometry', 'time', 'time_series_id',
+    'skipGeometry', 'statistic_id', 'time', 'time_series_id',
 ];
 
 /** Statistics endpoint -> seconds fresh. Day-of-year normals come from decades of record. */

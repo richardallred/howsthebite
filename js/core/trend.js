@@ -63,3 +63,27 @@ export function mean(values) {
     const nums = values.filter(isNum);
     return nums.length ? nums.reduce((sum, v) => sum + v, 0) / nums.length : null;
 }
+
+/**
+ * Whether a weather front is on its way or has just gone through, from the barometer and
+ * the air temperature over the last two days:
+ *   'approaching'  pressure falling steadily (≥ 0.08 inHg in 12 hours)
+ *   'passed'       pressure up sharply over the last day, with the air colder than the day before
+ * Null when neither, or when the series are too short to tell.
+ *
+ * Anglers' advice on fronts (feed ahead of one, slow down after) is near-universal but has
+ * barely been measured, so the lure suggestions lean on it only lightly.
+ */
+export function frontState(pressure, air) {
+    const change12 = changeOver(pressure, 12);
+    const change24 = changeOver(pressure, 24);
+    if (isNum(change24) && change24 >= 0.12) {
+        const last = air?.[air.length - 1]?.t;
+        const recent = isNum(last) ? mean(air.filter((point) => point.t > last - 24 * HOUR_MS).map((point) => point.v)) : null;
+        const before = isNum(last) ? mean(air.filter((point) => point.t <= last - 24 * HOUR_MS && point.t > last - 48 * HOUR_MS).map((point) => point.v)) : null;
+        const cooled = isNum(recent) && isNum(before) && recent - before <= -5;
+        if (cooled || change24 >= 0.18) return 'passed';
+    }
+    if (isNum(change12) && change12 <= -0.08) return 'approaching';
+    return null;
+}

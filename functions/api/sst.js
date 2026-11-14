@@ -1,6 +1,8 @@
 // Cloudflare Pages Function: satellite sea-surface temperature near a point.
 //
 //   GET /api/sst?lat=29.21&lon=-81.02  ->  { "tempF": 77.6, "time": 1794474000000, "lat": 29.2, "lon": -80.96 }
+//   GET /api/sst?lat=29.21&lon=-81.02&days=30
+//       ->  the same, plus "series": [{ "t", "tempF" }, …], that cell's daily values for the last 30 days
 //
 // Used for salt water where no tide station nearby has a thermometer. The source is NASA
 // JPL's MUR analysis (1 km, daily, about a day and a half behind), served by NOAA
@@ -17,6 +19,7 @@ const BOX_DEGREES = 0.06;
 const FRESH_SECONDS = 6 * 60 * 60; // the product updates once a day
 const STALE_IF_ERROR_SECONDS = 3 * 24 * 60 * 60; // the sea changes slowly; an old reading beats none
 const UPSTREAM_TIMEOUT_MS = 10_000;
+const HISTORY_DAYS = 30; // any request for history gets the same 30 days, so they share a cache entry
 
 const json = (body, status = 200, headers = {}) => new Response(JSON.stringify(body), {
     status,
@@ -28,29 +31,42 @@ const snap = (value) => Math.round(value / GRID_DEGREES) * GRID_DEGREES;
 /** The upstream URL for a request, or null if the coordinates are not usable. */
 export function upstreamUrl(requestUrl) {
     const params = new URL(requestUrl).searchParams;
+    const history = params.has('days') && Number.parseInt(params.get('days'), 10) > 1;
     const lat = Number.parseFloat(params.get('lat'));
     const lon = Number.parseFloat(params.get('lon'));
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 75 || Math.abs(lon) > 180) return null;
     const [centreLat, centreLon] = [snap(lat), snap(lon)];
     const range = (centre) => `[(${(centre - BOX_DEGREES).toFixed(2)}):(${(centre + BOX_DEGREES).toFixed(2)})]`;
-    return { url: `${UPSTREAM}?analysed_sst[(last)]${range(centreLat)}${range(centreLon)}`, lat: centreLat, lon: centreLon };
+    const times = history ? `[last-${HISTORY_DAYS - 1}:1:last]` : '[(last)]';
+    return { url: `${UPSTREAM}?analysed_sst${times}${range(centreLat)}${range(centreLon)}`, lat: centreLat, lon: centreLon, history };
 }
 
-/** The water cell nearest the centre of an ERDDAP answer, as the app's reply; null if every cell is land. */
-export function nearestReading(table, lat, lon) {
+const toF = (celsius) => Number(((celsius * 9) / 5 + 32).toFixed(1));
+const usable = (celsius) => typeof celsius === 'number' && celsius >= -2 && celsius <= 40;
+
+/**
+ * The water cell nearest the centre of an ERDDAP answer, as the app's reply; null if every cell is land.
+ * The reading is the cell's latest value; with `history`, `series` lists all of its days, oldest first.
+ */
+export function nearestReading(table, lat, lon, { history = false } = {}) {
+    const rows = table?.rows ?? [];
+    const latest = rows.reduce((max, row) => (row[0] > max ? row[0] : max), '');
     let best = null;
-    for (const [time, cellLat, cellLon, celsius] of table?.rows ?? []) {
-        if (typeof celsius !== 'number' || celsius < -2 || celsius > 40) continue;
+    for (const [time, cellLat, cellLon, celsius] of rows) {
+        if (time !== latest || !usable(celsius)) continue;
         const distance = (cellLat - lat) ** 2 + ((cellLon - lon) * Math.cos((lat * Math.PI) / 180)) ** 2;
         if (!best || distance < best.distance) best = { distance, time, cellLat, cellLon, celsius };
     }
     if (!best) return null;
-    return {
-        tempF: Number(((best.celsius * 9) / 5 + 32).toFixed(1)),
-        time: Date.parse(best.time),
-        lat: best.cellLat,
-        lon: best.cellLon,
-    };
+    const reading = { tempF: toF(best.celsius), time: Date.parse(best.time), lat: best.cellLat, lon: best.cellLon };
+    if (history) {
+        reading.series = rows
+            .filter(([, cellLat, cellLon, celsius]) => cellLat === best.cellLat && cellLon === best.cellLon && usable(celsius))
+            .map(([time, , , celsius]) => ({ t: Date.parse(time), tempF: toF(celsius) }))
+            .filter((point) => Number.isFinite(point.t))
+            .sort((a, b) => a.t - b.t);
+    }
+    return reading;
 }
 
 function reply(cached, status) {
@@ -73,7 +89,7 @@ export async function onRequestGet({ request, waitUntil }) {
     let failed = false;
     try {
         const upstream = await fetch(target.url, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) });
-        if (upstream.ok) reading = nearestReading((await upstream.json()).table, target.lat, target.lon);
+        if (upstream.ok) reading = nearestReading((await upstream.json()).table, target.lat, target.lon, { history: target.history });
         else failed = true;
     } catch {
         failed = true;

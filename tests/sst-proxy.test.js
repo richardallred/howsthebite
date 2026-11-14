@@ -65,6 +65,34 @@ test('uses the nearest cell that has water, in Fahrenheit', () => {
     assert.equal(nearestReading(undefined, 29.2, -81.0), null);
 });
 
+test('with days, asks for the last 30 days and answers with the chosen cell\'s series', async () => {
+    const a = upstreamUrl('https://x.test/api/sst?lat=29.21&lon=-81.02&days=30');
+    assert.equal(a.url, 'https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.json?analysed_sst[last-29:1:last][(29.14):(29.26)][(-81.06):(-80.94)]');
+    assert.equal(upstreamUrl('https://x.test/api/sst?lat=29.21&lon=-81.02&days=7').url, a.url); // one cache entry for any history
+    assert.equal(upstreamUrl('https://x.test/api/sst?lat=29.21&lon=-81.02&days=junk').history, false);
+
+    // Two days of the same box: the reading is the latest day's nearest water cell, and the series is that cell.
+    const history = {
+        rows: [
+            ['2026-11-11T09:00:00Z', 29.2, -81.0, null],
+            ['2026-11-11T09:00:00Z', 29.2, -80.96, 26.0],
+            ['2026-11-11T09:00:00Z', 29.2, -80.9, 26.5],
+            ...table.rows,
+        ],
+    };
+    const reading = nearestReading(history, 29.2, -81.0, { history: true });
+    assert.equal(reading.tempF, 77.6);
+    assert.deepEqual(reading.series, [
+        { t: Date.parse('2026-11-11T09:00:00Z'), tempF: 78.8 },
+        { t: Date.parse('2026-11-12T09:00:00Z'), tempF: 77.6 },
+    ]);
+    assert.equal(nearestReading(history, 29.2, -81.0).series, undefined);
+
+    upstreamResponse = () => new Response(JSON.stringify({ table: history }), { status: 200 });
+    const body = await (await call('?lat=29.21&lon=-81.02&days=30')).json();
+    assert.equal(body.series.length, 2);
+});
+
 test('answers with the reading and serves repeats from the cache', async () => {
     const first = await call('?lat=29.21&lon=-81.02');
     assert.equal(first.status, 200);

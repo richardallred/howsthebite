@@ -283,6 +283,64 @@ export function flowNormalsResponse(url, stations) {
     };
 }
 
+const isoDay = (t) => new Date(t).toISOString().slice(0, 10);
+
+/**
+ * USGS daily mean water temperature: 30 days ending yesterday. By default the month is flat at the
+ * station's latest reading; `dailyFromC` sets where the month started, and `dailyLastThreeC` drops
+ * (or raises) the last three days to that value, for a cold snap. `daily: false` = no daily record.
+ */
+export function dailyResponse(url, stations) {
+    const station = stations.find((s) => s.id === url.searchParams.get('monitoring_location_id'));
+    const latest = station?.readings['00010'];
+    const features = [];
+    if (latest !== undefined && station.daily !== false && url.searchParams.get('parameter_code') === '00010') {
+        const from = station.dailyFromC ?? latest;
+        const to = station.dailyLastThreeC === undefined ? latest : from; // a snap: steady, then the sudden change
+        for (let i = 30; i >= 1; i--) {
+            let value = from + ((to - from) * (30 - i)) / 29;
+            if (i <= 3 && station.dailyLastThreeC !== undefined) value = station.dailyLastThreeC;
+            features.push({
+                type: 'Feature',
+                id: `${station.id}-daily-${i}`,
+                geometry: null,
+                properties: { time_series_id: `ts-daily-${station.id}`, time: isoDay(NOW - i * DAY), value: value.toFixed(2), unit_of_measure: 'degC' },
+            });
+        }
+    }
+    return { type: 'FeatureCollection', features, numberReturned: features.length, links: [] };
+}
+
+/** Day-of-year water temperature normals (daily means), centred on a station's `normalC`; none without one. */
+export function tempNormalsResponse(url, stations) {
+    const station = stations.find((s) => s.id === url.searchParams.get('monitoring_location_id'));
+    if (station?.normalC === undefined) return { type: 'FeatureCollection', features: [] };
+    const median = station.normalC;
+    return {
+        type: 'FeatureCollection',
+        features: [{
+            type: 'Feature',
+            geometry: null,
+            properties: {
+                monitoring_location_id: station.id,
+                data: [{
+                    parameter_code: '00010',
+                    unit_of_measure: 'degC',
+                    parent_statistic_id: '00003',
+                    values: [{
+                        time_of_year: url.searchParams.get('start_date'),
+                        time_of_year_type: 'day_of_year',
+                        values: [-3, -2, -1, 0, 1, 2, 3].map((offset) => (median + offset).toFixed(2)),
+                        percentiles: ['5', '10', '25', '50', '75', '90', '95'],
+                        sample_count: 15,
+                        computation: 'percentile',
+                    }],
+                }],
+            },
+        }],
+    };
+}
+
 export function monitoringLocationsResponse(url, stations) {
     const ids = (url.searchParams.get('id') ?? '').split(',');
     const features = stations.filter((station) => ids.includes(station.id)).map((station) => ({
@@ -358,6 +416,16 @@ export function coopsResponse(url, overrides) {
     }
     if (product === 'water_temperature') {
         if (coast.waterTempF === null) return { error: { message: 'No data was found. This product may not be offered at this station at the requested time.' } };
+        if (url.searchParams.get('interval') === 'h') {
+            // A month of hourly readings, from `waterTempFromF` (default: flat) to today's reading.
+            const from = coast.waterTempFromF ?? coast.waterTempF;
+            const hours = Number(url.searchParams.get('range'));
+            const data = [];
+            for (let h = hours; h >= 1; h--) {
+                data.push({ t: coopsTime(NOW - h * HOUR), v: (from + ((coast.waterTempF - from) * (hours - h)) / (hours - 1)).toFixed(1), f: '0,0,0' });
+            }
+            return { metadata: { id: url.searchParams.get('station'), name: 'Test Pier' }, data };
+        }
         return {
             metadata: { id: url.searchParams.get('station'), name: 'Test Pier' },
             data: [{ t: coopsTime(NOW - 12 * 60_000), v: coast.waterTempF.toFixed(1), f: '0,0,0' }],
@@ -395,10 +463,15 @@ export function waveGridResponse(overrides) {
     return { properties: { elevation: { unitCode: 'wmoUnit:m', value: 0 }, waveHeight: { uom: 'wmoUnit:m', values } } };
 }
 
-/** The site's own sea-surface-temperature proxy. */
-export const sstResponse = (overrides) => {
+/** The site's own sea-surface-temperature proxy; with `days`, a flat month of daily values too. */
+export const sstResponse = (overrides, url = null) => {
     const { satelliteTempF } = coastOf(overrides);
-    return satelliteTempF === null ? { tempF: null, time: null } : { tempF: satelliteTempF, time: NOW - 30 * HOUR, lat: 29.3, lon: -94.75 };
+    if (satelliteTempF === null) return { tempF: null, time: null };
+    const reading = { tempF: satelliteTempF, time: NOW - 30 * HOUR, lat: 29.3, lon: -94.75 };
+    if (url?.searchParams.has('days')) {
+        reading.series = Array.from({ length: 30 }, (_, i) => ({ t: NOW - 30 * HOUR - (29 - i) * DAY, tempF: satelliteTempF }));
+    }
+    return reading;
 };
 
 // ---------------------------------------------------------------------------

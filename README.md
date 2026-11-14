@@ -21,8 +21,11 @@ No framework and nothing to compile: plain HTML, CSS and ES modules. The app its
 - **Salt water too**: near the coast, switch between Freshwater, Inshore (bays, flats, marsh,
   piers) and Surf. Salt-water scores use NOAA tide predictions and coastal water temperature, and
   for surf the Weather Service's surf height and rip-current risk
-- **What to throw**: three or four lure and bait suggestions for the local fish in the current
-  water temperature, light, wind, clarity and tide, each with a link to search for it on Amazon
+- **What to throw**: three or four lure and bait suggestions for the local fish, each with a link
+  to search for it on Amazon. They follow where the fish are in their year (pre-spawn, spawn, the
+  fall feed, the bull-red run…), judged from the date, the water temperature and the last month of
+  readings; what has changed lately (a cold snap, a front, a lake rising into new cover); and the
+  light, wind, clarity and tide right now
 - **Score outlook**: a chart of the score from now to the end of the day after tomorrow, with
   each day's best time, so you can pick when to go
 - **Best times** for the next day and a half, from sunrise/sunset, the tide and the forecast
@@ -147,13 +150,13 @@ scripts it loaded earlier, possibly for days.
 - **The key stays on the server.** Browsers never see it. Without the proxy every visitor has their
   own anonymous allowance (1,000 requests per hour per IP), which is fine for one person but not
   when many visitors share an address, and a key shipped in the page would be public.
-- **Answers are cached at Cloudflare's edge**: readings for 10 minutes, station names and
-  day-of-year flow statistics for a day.
+- **Answers are cached at Cloudflare's edge**: readings for 10 minutes, daily means for an hour,
+  station names and day-of-year statistics for a day.
   The app snaps its search area to a 0.1° grid (about 7 miles), so people near each other ask
   the identical question and share one upstream request.
 - **Outages are absorbed.** If USGS rate-limits or fails, the last good answer (up to six hours
   old) is served instead. Each reading carries its own timestamp, which the app shows.
-- **It is not an open proxy.** Only the three collections, the one statistics endpoint and the
+- **It is not an open proxy.** Only the four collections, the one statistics endpoint and the
   query parameters the app uses are forwarded, only for GET, and the result limit is capped.
 
 The `x-cache` response header reports `hit`, `miss` or `stale`.
@@ -166,6 +169,10 @@ MUR analysis, served by NOAA CoastWatch) sends no CORS headers, so a browser can
 directly. Requests are snapped to a 0.05° grid and cached for six hours; an outage serves the
 last reading for up to three days. On hosting without Functions the app notices and falls back to
 an estimate from air temperature.
+
+With `&days=30` the answer also carries `series`, the same cell's daily values for the last 30
+days, which the lure suggestions use for the month's trend where no tide station has a
+thermometer. Any `days` gets the same 30, so those requests share one cache entry too.
 
 ### Amazon links
 
@@ -216,8 +223,10 @@ Amazon turns out to be a poor fit.
   images never invoke a Worker (Functions count against the Workers request allowance).
 - Search engines have no saved place and no location permission, so they see the default city.
   The page title therefore stays as the site's own title until a visitor picks a place.
-- The "Fishing questions, answered" section is plain HTML so it can be indexed. Keep its figures
-  in line with `js/core/scoring.js` and the sections above when the score changes.
+- The "Fishing questions, answered" section is plain HTML so it can be indexed. Each answer ends
+  with links to the studies behind it (the same ones listed under "Why these weights" and "Salt
+  water"). Keep its figures in line with `js/core/scoring.js` and those sections when the score
+  changes, and cite only sources that test the claim as worded.
 - Cloudflare marks every preview and per-deployment address (`<hash>.howsthebite.pages.dev`)
   `noindex`, so only the production address is indexed.
 
@@ -347,15 +356,56 @@ Temperature ranges between the measured thresholds come from long-standing guide
 ### Lure suggestions
 
 `js/core/lures.js` holds a list of rules per fish. Each rule names a lure or bait, how to fish it
-and why it suits the moment, and applies when the conditions match: water temperature judged
-against that fish's own range, light, wind, water clarity (measured turbidity, or river flow
-against normal as a stand-in), and in salt water the tide and the surf.
+and why it suits the moment. Three layers decide which rules apply and how they rank.
+
+**1. The season** (`js/core/season.js`). The same water temperature means different things in
+spring and fall: at 57°F in April largemouth are moving toward their spawning flats, at 57°F in
+November they are bunching up on shad before winter. Each fish is placed in a phase of its year
+from two things: which half of the year it is (water warming, mid-January to July, or cooling,
+August to mid-January), and the water temperature against that fish's thresholds. Near the turns
+of the year the measured trend overrides the calendar: a fortnight of water clearly warming in
+early January is an early spring (as it often is in Florida), and a clear cooling in late summer
+starts the fall. Some rules apply only in certain phases (a lizard on spawning beds, cut bait at
+the passes during the bull-red run), and others are favoured in them. The panel shows the leading
+fish's phase and what the fish are doing in it, and the colour line names their seasonal food.
+
+**2. What has changed lately.** The water temperature over the last 30 days comes from:
+
+| Where the reading comes from | History used |
+|---|---|
+| A USGS sensor (fresh water) | The station's daily means (`daily` collection), and its day-of-year normals for the date (Statistics API, five years of record or more) |
+| A NOAA tide station | 30 days of hourly readings from the same station, reduced to daily means |
+| The beach forecast or the satellite | 30 days of the satellite cell's daily values, through `/api/sst` |
+| An estimate from air temperature | None: the season comes from the date and the estimate |
+
+`js/core/water-trend.js` reduces that to a direction (warming or cooling by 2°F a week or more,
+from a line fitted to the last ten days), the 7- and 14-day changes, a cold snap or warm spell
+(4°F or more in three days of daily means; daily means, because a shallow river swings several
+degrees between dawn and afternoon), and whether the water is warm or cold for the date. With the
+barometer and air temperature (`frontState` in `trend.js`: a front just through, or one on its
+way) and a lake rising or falling 0.15 ft or more in a day, these become *situations*. A situation
+adds no rules; it shifts presentations up or down through tags on each rule: a cold snap favours
+slow, bottom and finesse presentations and marks down topwater; a rising lake favours the
+shallows; off-colour water favours vibration and scent over finesse. Fronts shift the least,
+because their effect is the least measured. The panel says which situations apply, charts the
+month, and notes on the suggestion it helped choose why it was picked.
+
+**3. The moment**: water temperature judged against that fish's own range, light, wind, water
+clarity (measured turbidity, or river flow against normal as a stand-in), and in salt water the
+tide and the surf.
 
 **These are not measured.** Hardly anyone has tested lure choice against conditions. The rules
 follow what state agencies publish in their "how to catch" guides (Iowa, Minnesota, Oregon,
 Oklahoma, New York and Missouri for fresh water; Texas, South Carolina, Georgia, New Jersey,
 Florida and California for salt), filled in from In-Fisherman, Bassmaster and On The Water where
 agencies are silent. Perch and salmon entries are general practice. The page says all this.
+
+The seasonal phases and their temperature thresholds are a synthesis of the widely published
+seasonal patterns (spawning temperatures, the fall shad and mullet runs, the striped bass and
+bluefish migrations, the snook's winter refuges) rather than figures from one source, and have
+not been checked against catch data. Each threshold sits in one table per fish in `season.js`
+so it is easy to review and correct. They are rules of thumb: fish in one lake run a week or two
+ahead of fish in the next, and the tip on the panel says so.
 
 Where studies exist they are used: the one comparison of pike lures found spoons out-caught
 spinnerbaits, and the two studies of lure colour (largemouth bass and pike) found colour made no
@@ -416,9 +466,9 @@ if you want to fit the weights rather than judge them.
 |---|---|---|
 | Current weather, 72-hour history, daily and hourly forecast, active alerts, place names for "use my location" | [US National Weather Service API](https://www.weather.gov/documentation/services-web-api) | Public domain, no key, US and territories only |
 | Town, lake and river search | [Photon](https://photon.komoot.io/) (OpenStreetMap data, hosted by komoot) | Free community service with a fair-use policy and no uptime guarantee |
-| Water temperature, level, flow, dissolved oxygen, turbidity | [USGS Water Data APIs](https://api.waterdata.usgs.gov/docs/ogcapi/) | Public domain. `latest-continuous`, `monitoring-locations` and `continuous` collections. Readings are provisional. Oxygen and turbidity are reported by a minority of stations. |
-| Normal flow for today's date | [USGS Statistics API](https://api.waterdata.usgs.gov/statistics/v0/docs) (`observationNormals`) | Public domain. Day-of-year percentiles from each gauge's approved record. The API is labelled beta by USGS. |
-| Tide predictions, coastal water temperature | [NOAA CO-OPS](https://api.tidesandcurrents.noaa.gov/api/prod/) | Public domain, no key. CO-OPS has no "nearest station" search, so the app carries a station list in `data/coops-stations.json`; rebuild it now and then with `node scripts/update-coops-stations.mjs`. |
+| Water temperature, level, flow, dissolved oxygen, turbidity | [USGS Water Data APIs](https://api.waterdata.usgs.gov/docs/ogcapi/) | Public domain. `latest-continuous`, `monitoring-locations` and `continuous` collections, and `daily` for the last month of daily mean water temperature. Readings are provisional. Oxygen and turbidity are reported by a minority of stations. |
+| Normal flow and water temperature for today's date | [USGS Statistics API](https://api.waterdata.usgs.gov/statistics/v0/docs) (`observationNormals`) | Public domain. Day-of-year percentiles from each gauge's approved record. The API is labelled beta by USGS. |
+| Tide predictions, coastal water temperature and its last 30 days | [NOAA CO-OPS](https://api.tidesandcurrents.noaa.gov/api/prod/) | Public domain, no key. CO-OPS has no "nearest station" search, so the app carries a station list in `data/coops-stations.json`; rebuild it now and then with `node scripts/update-coops-stations.mjs`. |
 | Surf height, rip-current risk, beach water temperature | NWS beach forecast ([feature service](https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/marine_beachforecast_summary/FeatureServer)) | Public domain. Many offices issue it only in the swimming season; the fields are empty otherwise. |
 | Wave-height forecast off a beach | NWS forecast grid (`api.weather.gov/gridpoints`) | Used when the beach forecast has no surf height. A beach's own grid cell is land, so the app looks a few miles out in each direction for one over open water and remembers it. |
 | Sea-surface temperature where no station is near | NASA JPL MUR analysis via [NOAA CoastWatch ERDDAP](https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.html), through `/api/sst` | Free to use and redistribute. About a day and a half old, and a degree or two warm inside bays; labelled a satellite estimate. |
@@ -498,11 +548,13 @@ js/
     usgs-api.js         USGS stations: water temperature, level, flow, their history and flow normals
   core/                 Pure logic with no DOM access (unit tested)
     scoring.js          The fishing score (fresh, inshore, surf) and the best-times outlook
-    lures.js            Lure and bait suggestions for the conditions
+    lures.js            Lure and bait suggestions for the season and the conditions
     tides.js            Tide height and movement between predicted highs and lows
     species.js          Which groups of fish live in a region, and what to call them
     alerts.js           Which NWS alerts matter on the water
-    trend.js            Time-based trend analysis
+    trend.js            Time-based trend analysis, and weather fronts from the barometer
+    season.js           Where each fish is in its year: pre-spawn, spawn, the fall feed…
+    water-trend.js      The last month of water temperature: direction, cold snaps, against normal
     sun.js              Sun position, sunrise and sunset
     moon.js             Moon phase and overhead/underfoot position
     sky.js              NWS sky reports -> label, emoji, sky class
