@@ -102,6 +102,39 @@ test.describe('place addresses', () => {
     });
 });
 
+test.describe('popular places', () => {
+    const LAKE_NORMAN = '/fishing/35.59,-80.93/lake-norman-north-carolina';
+
+    test('are ordinary links to place addresses, and open without loading a new page', async ({ page, app }) => {
+        await app.open();
+        await page.locator('#places summary', { hasText: 'Lakes' }).click();
+        const link = page.getByRole('link', { name: 'Lake Norman, North Carolina' });
+        await expect(link).toHaveAttribute('href', LAKE_NORMAN); // what a search engine follows
+
+        await page.evaluate(() => { window.sameDocument = true; });
+        await link.click();
+        await expect(heading(page)).toHaveText('Lake Norman, North Carolina');
+        await app.loaded();
+        expect(await page.evaluate(() => window.sameDocument)).toBe(true);
+        expect(await page.evaluate(() => window.scrollY)).toBe(0); // back at the score, not left at the foot of the page
+        // The list knows it is a lake, as a search for it would.
+        await expect(page).toHaveURL(new RegExp(`${LAKE_NORMAN.replace('.', '\\.')}\\?water=lake`));
+    });
+
+    test('someone who arrives at a listed place from a search engine gets its kind of water too', async ({ page, app }) => {
+        await app.open(LAKE_NORMAN);
+        await expect(heading(page)).toHaveText('Lake Norman, North Carolina');
+        await expect(page).toHaveURL(/\?water=lake/);
+        await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', `https://howsthebite.io${LAKE_NORMAN}`);
+    });
+
+    test('before any script runs, the page already says what it is', async ({ page }) => {
+        const html = await (await page.request.get('/')).text();
+        expect(html).toContain('<h1 id="locationName">Fishing forecast</h1>');
+        expect(html).not.toContain('Loading…');
+    });
+});
+
 test.describe('shared choices', () => {
     test('the fish in a link is used for that visit, and your own choice is kept', async ({ page, app }) => {
         await app.open('/fishing/41.88,-87.63/chicago-illinois?fish=cold');

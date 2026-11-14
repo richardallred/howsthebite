@@ -29,12 +29,49 @@ test.describe('when the weather service fails', () => {
     });
 });
 
+test.describe('when api.weather.gov cannot be reached at all', () => {
+    // A search engine's renderer is in this position: api.weather.gov/robots.txt disallows
+    // everything, so the request is never made. So is anyone behind a filter that blocks it.
+    test('the weather comes through the site itself, so the page still has its score', async ({ page, api, app }) => {
+        api.proxy = true;
+        api.fail('nws', 'network');
+        await app.open();
+
+        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
+        await expect(page.locator('#notice')).not.toHaveAttribute('data-tone', 'error');
+        await expect(page.locator('#forecastList li')).not.toHaveCount(0);
+        expect(api.count('nws-proxy', '/api/nws/points/41.8781,-87.6298')).toBe(1);
+        // Once the direct route is known to be shut it is not tried again for every request.
+        expect(api.count('nws')).toBeLessThan(api.count('nws-proxy'));
+    });
+
+    test('a spot the weather service does not cover is still recognised by that route', async ({ page, api }) => {
+        api.proxy = true;
+        api.fail('nws', 'network');
+        api.weather = { outsideCoverage: true };
+        await page.goto('/');
+        await expect(page.locator('#noticeText')).toContainText('US National Weather Service, which has no data for this spot');
+    });
+});
+
 test.describe('weather coverage', () => {
     test('a spot outside the United States is explained rather than shown as a generic failure', async ({ page, api }) => {
         api.weather = { outsideCoverage: true };
         await page.goto('/');
         await expect(page.locator('#noticeText')).toContainText('US National Weather Service, which has no data for this spot');
         await expect(page.locator('#scoreValue')).toHaveText('–');
+        // Nothing here to index: search engines are told so, as a 404 cannot be sent after the fact.
+        await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex');
+    });
+
+    test('a page that goes on to show a covered place is indexable again', async ({ page, api, app }) => {
+        api.weather = { outsideCoverage: true };
+        await page.goto('/');
+        await expect(page.locator('meta[name="robots"]')).toHaveCount(1);
+        api.weather = {};
+        await app.search('Asheville', 'Asheville, North Carolina');
+        await app.loaded();
+        await expect(page.locator('meta[name="robots"]')).toHaveCount(0);
     });
 
     test('a rural station without a barometer borrows pressure from the nearest airport', async ({ page, api, app }) => {

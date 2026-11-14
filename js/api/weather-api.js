@@ -14,6 +14,7 @@ import { API, US_STATES } from '../config.js';
 import { describeSky } from '../core/sky.js';
 import { HOUR_MS, cToF, isNum, prettySiteName } from '../core/util.js';
 import { HttpError, buildUrl, fetchJson, isAbort } from './http.js';
+import { nwsFetch } from './nws.js';
 
 const PA_PER_INHG = 3386.389;
 const MPH_PER_KMH = 0.621371;
@@ -36,15 +37,15 @@ export class OutsideCoverageError extends Error {
 
 /** NWS occasionally answers 5xx for a moment; one quick retry clears most of those. */
 async function nwsJson(url, { signal, timeoutMs } = {}) {
-    const options = { signal, timeoutMs, headers: { Accept: 'application/geo+json' } };
+    const options = { signal, timeoutMs };
     try {
-        return await fetchJson(url, options);
+        return await nwsFetch(url, options);
     } catch (error) {
         const retryable = !isAbort(error) && !(error instanceof HttpError && error.status < 500);
         if (!retryable) throw error;
         await new Promise((resolve) => setTimeout(resolve, 600));
         if (signal?.aborted) throw new DOMException('Superseded', 'AbortError');
-        return fetchJson(url, options);
+        return nwsFetch(url, options);
     }
 }
 
@@ -292,7 +293,7 @@ export async function fetchWeather(lat, lon, { signal } = {}) {
         }),
         // Hour-by-hour sky and wind for the score outlook. Optional: no retry, short timeout,
         // and the 12-hour periods stand in if it does not arrive.
-        fetchJson(`${point.hourlyUrl}?units=us`, { signal, timeoutMs: 8000, headers: { Accept: 'application/geo+json' } })
+        nwsFetch(`${point.hourlyUrl}?units=us`, { signal, timeoutMs: 8000 })
             .catch((error) => {
                 if (isAbort(error)) throw error;
                 return null;
@@ -346,9 +347,7 @@ export async function fetchWeather(lat, lon, { signal } = {}) {
  */
 export async function fetchAlerts(lat, lon, { signal } = {}) {
     // No retry and a short timeout: alerts must never hold up the rest of the page.
-    const data = await fetchJson(`${API.NWS}/alerts/active?point=${lat.toFixed(4)},${lon.toFixed(4)}`, {
-        signal, timeoutMs: 6000, headers: { Accept: 'application/geo+json' },
-    });
+    const data = await nwsFetch(`${API.NWS}/alerts/active?point=${lat.toFixed(4)},${lon.toFixed(4)}`, { signal, timeoutMs: 6000 });
     return (data.features ?? [])
         .map(({ properties: p }) => ({
             event: String(p?.event ?? ''),

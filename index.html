@@ -19,6 +19,7 @@
     <meta property="og:image:alt" content="How's the Bite? fishing forecast: a 0–100 score from water temperature, light, tide, wind and weather.">
     <meta property="og:locale" content="en_US">
     <meta name="twitter:card" content="summary_large_image">
+    <meta name="author" content="Richard Allred">
 
     <!-- Structured data for search engines. A data block, not a script, so the CSP does not apply to it. -->
     <script type="application/ld+json">
@@ -29,8 +30,14 @@
                 "@type": "WebSite",
                 "@id": "https://howsthebite.io/#website",
                 "name": "How's the Bite?",
-                "alternateName": "How's the Bite",
-                "url": "https://howsthebite.io/"
+                "alternateName": ["How's the Bite", "howsthebite.io"],
+                "url": "https://howsthebite.io/",
+                "publisher": { "@id": "https://howsthebite.io/#author" }
+            },
+            {
+                "@type": "Person",
+                "@id": "https://howsthebite.io/#author",
+                "name": "Richard Allred"
             },
             {
                 "@type": "WebApplication",
@@ -43,6 +50,7 @@
                 "isAccessibleForFree": true,
                 "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
                 "inLanguage": "en-US",
+                "author": { "@id": "https://howsthebite.io/#author" },
                 "isPartOf": { "@id": "https://howsthebite.io/#website" }
             }
         ]
@@ -124,7 +132,7 @@
     <section class="location-bar" aria-label="Location">
         <div class="wrap location-head">
             <div class="location-title">
-                <h1 id="locationName">Loading…</h1>
+                <h1 id="locationName">Fishing forecast</h1>
                 <div class="location-meta">
                     <p id="updatedAt" aria-live="polite">&nbsp;</p>
                     <button class="btn btn-quiet btn-icon btn-small" id="refreshBtn" type="button" aria-label="Refresh conditions" title="Refresh conditions">
@@ -141,7 +149,7 @@
     </section>
 
     <div class="wrap">
-        <div class="notice" id="notice" role="status" hidden>
+        <div class="notice" id="notice" role="status" data-nosnippet hidden>
             <p id="noticeText"></p>
             <button class="btn btn-small" id="noticeAction" type="button" hidden>Try again</button>
         </div>
@@ -373,6 +381,91 @@
                 </details>
             </div>
         </section>
+        <!-- Links to place pages that search engines can follow, and a quick start for anyone
+             without a place in mind. Each address is the place's canonical one (see
+             js/core/place-url.js); the build lists the same addresses in sitemap.xml, and
+             tests/places.test.js checks every one. data-water is the kind of water, which an
+             address alone cannot say. -->
+        <nav class="section panel" id="places" aria-labelledby="placesTitle">
+            <div class="panel-head">
+                <h2 class="panel-title" id="placesTitle">Popular fishing spots</h2>
+                <p class="panel-sub">Or search for any town, lake or river above.</p>
+            </div>
+            <div class="faq places">
+                <details>
+                    <summary>Lakes</summary>
+                    <ul class="place-links">
+                        <li><a href="/fishing/35.17,-85.12/chickamauga-lake-tennessee" data-water="lake">Chickamauga Lake, Tennessee</a></li>
+                        <li><a href="/fishing/39.03,-122.8/clear-lake-california" data-water="lake">Clear Lake, California</a></li>
+                        <li><a href="/fishing/47.88,-114.13/flathead-lake-montana" data-water="lake">Flathead Lake, Montana</a></li>
+                        <li><a href="/fishing/36.77,-88.13/kentucky-lake-kentucky" data-water="lake">Kentucky Lake, Kentucky</a></li>
+                        <li><a href="/fishing/44.32,-73.32/lake-champlain-vermont" data-water="lake">Lake Champlain, Vermont</a></li>
+                        <li><a href="/fishing/41.51,-82.94/lake-erie-at-port-clinton-ohio" data-water="lake">Lake Erie at Port Clinton, Ohio</a></li>
+                        <li><a href="/fishing/32.89,-95.64/lake-fork-texas" data-water="lake">Lake Fork, Texas</a></li>
+                        <li><a href="/fishing/34.66,-85.95/lake-guntersville-alabama" data-water="lake">Lake Guntersville, Alabama</a></li>
+                        <li><a href="/fishing/34.47,-114.36/lake-havasu-arizona" data-water="lake">Lake Havasu, Arizona</a></li>
+                        <li><a href="/fishing/34.29,-83.94/lake-lanier-georgia" data-water="lake">Lake Lanier, Georgia</a></li>
+                        <li><a href="/fishing/33.53,-80.46/lake-marion-south-carolina" data-water="lake">Lake Marion, South Carolina</a></li>
+                        <li><a href="/fishing/36.21,-114.41/lake-mead-nevada" data-water="lake">Lake Mead, Nevada</a></li>
+                        <li><a href="/fishing/35.59,-80.93/lake-norman-north-carolina" data-water="lake">Lake Norman, North Carolina</a></li>
+                        <li><a href="/fishing/38.14,-92.66/lake-of-the-ozarks-missouri" data-water="lake">Lake of the Ozarks, Missouri</a></li>
+                        <li><a href="/fishing/26.94,-80.8/lake-okeechobee-florida" data-water="lake">Lake Okeechobee, Florida</a></li>
+                        <li><a href="/fishing/37.38,-110.73/lake-powell-utah" data-water="lake">Lake Powell, Utah</a></li>
+                        <li><a href="/fishing/39.09,-120.05/lake-tahoe-california" data-water="lake">Lake Tahoe, California</a></li>
+                        <li><a href="/fishing/33.85,-96.65/lake-texoma-texas" data-water="lake">Lake Texoma, Texas</a></li>
+                        <li><a href="/fishing/44,-88.43/lake-winnebago-wisconsin" data-water="lake">Lake Winnebago, Wisconsin</a></li>
+                        <li><a href="/fishing/43.6,-71.33/lake-winnipesaukee-new-hampshire" data-water="lake">Lake Winnipesaukee, New Hampshire</a></li>
+                        <li><a href="/fishing/46.24,-93.66/mille-lacs-lake-minnesota" data-water="lake">Mille Lacs Lake, Minnesota</a></li>
+                        <li><a href="/fishing/43.2,-75.89/oneida-lake-new-york" data-water="lake">Oneida Lake, New York</a></li>
+                        <li><a href="/fishing/31.25,-94.36/sam-rayburn-reservoir-texas" data-water="lake">Sam Rayburn Reservoir, Texas</a></li>
+                        <li><a href="/fishing/36.63,-93.41/table-rock-lake-missouri" data-water="lake">Table Rock Lake, Missouri</a></li>
+                        <li><a href="/fishing/31.57,-93.79/toledo-bend-reservoir-louisiana" data-water="lake">Toledo Bend Reservoir, Louisiana</a></li>
+                    </ul>
+                </details>
+                <details>
+                    <summary>Rivers</summary>
+                    <ul class="place-links">
+                        <li><a href="/fishing/44.66,-84.71/au-sable-river-at-grayling-michigan" data-water="river">Au Sable River at Grayling, Michigan</a></li>
+                        <li><a href="/fishing/45.31,-107.93/bighorn-river-at-fort-smith-montana" data-water="river">Bighorn River at Fort Smith, Montana</a></li>
+                        <li><a href="/fishing/46.19,-123.83/columbia-river-at-astoria-oregon" data-water="river">Columbia River at Astoria, Oregon</a></li>
+                        <li><a href="/fishing/41.95,-75.28/delaware-river-at-hancock-new-york" data-water="river">Delaware River at Hancock, New York</a></li>
+                        <li><a href="/fishing/45.18,-121.08/deschutes-river-at-maupin-oregon" data-water="river">Deschutes River at Maupin, Oregon</a></li>
+                        <li><a href="/fishing/40.93,-109.39/green-river-at-dutch-john-utah" data-water="river">Green River at Dutch John, Utah</a></li>
+                        <li><a href="/fishing/44.42,-111.37/henrys-fork-at-island-park-idaho" data-water="river">Henrys Fork at Island Park, Idaho</a></li>
+                        <li><a href="/fishing/60.49,-151.06/kenai-river-at-soldotna-alaska" data-water="river">Kenai River at Soldotna, Alaska</a></li>
+                        <li><a href="/fishing/45.35,-111.73/madison-river-at-ennis-montana" data-water="river">Madison River at Ennis, Montana</a></li>
+                        <li><a href="/fishing/44.05,-91.64/mississippi-river-at-winona-minnesota" data-water="river">Mississippi River at Winona, Minnesota</a></li>
+                        <li><a href="/fishing/43.57,-76.13/salmon-river-at-pulaski-new-york" data-water="river">Salmon River at Pulaski, New York</a></li>
+                        <li><a href="/fishing/36.81,-107.61/san-juan-river-at-navajo-dam-new-mexico" data-water="river">San Juan River at Navajo Dam, New Mexico</a></li>
+                        <li><a href="/fishing/43.48,-110.76/snake-river-at-jackson-wyoming" data-water="river">Snake River at Jackson, Wyoming</a></li>
+                        <li><a href="/fishing/40.27,-76.88/susquehanna-river-at-harrisburg-pennsylvania" data-water="river">Susquehanna River at Harrisburg, Pennsylvania</a></li>
+                        <li><a href="/fishing/36.27,-92.54/white-river-at-cotter-arkansas" data-water="river">White River at Cotter, Arkansas</a></li>
+                        <li><a href="/fishing/45.66,-110.56/yellowstone-river-at-livingston-montana" data-water="river">Yellowstone River at Livingston, Montana</a></li>
+                    </ul>
+                </details>
+                <details>
+                    <summary>Coast</summary>
+                    <ul class="place-links">
+                        <li><a href="/fishing/38.98,-76.49/annapolis-maryland">Annapolis, Maryland</a></li>
+                        <li><a href="/fishing/38.94,-74.91/cape-may-new-jersey">Cape May, New Jersey</a></li>
+                        <li><a href="/fishing/32.78,-79.93/charleston-south-carolina">Charleston, South Carolina</a></li>
+                        <li><a href="/fishing/41.68,-69.96/chatham-massachusetts">Chatham, Massachusetts</a></li>
+                        <li><a href="/fishing/30.39,-86.5/destin-florida">Destin, Florida</a></li>
+                        <li><a href="/fishing/29.3,-94.8/galveston-texas">Galveston, Texas</a></li>
+                        <li><a href="/fishing/59.64,-151.54/homer-alaska">Homer, Alaska</a></li>
+                        <li><a href="/fishing/24.92,-80.63/islamorada-florida">Islamorada, Florida</a></li>
+                        <li><a href="/fishing/24.56,-81.78/key-west-florida">Key West, Florida</a></li>
+                        <li><a href="/fishing/41.04,-71.95/montauk-new-york">Montauk, New York</a></li>
+                        <li><a href="/fishing/35.96,-75.62/nags-head-north-carolina">Nags Head, North Carolina</a></li>
+                        <li><a href="/fishing/27.83,-97.06/port-aransas-texas">Port Aransas, Texas</a></li>
+                        <li><a href="/fishing/32.72,-117.16/san-diego-california">San Diego, California</a></li>
+                        <li><a href="/fishing/27.95,-82.46/tampa-florida">Tampa, Florida</a></li>
+                        <li><a href="/fishing/29.28,-89.35/venice-louisiana">Venice, Louisiana</a></li>
+                        <li><a href="/fishing/36.85,-75.98/virginia-beach-virginia">Virginia Beach, Virginia</a></li>
+                    </ul>
+                </details>
+            </div>
+        </nav>
         <footer class="app-footer">
             <p>
                 Data from the <a href="https://www.weather.gov/" target="_blank" rel="noopener">National Weather Service</a>,
@@ -387,6 +480,7 @@
                 counts least, because catch-rate studies find no effect. USGS readings are provisional.
                 Check local regulations before you go.
             </p>
+            <p>Made by Richard Allred.</p>
         </footer>
     </main>
 
@@ -398,7 +492,7 @@
         <a href="#history"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>History</span></a>
     </nav>
 
-    <div class="install-banner" id="installBanner" hidden>
+    <div class="install-banner" id="installBanner" data-nosnippet hidden>
         <p>Install How's the Bite for one-tap access and offline use.</p>
         <button class="btn btn-solid btn-small" id="installBtn" type="button">Install</button>
         <button class="btn btn-quiet btn-icon btn-small" id="installDismiss" type="button" aria-label="Dismiss">

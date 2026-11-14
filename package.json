@@ -21,6 +21,7 @@
     "water-temperature",
     "fishing-conditions"
   ],
+  "author": "Richard Allred",
   "license": "MIT",
   "engines": {
     "node": ">=20"
