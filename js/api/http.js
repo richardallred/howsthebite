@@ -1,11 +1,12 @@
 import { APP } from '../config.js';
 
 export class HttpError extends Error {
-    constructor(status, url) {
+    constructor(status, url, headers = null) {
         super(`Request failed with HTTP ${status}`);
         this.name = 'HttpError';
         this.status = status;
         this.url = url;
+        this.headers = headers; // the response's, so a caller can tell who answered
     }
 }
 
@@ -29,7 +30,7 @@ export async function fetchJson(url, { signal, timeoutMs = APP.REQUEST_TIMEOUT_M
 
     try {
         const response = await fetch(url, { signal: controller.signal, headers });
-        if (!response.ok) throw new HttpError(response.status, String(url));
+        if (!response.ok) throw new HttpError(response.status, String(url), response.headers);
         return await response.json();
     } finally {
         clearTimeout(timer);

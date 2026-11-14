@@ -180,8 +180,29 @@ the address, but their pages are not written with the place's title and meta tag
 Cloudflare/Netlify convention; elsewhere set the same headers in that host's own way.
 
 When you add, rename or remove a file the page loads, update `SHELL` in `sw.js`. The build fails
-if `SHELL` lists a file that is not published, and a browser test fails if the page loads a file
-that `SHELL` does not list.
+if `SHELL` lists a file that is not published or leaves out a script, style, font or data file,
+and a browser test fails if the page loads a file that `SHELL` does not list.
+
+**Fingerprinted file names.** The build publishes scripts, styles, fonts and data (`styles.css`
+and everything under `js/`, `fonts/`, `vendor/` and `data/`) under names that carry a hash of
+their content, such as `js/app.3f9c2a7b1e.js`, and rewrites every reference to them in the pages,
+the stylesheets, the scripts and `sw.js` (`scripts/fingerprint.mjs`). The source tree keeps its
+plain names and runs as it is.
+
+- A name that changes with the content cannot be served stale. Google's renderer keeps scripts
+  and styles longer than cache headers allow, and its documentation asks for fingerprinted names
+  so that a page is never rendered with last week's code.
+- Those files are served with `Cache-Control: immutable` (the build adds the rules to `_headers`),
+  so a returning visitor downloads only what changed. A file's hash covers the files it refers
+  to, so changing one module renames it and whatever imports it, and nothing else.
+- Pages, `sw.js`, the manifest, icons and link-preview images keep fixed names, because browsers,
+  installed apps and other sites hold on to those addresses.
+- A file in those folders has to be loaded by a path written out in full (an `import`, an `href`,
+  a `url()`, or a whole quoted path such as `'/data/coops-stations.json'`). The build fails if
+  nothing refers to a file that way, because a path assembled at run time cannot be rewritten.
+- A deploy removes the previous release's fingerprinted files. The service worker serves them
+  from its cache, so an open tab is not affected; a page that a crawler fetched before a deploy
+  and renders after it would be missing its scripts until the next crawl.
 
 **How visitors get a new version.** The build names the offline cache after a hash of the
 published files, so any change makes `sw.js` differ and browsers see a new version. The app looks
@@ -221,6 +242,23 @@ With `&days=30` the answer also carries `series`, the same cell's daily values f
 days, which the lure suggestions use for the month's trend where no tide station has a
 thermometer. Any `days` gets the same 30, so those requests share one cache entry too.
 
+### The weather stand-in
+
+`functions/api/nws/[[path]].js` answers `GET /api/nws/<path>` by asking `api.weather.gov` for the
+same path. Browsers do not normally use it: they call the Weather Service directly, as before.
+It is there for clients that cannot, of which the important one is a search engine's renderer
+(see "Search engines and link previews" below); a network filter that blocks `weather.gov` is
+another. The app turns to it only when a direct request fails to connect, and then stays on it
+for the rest of the visit.
+
+- Only the endpoints and query parameters the app uses are forwarded, only for GET.
+- Answers are cached at the edge: a coordinate's grid cell and station list for a day, forecasts
+  for 15 minutes, observations for 5, alerts for 2. If the Weather Service fails, the last good
+  answer (up to an hour old) is served.
+- Every answer that came from the Weather Service carries `x-proxy: nws`, which is how the app
+  tells "no data for this spot" (a 404 it acts on) from hosting that has no Functions.
+- It identifies itself to the Weather Service with the site's address, as their API asks.
+
 ### Amazon links
 
 Lure suggestions link to Amazon search results, tagged with the Amazon Associates tracking ID in
@@ -258,10 +296,19 @@ Amazon turns out to be a poor fit.
 
 - `index.html` carries the canonical URL, Open Graph tags (the preview image is
   `screenshots/share-card.png`, 1200×630) and `WebSite`/`WebApplication` structured data.
-  `robots.txt` allows everything and points to `sitemap.xml`.
+  `robots.txt` allows everything, `/api/` included (see the next point), and points to
+  `sitemap.xml`.
+- **A search engine can only index what its renderer is allowed to fetch.** The score, forecast
+  and best times are drawn by script from live data, and Google's renderer obeys `robots.txt`
+  for every request a page makes. `api.weather.gov/robots.txt` disallows everything, so a
+  direct request to it is never made and the page would be indexed as "Couldn't load the
+  weather". When a direct request cannot connect, the app asks this site instead
+  (`js/api/nws.js`, and "The weather stand-in" above). Never disallow `/api/` in `robots.txt`.
+  To see a page as Google does, use URL Inspection in Search Console and open the screenshot
+  and the list of page resources that could not be loaded.
 - These use the absolute address `https://howsthebite.io/`. If the domain ever changes, change it
-  in `index.html`, `robots.txt`, `sitemap.xml` and `functions/_middleware.js`. Place pages take
-  their canonical address from the canonical link in `index.html`.
+  in `index.html`, `robots.txt` and `functions/_middleware.js`. Place pages and the sitemap take
+  the site's address from the canonical link in `index.html`.
 - `functions/_middleware.js` permanently redirects page loads on the old address,
   `howsthebite.pages.dev`, to the same path on `howsthebite.io`, so search engines move their
   index and any links to the new domain. Files fetched by an already-open page or the installed
@@ -288,8 +335,30 @@ Amazon turns out to be a poor fit.
     Service's coverage are served with `X-Robots-Tag: noindex`.
   - `tests/place-url.test.js` fails if `index.html` loses one of the elements the function
     rewrites, or gains a relative path (which would break under `/fishing/…`).
-  - `sitemap.xml` lists only the home page. Place pages are found through links people share;
-    to have particular waters indexed, add their addresses to the sitemap.
+  - A place the Weather Service turns out to have no data for (a spot inside the coverage boxes
+    but over the border or far offshore) cannot be answered with a 404 after the fact, so the
+    app adds `<meta name="robots" content="noindex">` instead, which keeps it from being indexed
+    as an empty page.
+- **Popular fishing spots.** Search engines find pages by following links, and place pages are
+  otherwise reached only through the search box. The list at the foot of the page (`#places` in
+  `index.html`) links to well-known lakes, rivers and coastal towns, and because every place
+  page is the same file, each of them links to the others. To add a water, add a link:
+  - the address is the canonical one, `/fishing/<lat>,<lon>/<slug>`, with coordinates rounded to
+    2 decimals, and the link text is exactly the name the slug turns back into
+    (`tests/places.test.js` checks both, and that no place is listed twice);
+  - `data-water="lake"` or `"river"` says what kind of water it is, so the right gauges are used
+    whether someone picks it from the list or arrives at its address from a search engine;
+  - river entries are named for the river and a town on it ("Kenai River at Soldotna, Alaska")
+    and use the town's coordinates.
+- **The sitemap is written by the build** (`scripts/sitemap.mjs`): the home page plus every place
+  linked from `index.html`, so the two cannot disagree. It has no `<lastmod>`, which Google uses
+  only when it is verifiably accurate, and no `<priority>` or `<changefreq>`, which it ignores.
+- The page says who made it: a line in the footer, `<meta name="author">`, and a `Person` in the
+  structured data that the site and the app point to. Google's guidance asks sites to make clear
+  who is behind them.
+- Before any script runs, the `<h1>` reads "Fishing forecast" on the home page and the place's
+  name on a place page. The notice and the install banner carry `data-nosnippet`, so their
+  wording is never quoted as the page's description in search results.
 - The "Fishing questions, answered" section is plain HTML so it can be indexed. Each answer ends
   with links to the studies behind it (the same ones listed under "Why these weights" and "Salt
   water"). Keep its figures in line with `js/core/scoring.js` and those sections when the score
@@ -629,6 +698,7 @@ js/
   storage.js            Guarded localStorage access (places, theme, last snapshot)
   api/
     http.js             fetch + JSON with timeout and cancellation
+    nws.js              Weather Service requests: direct, or through this site when that is blocked
     weather-api.js      NWS observations, forecast and alerts, Photon place search
     species-api.js      GBIF: how often each sport fish is recorded around a place
     coast-api.js        NOAA tides and water temperature, NWS beach and wave forecasts, sea temperature
@@ -660,7 +730,10 @@ functions/
   fishing/[[path]].js   Cloudflare Pages Function: place pages with the place in their title and meta tags
   api/usgs/[[path]].js  Cloudflare Pages Function: caching proxy for the USGS API
   api/sst.js            Cloudflare Pages Function: satellite sea-surface temperature
-scripts/build.mjs       Copies the publishable files to dist/
+  api/nws/[[path]].js   Cloudflare Pages Function: stand-in route to the Weather Service API
+scripts/build.mjs       Copies the publishable files to dist/, writes the sitemap, fingerprints file names
+scripts/fingerprint.mjs Names files after their content and rewrites the references to them
+scripts/sitemap.mjs     The sitemap, worked out from the links in index.html
 scripts/serve.mjs       Local static server (npm start, browser tests) that also serves place addresses
 tests/                  Unit tests (node --test)
 e2e/                    Browser tests (Playwright)
@@ -690,8 +763,9 @@ CSS `color-mix()` and `:has()`, `ResizeObserver` and `IntersectionObserver`.
   site settings, or search for a place instead.
 - **Something works locally but not when deployed**: open the browser console and look for a
   Content-Security-Policy message. A new data source has to be added to `connect-src` in `_headers`.
-- **Changes not showing up while developing**: the service worker fetches app files network-first,
-  so a normal reload is enough. If in doubt, unregister it under DevTools → Application.
+- **Changes not showing up while developing**: served from the source tree, the service worker
+  fetches app files network-first, so a normal reload is enough. If in doubt, unregister it under
+  DevTools → Application.
 
 ## License
 

@@ -1062,6 +1062,18 @@ function hrefFor(location, { choices = false } = {}) {
     return placeHref(addressPlace(location), extra);
 }
 
+/**
+ * Tell search engines whether the page has anything to index. By the time the weather
+ * service says it has no data for a spot, the server has already answered 200, so the
+ * page says it instead: a noindex added by script, which is what Google documents for
+ * pages whose content arrives that way. Otherwise such a page reads as a "soft 404".
+ */
+function setIndexable(indexable) {
+    const marker = document.querySelector('meta[name="robots"][data-no-coverage]');
+    if (indexable) marker?.remove();
+    else if (!marker) document.head.append(el('meta', { name: 'robots', content: 'noindex', 'data-no-coverage': '' }));
+}
+
 /** Point the canonical link and og:url at the page being shown, on the site's own domain. */
 function setCanonical(path) {
     for (const [selector, attribute] of [['link[rel="canonical"]', 'href'], ['meta[property="og:url"]', 'content']]) {
@@ -1118,12 +1130,34 @@ function knownPlace(linked) {
         .find((item) => item && locationKey(item) === locationKey(linked.place) && sharedName(item) === linked.place.name) ?? null;
 }
 
+/**
+ * The popular places listed in the page (index.html, #places) say whether each is a lake or
+ * a river, which an address alone cannot. Someone arriving at one of them from a search
+ * engine gets the same gauges and score as someone who picked it from the list.
+ */
+function withListedKind(place) {
+    if (place.kind) return place;
+    const water = document.querySelector(`#places a[href="${placePath(place)}"]`)?.dataset.water;
+    return water === 'lake' || water === 'river' ? { ...place, kind: water } : place;
+}
+
+/** Open a place from the list without reloading the page. Modified clicks (new tab) are left to the browser. */
+function onPlaceLinkClick(event) {
+    const link = event.target.closest('a[href]');
+    if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const { place } = readPlaceUrl(new URL(link.href));
+    if (!place) return;
+    event.preventDefault();
+    setLocation(withListedKind(place));
+    window.scrollTo({ top: 0, behavior: 'instant' }); // the page is about somewhere else now
+}
+
 /** Back and Forward: show the place that history entry was showing. */
 function onHistoryNavigation(event) {
     const linked = readPlaceUrl(window.location);
     applyAddressChoices(linked);
     const remembered = isPlace(event.state?.location) ? event.state.location : null;
-    const place = remembered ?? linked.place ?? storage.getLocation() ?? { ...APP.DEFAULT_LOCATION, fallback: true };
+    const place = remembered ?? (linked.place && withListedKind(linked.place)) ?? storage.getLocation() ?? { ...APP.DEFAULT_LOCATION, fallback: true };
     if (samePlace(place, state.location)) {
         render(); // only the #section, or a choice, changed
         return;
@@ -1459,6 +1493,7 @@ async function load() {
         if (offline) problem = "You're offline.";
         else if (weatherResult.reason instanceof OutsideCoverageError) {
             problem = 'Weather comes from the US National Weather Service, which has no data for this spot. Try a place in the United States.';
+            setIndexable(false);
         }
         showNotice(problem + stale, { action: () => load() });
         render();
@@ -1563,6 +1598,7 @@ function setLocation(place, { address = true } = {}) {
     }
     if (address) pushAddress(location, previous);
     hideNotice();
+    setIndexable(true);
     render();
     load();
 }
@@ -1913,6 +1949,7 @@ function init() {
     $('locateBtn').addEventListener('click', useMyLocation);
     $('refreshBtn').addEventListener('click', () => load());
     $('shareBtn').addEventListener('click', sharePlace);
+    $('places').addEventListener('click', onPlaceLinkClick);
     window.addEventListener('popstate', onHistoryNavigation);
     $('waterFilter').addEventListener('click', (event) => {
         const filter = event.target.closest('button')?.dataset.filter;
@@ -1933,7 +1970,7 @@ function init() {
     applyAddressChoices(linked);
     const saved = storage.getLocation();
     if (linked.place) {
-        state.location = knownPlace(linked) ?? linked.place;
+        state.location = knownPlace(linked) ?? withListedKind(linked.place);
         storage.setLocation(state.location);
         storage.addRecent(state.location);
     } else {

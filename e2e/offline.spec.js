@@ -14,7 +14,8 @@ test('after one visit the app opens offline and shows the last conditions with t
     const cached = await page.evaluate(async () => {
         const names = await caches.keys();
         const keys = await (await caches.open(names[0])).keys();
-        return keys.map((request) => new URL(request.url).pathname);
+        // A built site names scripts and styles after their content (/js/app.3f9c2a7b1e.js).
+        return keys.map((request) => new URL(request.url).pathname.replace(/\.[0-9a-f]{10}(\.[a-z0-9]+)$/, '$1'));
     });
     expect(cached).toEqual(expect.arrayContaining(['/index.html', '/styles.css', '/js/app.js', '/vendor/leaflet/leaflet.js']));
 

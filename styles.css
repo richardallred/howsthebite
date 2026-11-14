@@ -1005,6 +1005,19 @@ button, input { font: inherit; color: inherit; }
     color: var(--ink-2);
 }
 
+/* ---------- Popular places (rows that open like the questions above) ---------- */
+
+.place-links {
+    columns: 3 260px;
+    column-gap: 28px;
+    padding: 0 20px 14px;
+    font-size: 0.9375rem;
+    line-height: 1.4;
+}
+.place-links li { break-inside: avoid; }
+.place-links a { display: block; padding: 6px 0; color: var(--ink-2); text-decoration: none; }
+.place-links a:hover { color: var(--accent); text-decoration: underline; }
+
 /* ---------- Footer ---------- */
 
 .app-footer {

@@ -28,6 +28,7 @@ const SERVICES = {
 };
 
 const PROXY_PATH = /\/api\/usgs\/(?:([a-z-]+)\/items|statistics\/(observationNormals))$/;
+const NWS_PROXY_PATH = /\/api\/nws(\/.+)$/;
 
 export const test = base.extend({
     api: async ({ context }, use) => {
@@ -37,11 +38,11 @@ export const test = base.extend({
             alerts: [], // NWS alerts in effect: { event, onsetHours, endsHours } relative to NOW
             species: DEFAULT_SPECIES, // fish recorded in the region: { name: recordCount }, names from FISH in api-mocks.js
             coast: {}, // overrides merged into DEFAULT_COAST (tides, sea temperature, beach and wave forecasts)
-            // false: the site is plain static hosting, so /api/usgs is a 404 and the app goes direct.
-            // true:  the Cloudflare Pages proxy is deployed and answers /api/usgs.
+            // false: the site is plain static hosting, so /api/usgs and /api/nws are a 404 and the app goes direct.
+            // true:  the Cloudflare Pages Functions are deployed and answer them.
             proxy: false,
             failures: {}, // service name ('nws', 'photon', 'usgs', 'gbif', 'coops', 'beach', 'proxy', 'tiles') -> HTTP status, or 'network'
-            calls: [], // { service, url } for every mocked request
+            calls: [], // { service, url } for every mocked request; 'proxy' is /api/usgs, 'nws-proxy' is /api/nws
             unexpected: [], // requests to hosts without a mock
             fail(service, status = 500) { this.failures[service] = status; },
             restore(service) { delete this.failures[service]; },
@@ -50,10 +51,10 @@ export const test = base.extend({
             },
         };
 
-        const respond = (route, status, body) => route.fulfill({
+        const respond = (route, status, body, headers = {}) => route.fulfill({
             status,
             contentType: 'application/json',
-            headers: { 'access-control-allow-origin': '*' },
+            headers: { 'access-control-allow-origin': '*', ...headers },
             body: JSON.stringify(body),
         });
         const json = (route, body) => respond(route, 200, body);
@@ -79,6 +80,33 @@ export const test = base.extend({
             api.unexpected.push(url.href);
             return route.abort('blockedbyclient');
         };
+
+        /** Answers a National Weather Service request. `url` is the address at api.weather.gov. */
+        const nws = (route, url, headers = {}) => {
+            const answer = (body) => respond(route, 200, body, headers);
+            if (url.pathname.startsWith('/points/')) {
+                if ({ ...api.weather }.outsideCoverage) return respond(route, 404, { title: 'Data Unavailable For Requested Point' }, headers);
+                return answer(pointResponse(api.weather));
+            }
+            if (url.pathname.endsWith('/forecast')) return answer(forecastResponse(api.weather));
+            if (url.pathname.endsWith('/forecast/hourly')) return answer(hourlyForecastResponse(api.weather));
+            if (url.pathname.endsWith('/stations')) return answer(stationsResponse(api.weather));
+            if (url.pathname.endsWith('/observations')) return answer(observationsResponse(url, api.weather));
+            if (url.pathname === '/alerts/active') return answer(alertsResponse(api.alerts));
+            if (url.pathname === '/zones') return answer(marineZonesResponse());
+            if (/^\/gridpoints\/[A-Z]+\/\d+,\d+$/.test(url.pathname)) return answer(waveGridResponse(api.coast));
+            api.unexpected.push(url.href);
+            return route.abort('blockedbyclient');
+        };
+
+        // The same-origin stand-in for NWS, which the app turns to when api.weather.gov cannot
+        // be reached (js/api/nws.js). Deployed, or not, together with the USGS proxy.
+        await context.route((url) => NWS_PROXY_PATH.test(url.pathname), (route) => {
+            const url = new URL(route.request().url());
+            api.calls.push({ service: 'nws-proxy', url: url.href });
+            if (!api.proxy) return respond(route, 404, { error: 'Not found' });
+            return nws(route, new URL(NWS_PROXY_PATH.exec(url.pathname)[1] + url.search, `https://${SERVICES.nws}`), { 'x-proxy': 'nws' });
+        });
 
         // The same-origin USGS proxy. Mocked even when "not deployed" so the result is the
         // same whether the tests run against a plain static server or a Pages preview.
@@ -109,20 +137,7 @@ export const test = base.extend({
             if (failed(route, service)) return undefined;
 
             switch (service) {
-                case 'nws':
-                    if (url.pathname.startsWith('/points/')) {
-                        if ({ ...api.weather }.outsideCoverage) return respond(route, 404, { title: 'Data Unavailable For Requested Point' });
-                        return json(route, pointResponse(api.weather));
-                    }
-                    if (url.pathname.endsWith('/forecast')) return json(route, forecastResponse(api.weather));
-                    if (url.pathname.endsWith('/forecast/hourly')) return json(route, hourlyForecastResponse(api.weather));
-                    if (url.pathname.endsWith('/stations')) return json(route, stationsResponse(api.weather));
-                    if (url.pathname.endsWith('/observations')) return json(route, observationsResponse(url, api.weather));
-                    if (url.pathname === '/alerts/active') return json(route, alertsResponse(api.alerts));
-                    if (url.pathname === '/zones') return json(route, marineZonesResponse());
-                    if (/^\/gridpoints\/[A-Z]+\/\d+,\d+$/.test(url.pathname)) return json(route, waveGridResponse(api.coast));
-                    api.unexpected.push(url.href);
-                    return route.abort('blockedbyclient');
+                case 'nws': return nws(route, url);
                 case 'photon': return json(route, photonResponse(url));
                 case 'gbif': return json(route, gbifResponse(api.species));
                 case 'coops': return json(route, coopsResponse(url, api.coast));

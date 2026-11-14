@@ -1,8 +1,8 @@
 # Cloudflare Pages configuration. See the "Deploying to Cloudflare Pages" section of the README.
 #
-# The site is static files from dist/ (built by `npm run build`) plus one Pages
-# Function, functions/api/usgs/[[path]].js, which proxies and caches the USGS API.
-# The function reads a secret named USGS_API_KEY:
+# The site is static files from dist/ (built by `npm run build`) plus the Pages Functions
+# under functions/. One of them, functions/api/usgs/[[path]].js, which proxies and caches
+# the USGS API, reads a secret named USGS_API_KEY:
 #   production:  npx wrangler pages secret put USGS_API_KEY
 #   local:       a git-ignored .dev.vars file containing  USGS_API_KEY=...
 

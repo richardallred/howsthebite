@@ -15,6 +15,7 @@
 import { API } from '../config.js';
 import { HOUR_MS, distanceMiles, isNum } from '../core/util.js';
 import { HttpError, buildUrl, fetchJson, isAbort } from './http.js';
+import { nwsFetch } from './nws.js';
 
 const TIMEOUT_MS = 8000; // everything here is optional: the score copes without it
 const HAS_TIDES = 1;
@@ -169,7 +170,6 @@ export async function fetchBeachForecast(lat, lon, { signal } = {}) {
 // NWS marine wave forecast
 // ---------------------------------------------------------------------------
 
-const NWS_HEADERS = { Accept: 'application/geo+json' };
 const PROBE_KM = 8;
 const PROBE_BEARINGS = [90, 180, 270, 0, 135, 225, 45, 315];
 // Ocean and gulf marine zones; Great Lakes zones (LM, LH, …) and anything else are ignored.
@@ -217,7 +217,7 @@ export function parseWaveGrid(grid) {
  */
 export async function fetchWaveForecast(lat, lon, { signal, knownGridUrl = null } = {}) {
     const read = async (gridUrl) => {
-        const periods = parseWaveGrid(await fetchJson(gridUrl, { signal, timeoutMs: TIMEOUT_MS, headers: NWS_HEADERS }));
+        const periods = parseWaveGrid(await nwsFetch(gridUrl, { signal, timeoutMs: TIMEOUT_MS }));
         return periods.length ? { gridUrl, periods } : null;
     };
     if (knownGridUrl) {
@@ -231,7 +231,7 @@ export async function fetchWaveForecast(lat, lon, { signal, knownGridUrl = null 
     const probes = await Promise.all(PROBE_BEARINGS.map(async (bearing) => {
         const [probeLat, probeLon] = offset(lat, lon, bearing, PROBE_KM);
         try {
-            const zones = await fetchJson(`${API.NWS}/zones?type=coastal&point=${probeLat},${probeLon}`, { signal, timeoutMs: TIMEOUT_MS, headers: NWS_HEADERS });
+            const zones = await nwsFetch(`${API.NWS}/zones?type=coastal&point=${probeLat},${probeLon}`, { signal, timeoutMs: TIMEOUT_MS });
             const zone = (zones.features ?? []).map((feature) => feature.properties ?? {}).find((props) => OCEAN_ZONE.test(props.id ?? ''));
             return zone ? { lat: probeLat, lon: probeLon, open: /\bNM\b/i.test(zone.name ?? '') } : null;
         } catch (error) {
@@ -243,7 +243,7 @@ export async function fetchWaveForecast(lat, lon, { signal, knownGridUrl = null 
     const candidates = probes.filter(Boolean).sort((a, b) => Number(b.open) - Number(a.open)).slice(0, 3);
     for (const candidate of candidates) {
         try {
-            const point = await fetchJson(`${API.NWS}/points/${candidate.lat},${candidate.lon}`, { signal, timeoutMs: TIMEOUT_MS, headers: NWS_HEADERS });
+            const point = await nwsFetch(`${API.NWS}/points/${candidate.lat},${candidate.lon}`, { signal, timeoutMs: TIMEOUT_MS });
             const gridUrl = point.properties?.forecastGridData;
             const found = gridUrl ? await read(gridUrl) : null;
             if (found) return found;

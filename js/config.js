@@ -4,6 +4,9 @@
 export const API = {
     // US National Weather Service: observations, forecast, place names (public domain).
     NWS: 'https://api.weather.gov',
+    // Same-origin stand-in for it (functions/api/nws/[[path]].js), used only when a direct
+    // request cannot connect: see js/api/nws.js.
+    NWS_PROXY: '/api/nws',
     // Photon (OpenStreetMap data, hosted by komoot): town, lake and river search.
     PHOTON: 'https://photon.komoot.io/api/',
     // USGS Water Data OGC API (replaces waterservices.usgs.gov, which USGS is retiring).
