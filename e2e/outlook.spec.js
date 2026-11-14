@@ -58,6 +58,27 @@ test.describe('score outlook', () => {
         expect(await rows.count()).toBeGreaterThan(25); // every two hours over two and a half days
     });
 
+    test('marks the moon\'s major periods under the chart, in the read-out and in the table', async ({ page, app }) => {
+        await app.open();
+        // Overhead Monday, Tuesday and Wednesday afternoon, underfoot in the small hours between.
+        await expect(page.locator('#outlookChart .outlook-moon')).toHaveCount(5);
+        await expect(page.locator('#outlookNote')).toContainText('Bars under the chart are the two hours around the moon crossing overhead or underfoot.');
+
+        const plot = page.locator('#outlookChart .chart-plot');
+        const tooltip = page.locator('#outlookChart .chart-tooltip');
+        await plot.focus();
+        await page.keyboard.press('Home');
+        await expect(tooltip).not.toContainText('Moon'); // 10:00 AM, well before the 1:32 PM crossing
+        for (let hour = 0; hour < 3; hour++) await page.keyboard.press('ArrowRight');
+        await expect(tooltip).toContainText('Mon 1:00 PM');
+        await expect(tooltip).toContainText('Moon overhead');
+
+        await page.locator('#outlookChart summary').click();
+        await expect(page.locator('#outlookChart thead th')).toHaveText(['Time', 'Rating', 'Score', 'Moon']);
+        await expect(page.locator('#outlookChart tbody tr', { hasText: 'Mon 12:00 PM' })).toContainText(/Overhead 1:3[123] PM$/);
+        await expect(page.locator('#outlookChart tbody td:last-child', { hasText: /Overhead|Underfoot/ })).toHaveCount(5);
+    });
+
     test('says so when nothing changes all day, instead of naming a best time', async ({ page, api, app }) => {
         // Near-freezing water holds the score down at every hour.
         api.stations = api.stations.map((station) => (station.id === 'USGS-05500001'
@@ -74,6 +95,9 @@ test.describe('score outlook', () => {
         await page.getByRole('button', { name: 'Inshore', exact: true }).click();
 
         await expect(page.locator('#outlookNote')).toContainText('light and tide are calculated');
+        // No moon factor in salt water, so no major periods are marked.
+        await expect(page.locator('#outlookChart .outlook-moon')).toHaveCount(0);
+        await expect(page.locator('#outlookChart thead th')).toHaveText(['Time', 'Rating', 'Score']);
         // The fixture's tide turns every six hours, so the score dips at each slack: more ups and downs than light alone gives.
         const points = (await page.locator('#outlookChart .chart-line').getAttribute('d')).split('L').map((pair) => Number(pair.split(',')[1]));
         let turns = 0;

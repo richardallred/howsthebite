@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { forecastSkyClass } from '../js/api/weather-api.js';
 import { summariseAlerts } from '../js/core/alerts.js';
-import { moonAge, moonInfo, moonTransit } from '../js/core/moon.js';
+import { majorPeriods, moonAge, moonInfo, moonTransit, moonTransits } from '../js/core/moon.js';
 import { sunAltitude, sunTimes } from '../js/core/sun.js';
 import { changeOver, classifyTrend, lastHours, valueAt } from '../js/core/trend.js';
 import {
@@ -179,6 +179,49 @@ test('the moon crosses overhead and underfoot about every 12.4 hours', () => {
     assert.equal(atMidnight.position, 'underfoot');
     assert.ok(atMidnight.degreesAway < 15);
     assert.ok(moonTransit(noon + 6 * HOUR_MS, -87.6298).degreesAway > 60);
+});
+
+test('overhead times match the US Naval Observatory to the minute', () => {
+    // "Upper transit" from aa.usno.navy.mil/api/rstt/oneday, which gives whole minutes.
+    const published = [
+        [Date.UTC(2026, 5, 15, 18, 32), -87.6298], // Chicago, 1:32 PM CDT
+        [Date.UTC(2026, 10, 14, 22, 2), -87.6298], // Chicago, 4:02 PM CST
+        [Date.UTC(2026, 10, 23, 4, 9), -87.6298], // Chicago, 10:09 PM CST
+        [Date.UTC(2027, 2, 3, 16, 39), -118.25], // Los Angeles, 8:39 AM PST
+    ];
+    for (const [expected, lon] of published) {
+        const found = moonTransits(expected - 6 * HOUR_MS, expected + 6 * HOUR_MS, lon);
+        assert.equal(found.length, 1);
+        assert.equal(found[0].position, 'overhead');
+        assert.ok(Math.abs(found[0].t - expected) <= 90_000, `${new Date(found[0].t).toISOString()} against ${new Date(expected).toISOString()}`);
+    }
+});
+
+test('moon crossings alternate overhead and underfoot, half a lunar day apart, wherever the search starts', () => {
+    for (let lon = -170; lon <= 170; lon += 34) {
+        for (let start = Date.UTC(2026, 0, 1); start < Date.UTC(2026, 2, 1); start += 61 * HOUR_MS) {
+            const transits = moonTransits(start, start + 72 * HOUR_MS, lon);
+            assert.ok(transits.length === 5 || transits.length === 6);
+            assert.ok(transits[0].t >= start && transits[0].t - start < 12.7 * HOUR_MS, 'the first crossing after the start is not skipped');
+            for (let i = 1; i < transits.length; i++) {
+                const gapHours = (transits[i].t - transits[i - 1].t) / HOUR_MS;
+                assert.ok(gapHours > 12.2 && gapHours < 12.7, `gap of ${gapHours} h`);
+                assert.notEqual(transits[i].position, transits[i - 1].position);
+            }
+        }
+    }
+});
+
+test('major periods run an hour either side of a crossing and include one already under way', () => {
+    const overhead = Date.UTC(2026, 5, 15, 18, 32); // Chicago, see above
+    const [current, next] = majorPeriods(overhead + 30 * 60_000, overhead + 14 * HOUR_MS, -87.6298);
+    assert.equal(current.position, 'overhead');
+    assert.ok(Math.abs(current.t - overhead) <= 90_000);
+    assert.equal(current.end - current.start, 2 * HOUR_MS);
+    assert.equal(current.t - current.start, HOUR_MS);
+    assert.equal(next.position, 'underfoot');
+    // One that ended before the start is left out.
+    assert.equal(majorPeriods(overhead + 90 * 60_000, overhead + 3 * HOUR_MS, -87.6298).length, 0);
 });
 
 test('alerts: dangerous ones in effect are flagged, advisories are listed, the rest ignored', () => {
