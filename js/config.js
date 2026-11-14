@@ -1,4 +1,5 @@
 // Endpoints and tunables. No API keys are required for any of these services.
+// Same-origin paths start with "/": the page is also served at place addresses (/fishing/…).
 
 export const API = {
     // US National Weather Service: observations, forecast, place names (public domain).
@@ -12,7 +13,7 @@ export const API = {
     // NWS surf-zone forecast by beach (surf height, rip-current risk), an ArcGIS feature service.
     NWS_BEACH: 'https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/marine_beachforecast_summary/FeatureServer/0/query',
     // Same-origin proxy for satellite sea-surface temperature (functions/api/sst.js); optional.
-    SST_PROXY: 'api/sst',
+    SST_PROXY: '/api/sst',
     // GBIF occurrence search: which sport fish have been recorded around a place.
     GBIF: 'https://api.gbif.org/v1/occurrence/search',
     // USGS Statistics API: what a gauge normally reads on each day of the year.
@@ -21,7 +22,7 @@ export const API = {
     // Cloudflare Pages). It keeps the API key on the server and lets nearby visitors
     // share cached answers. Where the proxy is not deployed (plain static hosting,
     // local `npm start`) the app notices and talks to USGS directly instead.
-    USGS_PROXY: 'api/usgs',
+    USGS_PROXY: '/api/usgs',
 };
 
 export const APP = {

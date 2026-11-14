@@ -3,6 +3,8 @@
 // State lives in one object; `render()` redraws the page from it. Network
 // results are applied only if they belong to the most recent request, so
 // switching locations quickly can never show data for the wrong place.
+// Every place has its own address (/fishing/<lat>,<lon>/<name>, see core/place-url.js),
+// kept in the address bar and in the browser's history.
 
 import {
     fetchBeachForecast, fetchCoastWaterTemp, fetchCoastWaterTempHistory, fetchSeaSurfaceTemp, fetchTides, fetchWaveForecast,
@@ -18,6 +20,7 @@ import { APP } from './config.js';
 import { summariseAlerts } from './core/alerts.js';
 import { colourAdvice, lureConditions, lurePatterns, recommendLures } from './core/lures.js';
 import { moonInfo } from './core/moon.js';
+import { coordinateName, placeHref, placeMeta, placePath, readPlaceUrl, slugify } from './core/place-url.js';
 import { SPECIES_GROUPS, bestWindows, estimateWaterTemp, scoreConditions, scoreSeries } from './core/scoring.js';
 import { DEFAULT_LABELS, chooseSpecies, regionalSpecies, saltSpeciesOptions, speciesOptions } from './core/species.js';
 import { sunTimes } from './core/sun.js';
@@ -960,8 +963,10 @@ function renderCharts(derived) {
 function renderLocation() {
     setText('locationName', state.location?.name ?? 'Choose a location');
     // The page's own title stays while a first visit shows the default city, so search engines
-    // (which have no saved place) index the site for what it is, not for Chicago.
-    if (!state.location?.fallback) document.title = `${state.location?.name ?? 'Fishing forecast'} — How's the Bite?`;
+    // (which have no saved place) index the site for what it is, not for Chicago. A place's
+    // title matches the one its page is served with (functions/fishing/[[path]].js).
+    if (state.location && !state.location.fallback) document.title = placeMeta(state.location.name).title;
+    setCanonical(state.location && !state.location.fallback ? placePath(addressPlace(state.location)) : '/');
     renderUpdatedAt();
     renderRecents();
 }
@@ -995,10 +1000,15 @@ function renderRecents() {
     container.hidden = recents.length === 0;
     container.replaceChildren(
         el('span', { class: 'chips-label' }, 'Recent'),
-        ...recents.map((item) => el('button', {
+        // Real links, so a recent place can be opened in a new tab or have its address copied.
+        ...recents.map((item) => el('a', {
             class: 'chip',
-            type: 'button',
-            onClick: () => setLocation(item),
+            href: hrefFor(item),
+            onClick: (event) => {
+                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                event.preventDefault();
+                setLocation(item);
+            },
         }, item.name)),
     );
 }
@@ -1018,6 +1028,139 @@ function render() {
     renderLevel(derived);
     renderTides(derived);
     renderCharts(derived);
+    syncAddress();
+}
+
+// ---------------------------------------------------------------------------
+// Addresses: every place has its own (see core/place-url.js)
+// ---------------------------------------------------------------------------
+
+const MY_LOCATION = 'My location';
+
+/** The place as it goes into an address. A position with no town name is shared by its coordinates alone. */
+const addressPlace = (location) => (location.name === MY_LOCATION ? { ...location, name: '' } : location);
+
+/** The name someone opening this place's address will see. */
+const sharedName = (location) => addressPlace(location).name || coordinateName(location.lat, location.lon);
+
+/** Same spot (to the address's precision) and same name: nothing to reload. */
+const samePlace = (a, b) => Boolean(a && b) && Boolean(a.fallback) === Boolean(b.fallback)
+    && locationKey(a) === locationKey(b) && slugify(addressPlace(a).name) === slugify(addressPlace(b).name);
+
+/**
+ * The address of a place. With `choices`, also the kind of water and the fish the score is
+ * for, wherever there is a choice, so whoever opens it sees the same score.
+ */
+function hrefFor(location, { choices = false } = {}) {
+    const extra = {};
+    if (choices) {
+        const { modes, mode } = modeChoice();
+        if (modes.length > 1) extra.mode = mode;
+        const { options, chosen } = speciesChoice();
+        if (options.length > 1) extra.fish = chosen.id;
+    }
+    return placeHref(addressPlace(location), extra);
+}
+
+/** Point the canonical link and og:url at the page being shown, on the site's own domain. */
+function setCanonical(path) {
+    for (const [selector, attribute] of [['link[rel="canonical"]', 'href'], ['meta[property="og:url"]', 'content']]) {
+        const node = document.querySelector(selector);
+        const current = node?.getAttribute(attribute);
+        if (!current) continue;
+        const wanted = new URL(path, current).href;
+        if (current !== wanted) node.setAttribute(attribute, wanted);
+    }
+}
+
+/**
+ * Keep the address bar on what is shown, so it can be copied, bookmarked or reloaded. The
+ * choices are only known once the place has loaded (whether it is tidal, which fish live
+ * there), so until then the address is left as it is. The #section stays.
+ */
+function syncAddress() {
+    const location = state.location;
+    if (!location || location.fallback || state.loading || !state.weather) return;
+    const href = hrefFor(location, { choices: true }) + window.location.hash;
+    if (href !== window.location.pathname + window.location.search + window.location.hash) {
+        history.replaceState({ location }, '', href);
+    }
+}
+
+/** Give a newly chosen place its own history entry, so Back returns to the one before. */
+function pushAddress(location, previous) {
+    const href = hrefFor(location);
+    // The default city on a first visit is a placeholder, not somewhere to go back to.
+    if (!previous || previous.fallback) {
+        history.replaceState({ location }, '', href);
+        return;
+    }
+    // Record what the entry being left showed: a #section link may have made it without a place.
+    history.replaceState({ ...history.state, location: previous }, '');
+    history.pushState({ location }, '', href);
+}
+
+/** Choices carried by an address apply to this visit; saved preferences are left as they are. */
+function applyAddressChoices({ mode, freshFish, saltFish }) {
+    if (mode) state.mode = mode;
+    if (freshFish) state.speciesGroup = freshFish;
+    if (saltFish) state.saltGroup = saltFish;
+}
+
+const isPlace = (value) => Boolean(value) && isNum(value.lat) && isNum(value.lon) && typeof value.name === 'string';
+
+/**
+ * The visitor's own copy of a linked place, if they have one (the same spot, shared under
+ * the same name): it has the exact position, "My location" and the kind of water.
+ */
+function knownPlace(linked) {
+    return [storage.getLocation(), ...storage.getRecents()]
+        .find((item) => item && locationKey(item) === locationKey(linked.place) && sharedName(item) === linked.place.name) ?? null;
+}
+
+/** Back and Forward: show the place that history entry was showing. */
+function onHistoryNavigation(event) {
+    const linked = readPlaceUrl(window.location);
+    applyAddressChoices(linked);
+    const remembered = isPlace(event.state?.location) ? event.state.location : null;
+    const place = remembered ?? linked.place ?? storage.getLocation() ?? { ...APP.DEFAULT_LOCATION, fallback: true };
+    if (samePlace(place, state.location)) {
+        render(); // only the #section, or a choice, changed
+        return;
+    }
+    setLocation(place, { address: false });
+}
+
+let shareLabelTimer = null;
+
+/** Share the place on screen: the system share sheet where there is one, otherwise copy the link. */
+async function sharePlace() {
+    const location = state.location;
+    if (!location) return;
+    const url = new URL(hrefFor(location, { choices: Boolean(state.weather) && !state.loading }), window.location.origin).href;
+    const name = sharedName(location);
+    const result = state.weather ? derive()?.result : null;
+    const text = result
+        ? `How's the bite at ${name}? ${result.score}/100 (${result.band.label.toLowerCase()}) right now.`
+        : `How's the bite at ${name}?`;
+
+    if (typeof navigator.share === 'function') {
+        try {
+            await navigator.share({ title: placeMeta(name).ogTitle, text, url });
+            return;
+        } catch (error) {
+            if (error?.name === 'AbortError') return; // the sheet was closed
+            // Anything else (no permission, nothing to share to): copy the link instead.
+        }
+    }
+    try {
+        await navigator.clipboard.writeText(url);
+        setText('shareLabel', 'Link copied');
+        clearTimeout(shareLabelTimer);
+        shareLabelTimer = setTimeout(() => setText('shareLabel', 'Share'), 2500);
+    } catch {
+        showNotice(`Copy this link to share it: ${url}`, { tone: 'info' });
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1393,9 +1536,15 @@ const isStale = () => !state.weather || Date.now() - state.weather.fetchedAt > A
 // Actions
 // ---------------------------------------------------------------------------
 
-function setLocation(place) {
+/**
+ * Show a place. `address: false` when the address bar already shows it (Back and Forward);
+ * otherwise it gets a new history entry.
+ */
+function setLocation(place, { address = true } = {}) {
+    const previous = state.location;
     const location = { lat: roundCoord(place.lat), lon: roundCoord(place.lon), name: place.name };
     if (place.kind) location.kind = place.kind; // 'lake' or 'river' when a water body was searched for
+    if (place.fallback) location.fallback = true; // the default city, when Back returns to a first visit
     state.location = location;
     state.weather = null;
     state.stations = [];
@@ -1408,8 +1557,11 @@ function setLocation(place) {
     state.alerts = [];
     state.coast = null;
     state.loadFailed = false;
-    storage.setLocation(location);
-    storage.addRecent(location);
+    if (!location.fallback) {
+        storage.setLocation(location);
+        storage.addRecent(location);
+    }
+    if (address) pushAddress(location, previous);
     hideNotice();
     render();
     load();
@@ -1493,7 +1645,7 @@ async function useMyLocation() {
         const lat = roundCoord(position.coords.latitude);
         const lon = roundCoord(position.coords.longitude);
         const name = await reverseGeocode(lat, lon).catch(() => null);
-        setLocation({ lat, lon, name: name ?? 'My location' });
+        setLocation({ lat, lon, name: name ?? MY_LOCATION });
     } catch (error) {
         showNotice(GEO_ERRORS[error?.code] ?? GEO_ERRORS[2]);
     } finally {
@@ -1649,9 +1801,11 @@ function initSectionNav() {
     for (const id of byId.keys()) observer.observe($(id));
 }
 
-/** Honour #forecast-style links (and the old ?section= shortcuts) once content has a height. */
-function scrollToRequestedSection() {
-    const id = window.location.hash.slice(1) || new URLSearchParams(window.location.search).get('section');
+/**
+ * Honour #forecast-style links (and the old ?section= shortcuts) once content has a height.
+ * `id` is read at start-up, before the address bar is moved to the place's own address.
+ */
+function scrollToRequestedSection(id) {
     const target = id && ['forecast', 'water', 'history'].includes(id === 'map' ? 'water' : id) ? $(id === 'map' ? 'water' : id) : null;
     target?.scrollIntoView();
 }
@@ -1758,6 +1912,8 @@ function init() {
 
     $('locateBtn').addEventListener('click', useMyLocation);
     $('refreshBtn').addEventListener('click', () => load());
+    $('shareBtn').addEventListener('click', sharePlace);
+    window.addEventListener('popstate', onHistoryNavigation);
     $('waterFilter').addEventListener('click', (event) => {
         const filter = event.target.closest('button')?.dataset.filter;
         if (filter) setWaterFilter(filter);
@@ -1771,18 +1927,32 @@ function init() {
         if (group) setSpeciesGroup(group);
     });
 
+    // A place in the address (a shared link, a bookmark, a reload) wins over the saved one.
+    const section = window.location.hash.slice(1) || new URLSearchParams(window.location.search).get('section');
+    const linked = readPlaceUrl(window.location);
+    applyAddressChoices(linked);
     const saved = storage.getLocation();
-    state.location = saved ?? { ...APP.DEFAULT_LOCATION, fallback: true };
+    if (linked.place) {
+        state.location = knownPlace(linked) ?? linked.place;
+        storage.setLocation(state.location);
+        storage.addRecent(state.location);
+    } else {
+        state.location = saved ?? { ...APP.DEFAULT_LOCATION, fallback: true };
+        // Not a place after all (only possible where no server checks addresses first).
+        if (linked.invalid) history.replaceState(null, '', `/${window.location.hash}`);
+    }
+    history.replaceState({ ...history.state, location: state.location }, '');
 
     const restored = restoreSnapshot();
     render();
-    if (restored) scrollToRequestedSection();
+    if (restored) scrollToRequestedSection(section);
 
     const firstLoad = isStale() ? load() : Promise.resolve();
     firstLoad.then(() => {
-        if (!restored) scrollToRequestedSection();
+        if (!restored) scrollToRequestedSection(section);
     });
-    if (!saved) offerLocalConditions();
+    // Someone who followed a link came to see that place: no hint, and no switching to where they are.
+    if (!saved && !linked.place) offerLocalConditions();
 
     // Keep things fresh while the app stays open, and when it comes back to the foreground.
     const refreshIfStale = () => {

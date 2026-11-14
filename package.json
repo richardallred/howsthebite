@@ -5,7 +5,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "http-server . -p 8000 -c-1 -o",
+    "start": "node scripts/serve.mjs 8000",
     "build": "node scripts/build.mjs",
     "preview": "npm run build && wrangler pages dev dist --port 8788",
     "deploy": "npm run build && wrangler pages deploy dist",
@@ -27,7 +27,6 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",
-    "http-server": "^14.1.1",
     "wrangler": "^4.161.0"
   }
 }

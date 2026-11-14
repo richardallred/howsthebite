@@ -5,8 +5,8 @@
 
 import { el } from './dom.js';
 
-const LEAFLET_JS = 'vendor/leaflet/leaflet.js';
-const LEAFLET_CSS = 'vendor/leaflet/leaflet.css';
+const LEAFLET_JS = '/vendor/leaflet/leaflet.js';
+const LEAFLET_CSS = '/vendor/leaflet/leaflet.css';
 const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 const TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 

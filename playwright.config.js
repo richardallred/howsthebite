@@ -46,7 +46,7 @@ export default defineConfig({
     ],
 
     webServer: externalBaseUrl ? undefined : {
-        command: `npx http-server . -p ${PORT} -c-1 -s`,
+        command: `node scripts/serve.mjs ${PORT}`, // serves place addresses (/fishing/…) as the site does
         url: `http://localhost:${PORT}/index.html`,
         reuseExistingServer: !process.env.CI,
     },

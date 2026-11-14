@@ -2,6 +2,9 @@
 //
 // - App files (same origin) are fetched network-first, so a deploy shows up on
 //   the next load without any cache-busting, with the cache as offline fallback.
+// - Place pages (/fishing/…) are the shell with the place's name in the title and meta
+//   tags. They are not cached one by one; offline, any of them gets the cached shell,
+//   which reads the place from the address.
 // - API calls are NOT cached here. The page keeps its own snapshot of the last
 //   good data (with its real timestamp) and shows that when offline; serving a
 //   stale API response from here would make old data look fresh.
@@ -39,6 +42,7 @@ const SHELL = [
     'js/core/alerts.js',
     'js/core/lures.js',
     'js/core/moon.js',
+    'js/core/place-url.js',
     'js/core/scoring.js',
     'js/core/season.js',
     'js/core/sky.js',
@@ -85,13 +89,15 @@ self.addEventListener('fetch', (event) => {
         const cache = await caches.open(CACHE);
         try {
             const response = await fetch(request);
-            if (response.ok) cache.put(request, response.clone());
+            if (response.ok && !url.pathname.startsWith('/fishing/')) cache.put(request, response.clone());
             return response;
         } catch (error) {
             const cached = await cache.match(request, { ignoreSearch: true });
             if (cached) return cached;
             if (request.mode === 'navigate') {
-                const shell = await cache.match('index.html');
+                // The scope root first: Cloudflare Pages answers 'index.html' with a redirect to '/',
+                // and a redirected response cannot answer a navigation (the page fails to load).
+                const shell = (await cache.match('./')) ?? (await cache.match('index.html'));
                 if (shell) return shell;
             }
             throw error;

@@ -50,17 +50,18 @@
     </script>
     <meta name="theme-color" content="#eceee8">
     <meta name="color-scheme" content="light dark">
-    <link rel="manifest" href="manifest.json">
-    <link rel="icon" href="favicon.svg" type="image/svg+xml">
-    <link rel="icon" href="favicon.ico" sizes="any">
-    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-    <link rel="preload" href="fonts/archivo-variable.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="fonts/instrument-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <link rel="preload" href="/fonts/archivo-variable.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/instrument-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 
+    <!-- Paths are absolute because the same page is served at place addresses (/fishing/…). -->
     <!-- Applies the saved theme before first paint (blocking on purpose). -->
-    <script src="js/theme-init.js"></script>
+    <script src="/js/theme-init.js"></script>
 
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
     <!-- Icon sprite: 24×24, stroked with currentColor. -->
@@ -88,6 +89,7 @@
             <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
             <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.01"/></symbol>
             <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+            <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7.5 7.5 4.5-4.5 4.5 4.5"/><path d="M5.5 11.5v7a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-7"/></symbol>
         </defs>
     </svg>
 
@@ -95,7 +97,7 @@
 
     <header class="app-header">
         <div class="wrap header-row">
-            <a class="brand" href="./">
+            <a class="brand" href="/">
                 <svg class="icon brand-icon" aria-hidden="true"><use href="#i-hook"/></svg>
                 <span>How's the Bite</span>
             </a>
@@ -127,6 +129,10 @@
                     <p id="updatedAt" aria-live="polite">&nbsp;</p>
                     <button class="btn btn-quiet btn-icon btn-small" id="refreshBtn" type="button" aria-label="Refresh conditions" title="Refresh conditions">
                         <svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>
+                    </button>
+                    <button class="btn btn-quiet btn-small" id="shareBtn" type="button">
+                        <svg class="icon" aria-hidden="true"><use href="#i-share"/></svg>
+                        <span id="shareLabel" aria-live="polite">Share</span>
                     </button>
                 </div>
             </div>
@@ -401,6 +407,6 @@
 
     <noscript><p class="noscript">How's the Bite needs JavaScript to load live conditions.</p></noscript>
 
-    <script type="module" src="js/app.js"></script>
+    <script type="module" src="/js/app.js"></script>
 </body>
 </html>

@@ -15,7 +15,9 @@
 export const OLD_HOST = 'howsthebite.pages.dev';
 export const SITE = 'https://howsthebite.io';
 
-const isPagePath = (path) => path === '/' || path.endsWith('.html') || !/\.[a-z0-9]+$/i.test(path.split('/').pop());
+// Place addresses can end in a coordinate ("/fishing/35.6,-82.55"), which looks like a file extension.
+const isPagePath = (path) => path === '/' || path.startsWith('/fishing/') || path.endsWith('.html')
+    || !/\.[a-z0-9]+$/i.test(path.split('/').pop());
 
 export function redirectTarget(request) {
     const url = new URL(request.url);
