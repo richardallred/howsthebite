@@ -179,7 +179,7 @@ test.describe('species on offer follow the region', () => {
 
     test('a northern place offers every group, named for the fish recorded there', async ({ page, api, app }) => {
         await app.open();
-        await expect(choices(page)).toHaveText(['All species', 'Bass & panfish', 'Walleye & pike', 'Trout']);
+        await expect(choices(page)).toHaveText(['All species', 'Bass & panfish', 'Catfish', 'Walleye & pike', 'Trout']);
         await expect(page.locator('#speciesNote')).toBeHidden();
 
         // One question per region, remembered afterwards: a reload asks nothing.
@@ -190,19 +190,33 @@ test.describe('species on offer follow the region', () => {
         expect(asked.getAll('license')).toEqual(['CC0_1_0', 'CC_BY_4_0']);
         await page.reload();
         await app.loaded();
-        await expect(choices(page)).toHaveCount(4);
+        await expect(choices(page)).toHaveCount(5);
         expect(api.count('gbif')).toBe(1);
     });
 
-    test('where only bass and panfish are recorded there is nothing to choose, and the score says what it used', async ({ page, api, app }) => {
+    test('where only warm-water fish are recorded, bass and panfish lead with catfish beside them', async ({ page, api, app }) => {
         api.species = { largemouth: 900, bluegill: 700, channelCatfish: 60, sauger: 4, rainbow: 3 }; // a few strays
         await app.open();
-        await expect(choices(page)).toHaveCount(0);
-        await expect(page.locator('#speciesGroup')).toBeHidden();
-        await expect(page.locator('#speciesNote')).toHaveText('Scored for bass & panfish, the sport fish found around here.');
+        // No "All species": with one temperature group it would mean the same as bass and panfish.
+        await expect(choices(page)).toHaveText(['Bass & panfish', 'Catfish']);
+        await expect(page.getByRole('button', { name: 'Bass & panfish' })).toHaveAttribute('aria-pressed', 'true');
         // 68°F sits just under the top of the bass curve, where "all species" would have given full marks.
         await expect(app.factor('Water temperature')).toContainText('Prime range for bass & panfish');
         await expect(app.factor('Water temperature').locator('.factor-points')).toHaveText(/^34\/35/);
+    });
+
+    test('catfish have their own score and lures, and the choice is remembered', async ({ page, app }) => {
+        await app.open();
+        await page.getByRole('button', { name: 'Catfish' }).click();
+        await expect(page.getByRole('button', { name: 'Catfish' })).toHaveAttribute('aria-pressed', 'true');
+        // 68°F is short of the catfish's warmer prime range.
+        await expect(app.factor('Water temperature')).not.toContainText('Prime range');
+        await expect(page.locator('.lure-target').first()).toHaveText(/^For catfish/);
+        await expect(page.locator('.lure-target', { hasText: 'For bass' })).toHaveCount(0);
+
+        await page.reload();
+        await app.loaded();
+        await expect(page.getByRole('button', { name: 'Catfish' })).toHaveAttribute('aria-pressed', 'true');
     });
 
     test('a preference for fish that do not live here is set aside, not forgotten', async ({ page, api, app }) => {
@@ -213,14 +227,14 @@ test.describe('species on offer follow the region', () => {
         // Asheville's region in this test: bass, smallmouth, perch and trout, but no walleye or pike.
         api.species = { largemouth: 500, bluegill: 300, smallmouth: 80, perch: 40, walleye: 2, brown: 200 };
         await app.search('Asheville', 'Asheville, North Carolina');
-        await expect(choices(page)).toHaveText(['All species', 'Bass & panfish', 'Smallmouth & perch', 'Trout']);
+        await expect(choices(page)).toHaveText(['All species', 'Bass & panfish', 'Catfish', 'Smallmouth & perch', 'Trout']);
         await expect(page.getByRole('button', { name: 'Smallmouth & perch' })).toHaveAttribute('aria-pressed', 'true'); // same group, local name
         await expect(app.factor('Water temperature')).toContainText('Prime range for smallmouth & perch');
 
         // Lake Norman's region: no cool-water fish at all.
         api.species = { largemouth: 500, bluegill: 300, brown: 60 };
         await app.search('Lake Norman', 'Lake Norman, North Carolina');
-        await expect(choices(page)).toHaveText(['All species', 'Bass & panfish', 'Trout']);
+        await expect(choices(page)).toHaveText(['All species', 'Bass & panfish', 'Catfish', 'Trout']);
         await expect(page.getByRole('button', { name: 'All species' })).toHaveAttribute('aria-pressed', 'true');
         await expect(page.locator('#speciesNote')).toHaveText("Walleye & pike aren't recorded around here.");
 
@@ -235,6 +249,6 @@ test.describe('species on offer follow the region', () => {
         api.fail('gbif', 503);
         await app.open();
         await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
-        await expect(choices(page)).toHaveText(['All species', 'Bass & panfish', 'Walleye & pike', 'Trout']);
+        await expect(choices(page)).toHaveText(['All species', 'Bass & panfish', 'Catfish', 'Walleye & pike', 'Trout']);
     });
 });

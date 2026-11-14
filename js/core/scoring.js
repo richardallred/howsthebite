@@ -88,6 +88,10 @@ function trendText(trend, { unit, digits, period }) {
 //   cool: walleye optimum about 64–72°F, pike 60–65°F; activity drops off above the mid 70s.
 //   cold: trout catch rates were 77% lower above 73°F than below 66°F, and released fish
 //         died far more often; agencies restrict trout fishing at about 73°F.
+//   catfish: channel catfish grow best at 79–84°F and poorly below 70°F (the US Fish and
+//         Wildlife Service habitat model), so their prime runs warmer than the bass's and
+//         holds further into the heat; blue catfish keep feeding in cold water, so the cold
+//         side never quite reaches nothing.
 //   any:  a compromise for people who have not said what they are after.
 export const SPECIES_GROUPS = {
     any: {
@@ -98,9 +102,17 @@ export const SPECIES_GROUPS = {
     },
     warm: {
         label: 'Bass & panfish',
-        prime: 'Prime range for bass, panfish and catfish',
+        prime: 'Prime range for bass and panfish',
         curve: [[33, 0.05], [45, 0.2], [54, 0.4], [64, 0.8], [69, 1], [80, 1], [85, 0.75], [90, 0.45], [95, 0.15], [98, 0]],
         oxygen: [[3, 0.2], [3.5, 0.5], [4, 0.75], [5, 1]],
+    },
+    catfish: {
+        label: 'Catfish',
+        prime: 'Prime range for catfish',
+        curve: [[33, 0.1], [45, 0.25], [55, 0.45], [65, 0.75], [72, 1], [86, 1], [90, 0.8], [94, 0.45], [98, 0.1], [100, 0]],
+        oxygen: [[3, 0.2], [3.5, 0.5], [4, 0.75], [5, 1]],
+        light: 'catfish',
+        flow: 'catfish',
     },
     cool: {
         label: 'Walleye & pike',
@@ -196,7 +208,7 @@ export function temperatureZone(tempF, group = 'any') {
 /**
  * @param {number} tempF
  * @param {object} [options]
- * @param {'any'|'warm'|'cool'|'cold'} [options.group]
+ * @param {'any'|'warm'|'catfish'|'cool'|'cold'} [options.group]
  * @param {string|null} [options.label]   what the group is called in this region, for the note
  * @param {boolean} [options.estimated]   no sensor nearby: the temperature is a guess from air temperature
  * @param {number|null} [options.change24h]  shown, but not scored: its effect on catch rates is unmeasured
@@ -232,6 +244,11 @@ export function scoreWaterTemp(tempF, { group = 'any', label = null, estimated =
 // low light than bright sun (walleye success 0.47 at dusk, 0.34 at dawn, 0.26 by day;
 // bass 1.62/h at dusk, 1.14/h at dawn, 0.87/h by day, 0.52/h at night).
 //
+// Catfish are the exception in fresh water. Nobody has compared their catch rate by day and by
+// night, but in a 24-hour creel survey of two Ohio reservoirs over half the channel catfish
+// harvest, and of the effort spent on them, came after dark, and agencies' guides agree they
+// feed most at night and in low light. So night is not marked down for them, and bright sun is.
+//
 // In salt water the pattern is flatter. Fish are most active around dawn and dusk there too,
 // but the one creel survey that compared day with night (1,862 shore anglers in Mississippi)
 // found no real difference, so night is not marked down and daytime only a little.
@@ -244,6 +261,18 @@ const LIGHT_PROFILES = {
         nightNote: 'After dark — slower for most species, walleye and catfish excepted',
         duskNote: 'Evening low light — usually the best bite of the day',
         dawnNote: 'Early-morning low light — a strong window',
+    },
+    catfish: {
+        dusk: 1,
+        dawn: 0.8,
+        night: 0.85,
+        day: { clear: 0.4, partly: 0.5, overcast: 0.65, 'light-precip': 0.68, precip: 0.62, storm: 0.6, unknown: 0.5 },
+        nightNote: 'After dark — prime time for catfish',
+        duskNote: 'Evening low light — catfish move up to feed',
+        dawnNote: 'Early-morning low light — still a good catfish window',
+        dayNotes: {
+            clear: 'Bright sun — catfish hold deep or in cover; fish holes and current',
+        },
     },
     salt: {
         dusk: 1,
@@ -282,10 +311,12 @@ const DAY_NOTES = {
  * @param {number} [c.lon]
  * @param {string} [c.sky]  sky class from sky.js
  * @param {'fresh'|'salt'} [c.water]
+ * @param {string|null} [c.species]  a fresh-water species group with its own light profile (catfish)
  * @returns {{ points, note, trend, phase: 'dawn'|'dusk'|'day'|'night' }}
  */
-export function scoreLight({ time, lat, lon, sky = 'unknown', water = 'fresh' }) {
-    const profile = LIGHT_PROFILES[water] ?? LIGHT_PROFILES.fresh;
+export function scoreLight({ time, lat, lon, sky = 'unknown', water = 'fresh', species = null }) {
+    const own = water === 'fresh' ? SPECIES_GROUPS[species]?.light : null;
+    const profile = LIGHT_PROFILES[own ?? water] ?? LIGHT_PROFILES.fresh;
     const { dawn: DAWN_LIGHT, dusk: DUSK_LIGHT, night: NIGHT_LIGHT } = profile;
     const dayShare = profile.day[sky] ?? profile.day.unknown;
     const dayNote = profile.dayNotes?.[sky] ?? DAY_NOTES[sky] ?? DAY_NOTES.unknown;
@@ -358,7 +389,13 @@ export function scoreWind(mph, { gustMph = null } = {}) {
 
 const PERCENTILE_KEYS = [5, 10, 25, 50, 75, 90, 95];
 // High water lowered catch rates where it was measured; low water mostly did not.
-const FLOW_CURVE = [[0, 0.6], [10, 0.75], [25, 0.95], [35, 1], [70, 1], [80, 0.8], [90, 0.45], [95, 0.2], [100, 0]];
+// Catfish find food by smell and agencies' guides send anglers out on rising, stained water
+// after rain, so for them water somewhat above normal costs nothing (an unmeasured rule of
+// thumb); a river in flood is still poor fishing and unsafe.
+const FLOW_CURVES = {
+    fresh: [[0, 0.6], [10, 0.75], [25, 0.95], [35, 1], [70, 1], [80, 0.8], [90, 0.45], [95, 0.2], [100, 0]],
+    catfish: [[0, 0.6], [10, 0.75], [25, 0.95], [35, 1], [85, 1], [90, 0.75], [95, 0.35], [100, 0]],
+};
 
 /** Where `cfs` falls in the station's record for this day of the year, 0–100. Null if the record is unusable. */
 export function flowPercentile(cfs, percentiles) {
@@ -381,22 +418,25 @@ export function flowPercentile(cfs, percentiles) {
 
 /**
  * @param {{ cfs: number, percentiles: Record<number, number> } | null} flow
+ * @param {object} [options]
+ * @param {string|null} [options.species]  a species group with its own tolerance of high water (catfish)
  * @returns factor result, or null when flow does not apply or has no usable record
  */
-export function scoreFlow(flow) {
+export function scoreFlow(flow, { species = null } = {}) {
     const percentile = flowPercentile(flow?.cfs, flow?.percentiles);
     if (percentile === null) return null;
+    const curveId = SPECIES_GROUPS[species]?.flow ?? 'fresh';
     let note;
     if (percentile > 95) note = 'Very high for the date — likely blown out';
     else if (percentile > 90) note = 'High for the date — fast and probably muddy';
-    else if (percentile > 75) note = 'Above normal — pushy, may be off-colour';
+    else if (percentile > 75) note = curveId === 'catfish' ? 'Above normal — stained water and fresh food suit catfish' : 'Above normal — pushy, may be off-colour';
     else if (percentile >= 25) note = 'Normal for the date';
     else if (percentile >= 10) note = 'Below normal — lower, clearer water';
     else note = 'Very low for the date — skinny, clear water';
 
     const median = Number(flow.percentiles[50]);
     const trend = median > 0 ? `${Math.round((flow.cfs / median) * 100)}% of the median for today` : null;
-    return graded(curve(FLOW_CURVE, percentile), FACTOR_MAX.flow, { note, trend, percentile });
+    return graded(curve(FLOW_CURVES[curveId], percentile), FACTOR_MAX.flow, { note, trend, percentile });
 }
 
 // ---------------------------------------------------------------------------
@@ -536,7 +576,7 @@ const limitFor = (share) => Math.round(100 * clamp(0.1 + 1.8 * share, 0, 1));
  * @param {boolean} [c.waterEstimated]
  * @param {number|null} [c.waterChange24h]
  * @param {number|null} [c.oxygenMgL]
- * @param {'any'|'warm'|'cool'|'cold'} [c.speciesGroup]
+ * @param {'any'|'warm'|'catfish'|'cool'|'cold'} [c.speciesGroup]
  * @param {string|null} [c.speciesLabel]  the group's name in this region, e.g. 'Smallmouth & perch'
  * @param {number|null} c.pressureInHg
  * @param {number|null} [c.pressureChange3h]
@@ -557,16 +597,17 @@ export function scoreConditions(c) {
     const mode = c.mode in FACTOR_WEIGHTS ? c.mode : 'fresh';
     const weights = FACTOR_WEIGHTS[mode];
     const salt = mode !== 'fresh';
+    const group = c.speciesGroup ?? (salt ? 'warmsalt' : 'any');
     const every = {
         water: () => scoreWaterTemp(c.waterTempF, {
-            group: c.speciesGroup ?? (salt ? 'warmsalt' : 'any'), label: c.speciesLabel, estimated: c.waterEstimated,
+            group, label: c.speciesLabel, estimated: c.waterEstimated,
             change24h: c.waterChange24h, oxygenMgL: c.oxygenMgL,
         }),
         waves: () => scoreWaves(c.waveFt),
         tide: () => scoreTide(c.tides, date.getTime()),
-        light: () => scoreLight({ time: date.getTime(), lat: c.lat, lon: c.lon, sky: c.sky, water: salt ? 'salt' : 'fresh' }),
+        light: () => scoreLight({ time: date.getTime(), lat: c.lat, lon: c.lon, sky: c.sky, water: salt ? 'salt' : 'fresh', species: group }),
         wind: () => scoreWind(c.windMph, { gustMph: c.gustMph }),
-        flow: () => scoreFlow(c.flow),
+        flow: () => scoreFlow(c.flow, { species: group }),
         moon: () => scoreMoon(date, c.lon),
         pressure: () => scorePressure(c.pressureInHg, { change3h: c.pressureChange3h }),
     };

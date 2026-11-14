@@ -222,3 +222,13 @@ test('colour advice gives the tradition, the forage of the season, and what the 
     assert.match(colourAdvice({ clarity: 'normal', light: 'bright' }, 'shad'), /Match the shad/);
     assert.doesNotMatch(colourAdvice({ clarity: 'muddy', light: 'bright' }, 'shad'), /Match/);
 });
+
+test('catfish on their own fill the list, judged against their own temperature range', () => {
+    // 84°F in July: past the spawn, in the summer pattern of feeding after dark.
+    const night = picks(['catfish'], { waterTempF: 84, phase: 'night', date: JULY }, { limit: 4 });
+    assert.ok(night.length >= 3);
+    assert.ok(night.every((pick) => pick.target === 'catfish'));
+    assert.equal(night[0].name, 'Prepared "stink" bait on the bottom');
+    // 66°F is short of the catfish's prime, so cool-water advice (cut bait over prepared bait) applies.
+    assert.ok(names(['catfish'], { waterTempF: 66, phase: 'night', date: OCTOBER }).includes('Cut bait on the bottom'));
+});

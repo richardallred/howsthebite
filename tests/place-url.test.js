@@ -92,6 +92,7 @@ test('choices in the query are read only when they are real ones', () => {
     assert.equal(linked.saltFish, null);
     assert.equal(linked.place.kind, undefined);
     assert.equal(readPlaceUrl(at('/fishing/29.3,-94.8/galveston-texas?fish=warmsalt')).saltFish, 'warmsalt');
+    assert.equal(readPlaceUrl(at('/fishing/38.63,-90.2/st-louis-missouri?fish=catfish')).freshFish, 'catfish');
     assert.equal(readPlaceUrl(at('/fishing/29.3,-94.8/galveston-texas?mode=deep-sea&fish=shark')).mode, null);
 });
 

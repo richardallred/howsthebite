@@ -12,7 +12,8 @@ export const SPORT_FISH = [
     { key: 2394503, group: 'warm', name: 'bluegill' },
     { key: 2394526, group: 'warm', name: 'black crappie' },
     { key: 2394534, group: 'warm', name: 'white crappie' },
-    { key: 5202520, group: 'warm', name: 'channel catfish' },
+
+    { key: 5202520, group: 'catfish', name: 'catfish' }, // channel
 
     // Listed in the order they are named on the button.
     { key: 2382172, group: 'cool', name: 'walleye' },
@@ -31,10 +32,16 @@ export const SPORT_FISH = [
     { key: 5204024, group: 'cold', name: 'salmon' }, // chinook
 ];
 
-export const GROUP_IDS = ['warm', 'cool', 'cold'];
+/** Fresh-water groups, in the order they are offered. */
+export const GROUP_IDS = ['warm', 'catfish', 'cool', 'cold'];
+/**
+ * Catfish share the bass's water, so they are not a temperature group of their own: they are
+ * a choice beside the others, but "All species" means the temperature groups (see speciesOptions).
+ */
+const TEMPERATURE_GROUPS = ['warm', 'cool', 'cold'];
 
 /** The usual labels: for the far north of the lower 48, and wherever the records cannot refine them. */
-export const DEFAULT_LABELS = { any: 'All species', warm: 'Bass & panfish', cool: 'Walleye & pike', cold: 'Trout' };
+export const DEFAULT_LABELS = { any: 'All species', warm: 'Bass & panfish', catfish: 'Catfish', cool: 'Walleye & pike', cold: 'Trout' };
 
 // Below this many records in all, the region is too thinly surveyed to judge from records.
 const MIN_RECORDS = 20;
@@ -55,11 +62,11 @@ const DEEP_SOUTH_LATITUDE = 31; // Florida, the Gulf coast, south Texas, Hawaii
 const capitalise = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 
 // The fish each group stands for when the records cannot say more (also used for lure advice).
-const DEFAULT_NAMES = { warm: ['bass', 'panfish', 'catfish'], cool: ['walleye', 'pike'], cold: ['trout'] };
+const DEFAULT_NAMES = { warm: ['bass', 'panfish'], catfish: ['catfish'], cool: ['walleye', 'pike'], cold: ['trout'] };
 
 /** The group's fish that are actually recorded here, leading ones first: ['walleye', 'pike'], ['smallmouth'], ['trout', 'salmon']. */
 function namesFor(group, counts, groupTotal) {
-    if (group === 'warm') return DEFAULT_NAMES.warm;
+    if (group === 'warm' || group === 'catfish') return DEFAULT_NAMES[group];
     const byName = new Map();
     for (const fish of SPORT_FISH) {
         if (fish.group === group) byName.set(fish.name, (byName.get(fish.name) ?? 0) + (Number(counts[fish.key]) || 0));
@@ -72,7 +79,7 @@ function namesFor(group, counts, groupTotal) {
 }
 
 /** "Walleye & pike", "Smallmouth", "Trout & salmon": the two leading names. */
-const labelOf = (id, names) => (id === 'warm' ? DEFAULT_LABELS.warm : capitalise(names.slice(0, 2).join(' & ')));
+const labelOf = (id, names) => (id === 'warm' || id === 'catfish' ? DEFAULT_LABELS[id] : capitalise(names.slice(0, 2).join(' & ')));
 
 const group = (id, available, names, records = 0) => ({ available, label: labelOf(id, names), names, records });
 
@@ -85,6 +92,7 @@ function assumedFor(lat) {
     const farSouth = lat < DEEP_SOUTH_LATITUDE;
     return {
         warm: group('warm', !alaska, DEFAULT_NAMES.warm),
+        catfish: group('catfish', !alaska, DEFAULT_NAMES.catfish),
         cool: group('cool', !farSouth, alaska ? ['pike'] : DEFAULT_NAMES.cool),
         cold: group('cold', !farSouth, alaska ? ['trout', 'salmon'] : DEFAULT_NAMES.cold),
     };
@@ -93,7 +101,7 @@ function assumedFor(lat) {
 /**
  * @param {Record<string, number>|null} counts  records per GBIF species key for the region
  * @param {number} lat  latitude of the place, for the fallback and for Alaska
- * @returns {{ known: boolean, groups: Record<'warm'|'cool'|'cold', { available: boolean, label: string, names: string[], records: number }> }}
+ * @returns {{ known: boolean, groups: Record<'warm'|'catfish'|'cool'|'cold', { available: boolean, label: string, names: string[], records: number }> }}
  *   `known` is false when the answer is the latitude-based assumption rather than records.
  *   `names` lists the group's fish recorded here, leading ones first.
  */
@@ -115,8 +123,9 @@ export function regionalSpecies(counts, lat) {
         known: true,
         groups: {
             // Bass, sunfish and catfish live in every state but Alaska, including thinly
-            // surveyed country where few records exist, so this one is not left to the counts.
+            // surveyed country where few records exist, so these are not left to the counts.
             warm: group('warm', assumed.warm.available, DEFAULT_NAMES.warm, totals.warm),
+            catfish: group('catfish', assumed.catfish.available, DEFAULT_NAMES.catfish, totals.catfish),
             cool: judged('cool'),
             cold: judged('cold'),
         },
@@ -125,15 +134,17 @@ export function regionalSpecies(counts, lat) {
 
 /**
  * The choices to offer for a region, most general first.
- * With one group of fish around, that group is the only choice ("all species" would mean the same thing).
- * @returns {Array<{ id: 'any'|'warm'|'cool'|'cold', label: string, targets: string[] }>}  `targets` are the fish to suggest lures for
+ * With one temperature group around (bass and panfish in Florida), "all species" would mean the
+ * same thing, so that group leads instead, with catfish beside it.
+ * @returns {Array<{ id: 'any'|'warm'|'catfish'|'cool'|'cold', label: string, targets: string[] }>}  `targets` are the fish to suggest lures for
  */
 export function speciesOptions(region) {
     const available = GROUP_IDS.filter((id) => region.groups[id].available)
         .map((id) => ({ id, label: region.groups[id].label, targets: region.groups[id].names }));
-    if (available.length === 1) return available;
-    // "All species" stands for the leading fish of each group that lives here.
-    return [{ id: 'any', label: DEFAULT_LABELS.any, targets: available.map((option) => option.targets[0]) }, ...available];
+    const general = available.filter((option) => TEMPERATURE_GROUPS.includes(option.id));
+    if (general.length <= 1) return available;
+    // "All species" stands for the leading fish of each temperature group that lives here.
+    return [{ id: 'any', label: DEFAULT_LABELS.any, targets: general.map((option) => option.targets[0]) }, ...available];
 }
 
 /** The option to score with: the saved preference when it is offered here, otherwise the most general one. */

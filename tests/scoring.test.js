@@ -370,3 +370,55 @@ test('water temperature estimate lags the air temperature', () => {
     assert.equal(estimateWaterTemp([], 70), 65);
     assert.equal(estimateWaterTemp([10, 20], 15), 33); // liquid water floor
 });
+
+// --- Catfish -----------------------------------------------------------------
+
+test('catfish: a warmer prime range than bass, holding further into the heat', () => {
+    const full = FACTOR_MAX.water;
+    const catfish = (t) => scoreWaterTemp(t, { group: 'catfish' });
+    // Channel catfish grow best at 79–84°F; that is prime for catfish, and past the bass peak.
+    assert.equal(catfish(82).points, full);
+    assert.equal(catfish(86).points, full);
+    assert.ok(scoreWaterTemp(86, { group: 'warm' }).points < full * 0.8);
+    assert.match(catfish(80).note, /^Prime range for catfish$/);
+    // Below 70°F growth is poor, so the mid-60s score less than they do for bass.
+    assert.ok(catfish(64).share < scoreWaterTemp(64, { group: 'warm' }).share);
+    // Cold water slows them but blue catfish keep feeding: never quite nothing until near freezing.
+    assert.ok(catfish(40).points > 0);
+    assert.ok(catfish(40).share < 0.25);
+});
+
+test('catfish: night is not marked down and bright sun is', () => {
+    const light = (date, species, sky = 'clear') => scoreLight({ time: date.getTime(), ...CHICAGO, sky, species });
+    const night = light(local(1), 'catfish');
+    const brightNoon = light(local(13), 'catfish');
+    assert.equal(light(local(20), 'catfish').points, FACTOR_MAX.light); // dusk is still best
+    assert.ok(night.points > brightNoon.points);
+    assert.ok(night.points > light(local(1), 'warm').points);
+    assert.ok(brightNoon.points <= light(local(13), 'warm').points);
+    assert.match(night.note, /prime time for catfish/);
+    // Salt water keeps its own profile whatever the fresh-water choice.
+    assert.deepEqual(scoreLight({ time: local(1).getTime(), ...CHICAGO, water: 'salt', species: 'catfish' }),
+        scoreLight({ time: local(1).getTime(), ...CHICAGO, water: 'salt' }));
+});
+
+test('catfish: water somewhat above normal costs nothing, a flood still does', () => {
+    const flow = (cfs, species) => scoreFlow({ cfs, percentiles: NORMALS }, { species });
+    // About the 83rd percentile: pushy for most fish, stained and full of food for catfish.
+    assert.equal(flow(2700, 'catfish').points, FACTOR_MAX.flow);
+    assert.ok(flow(2700, 'warm').points < FACTOR_MAX.flow);
+    assert.match(flow(2700, 'catfish').note, /suit catfish/);
+    assert.ok(flow(9000, 'catfish').points <= 1);
+});
+
+test('catfish: the overall score at night favours them over bass', () => {
+    const night = { ...ideal, waterTempF: 80, date: local(1) };
+    const catfish = scoreConditions({ ...night, speciesGroup: 'catfish' });
+    const bass = scoreConditions({ ...night, speciesGroup: 'warm' });
+    assert.ok(catfish.score > bass.score + 10, `catfish ${catfish.score}, bass ${bass.score}`);
+    // And the best times ahead include the night for them, not just dusk and dawn.
+    const start = local(12).getTime();
+    const series = scoreSeries({ ...night, speciesGroup: 'catfish' }, { start, end: start + 18 * HOUR });
+    const at = (hour) => series.find((sample) => sample.t === local(hour).getTime()).score;
+    assert.ok(at(24 + 1) > at(13));
+});
