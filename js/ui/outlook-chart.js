@@ -131,11 +131,13 @@ export function createOutlookChart(container) {
         geometry.hoverDot.setAttribute('cy', py);
         geometry.hoverDot.setAttribute('visibility', 'visible');
 
-        tooltip.replaceChildren(
+        // Native replaceChildren() would print a null as the text "null", so leave the cap line out instead.
+        const lines = [
             el('strong', null, `${sample.score} · ${sample.band.label}`),
             el('span', null, index === 0 ? `Now, ${clock(sample.t, timezone)}` : dateTime(sample.t, timezone)),
-            sample.cap ? el('span', null, sample.cap) : null,
-        );
+        ];
+        if (sample.cap) lines.push(el('span', null, sample.cap));
+        tooltip.replaceChildren(...lines);
         tooltip.hidden = false;
         tooltip.style.left = `${px}px`;
         tooltip.style.top = `${Math.max(4, py - 12)}px`;

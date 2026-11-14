@@ -33,6 +33,7 @@ test.describe('score outlook', () => {
         await page.keyboard.press('Home');
         await expect(tooltip).toContainText(`${DEFAULT_SCORE} · Excellent`);
         await expect(tooltip).toContainText('Now, 10:00 AM');
+        await expect(tooltip).not.toContainText('null'); // no cap, so no third line
 
         await page.keyboard.press('ArrowRight'); // one hour on
         await expect(tooltip).toContainText('Mon 11:00 AM');
