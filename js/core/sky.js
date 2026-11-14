@@ -1,4 +1,4 @@
-// Sky conditions as reported by the National Weather Service -> the label, emoji
+// Sky conditions as reported by the National Weather Service -> the label, icon
 // and sky class the app uses. NWS describes weather two ways: a short text
 // ("Mostly Cloudy", "Light Rain and Fog/Mist") and an icon URL whose path holds
 // condition codes (".../icons/land/day/bkn/rain,20"). Text wins when present
@@ -44,16 +44,17 @@ function classFromText(text) {
     return null;
 }
 
-function emojiFor(skyClass, text, code, isDay) {
+/** The icon in the page's sprite (index.html) that pictures a sky: the id after "i-". */
+function iconFor(skyClass, text, code, isDay) {
     const t = text.toLowerCase();
     switch (skyClass) {
-        case 'clear': return isDay ? (code === 'few' || /mostly/.test(t) ? '🌤️' : '☀️') : '🌙';
-        case 'partly': return isDay ? '⛅' : '☁️';
-        case 'overcast': return /fog|mist|haze|smoke/.test(t) || ['fog', 'haze', 'smoke'].includes(code) ? '🌫️' : '☁️';
-        case 'light-precip': return /snow|flurries/.test(t) ? '🌨️' : '🌦️';
-        case 'precip': return /snow|sleet|wintry|ice/.test(t) || /snow|sleet/.test(code ?? '') ? '🌨️' : '🌧️';
-        case 'storm': return /blizzard/.test(t) || code === 'blizzard' ? '❄️' : '⛈️';
-        default: return '🌡️';
+        case 'clear': return isDay ? (code === 'few' || /mostly/.test(t) ? 'partly' : 'sun') : 'moon';
+        case 'partly': return isDay ? 'partly' : 'cloud';
+        case 'overcast': return /fog|mist|haze|smoke/.test(t) || ['fog', 'haze', 'smoke'].includes(code) ? 'fog' : 'cloud';
+        case 'light-precip': return /snow|flurries/.test(t) ? 'snow' : 'rain';
+        case 'precip': return /snow|sleet|wintry|ice/.test(t) || /snow|sleet/.test(code ?? '') ? 'snow' : 'rain';
+        case 'storm': return /blizzard/.test(t) || code === 'blizzard' ? 'snow' : 'storm';
+        default: return 'thermometer';
     }
 }
 
@@ -64,7 +65,7 @@ const sentenceCase = (text) => text.charAt(0).toUpperCase() + text.slice(1).toLo
  * @param {string} [report.text]  NWS textDescription / shortForecast
  * @param {string} [report.icon]  NWS icon URL
  * @param {boolean} [report.preferIcon]  forecasts: "Slight Chance Light Rain" is mostly not rain, so trust the icon's first code
- * @returns {{ class: string, label: string, emoji: string }}
+ * @returns {{ class: string, label: string, icon: string }}
  */
 export function describeSky({ text = '', icon = '', preferIcon = false } = {}) {
     const [code] = iconCodes(icon);
@@ -74,7 +75,7 @@ export function describeSky({ text = '', icon = '', preferIcon = false } = {}) {
     const fromIcon = ICON_CLASS[code] ?? null;
     const skyClass = (preferIcon ? fromIcon ?? fromText : fromText ?? fromIcon) ?? 'unknown';
     const label = cleanText ? sentenceCase(cleanText) : ICON_LABEL[code] ?? 'Unknown';
-    return { class: skyClass, label, emoji: emojiFor(skyClass, cleanText, code, isDay) };
+    return { class: skyClass, label, icon: iconFor(skyClass, cleanText, code, isDay) };
 }
 
 const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];

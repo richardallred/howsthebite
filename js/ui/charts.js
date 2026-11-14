@@ -9,7 +9,7 @@
 import { HOUR_MS, niceTicks } from '../core/util.js';
 import { el, svg } from './dom.js';
 
-const HEIGHT = 200;
+const HEIGHT = 176; // keep in step with .chart-plot in styles.css
 const MARGIN = { top: 14, right: 52, bottom: 26, left: 44 };
 
 const formatters = new Map();

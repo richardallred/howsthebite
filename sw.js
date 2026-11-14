@@ -10,12 +10,18 @@
 // files, so every release that changes anything is seen as a new version. The value
 // here is only used when the source tree is served directly (npm start, the tests).
 
-const CACHE = 'htb-shell-v6';
+const CACHE = 'htb-shell-v8';
 
 const SHELL = [
     './',
     'index.html',
     'styles.css',
+    'fonts/archivo-variable.woff2',
+    'fonts/instrument-sans-latin-400-normal.woff2',
+    'fonts/instrument-sans-latin-500-normal.woff2',
+    'fonts/instrument-sans-latin-600-normal.woff2',
+    'fonts/ibm-plex-mono-latin-400-normal.woff2',
+    'fonts/ibm-plex-mono-latin-500-normal.woff2',
     'manifest.json',
     'favicon.svg',
     'icons/icon-192x192.png',
@@ -45,6 +51,7 @@ const SHELL = [
     'js/ui/map.js',
     'js/ui/outlook-chart.js',
     'js/ui/theme.js',
+    'js/ui/tips.js',
     'vendor/leaflet/leaflet.css',
     'vendor/leaflet/leaflet.js',
 ];

@@ -10,7 +10,7 @@ import { HOUR_MS } from '../core/util.js';
 import { formatter, nearestIndex } from './charts.js';
 import { el, svg } from './dom.js';
 
-const HEIGHT = 236;
+const HEIGHT = 212; // keep in step with .outlook-plot in styles.css
 const MARGIN = { top: 30, right: 16, bottom: 28, left: 34 }; // room above the 100 line for a peak's label
 const Y_TICKS = [0, 25, 50, 75, 100];
 

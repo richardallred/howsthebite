@@ -24,10 +24,11 @@ import { debounce, distanceMiles, isNum, roundCoord, timeAgo } from './core/util
 import { compassPoint } from './core/sky.js';
 import { locationKey, storage } from './storage.js';
 import { createLineChart } from './ui/charts.js';
-import { $, el, icon, setText } from './ui/dom.js';
+import { $, el, icon, setText, svg } from './ui/dom.js';
 import { createStationMap } from './ui/map.js';
 import { createOutlookChart } from './ui/outlook-chart.js';
 import { initTheme } from './ui/theme.js';
+import { initTips, tip } from './ui/tips.js';
 
 const state = {
     location: null,
@@ -421,10 +422,33 @@ function factorDisplay(factor, derived) {
             };
         default: {
             const moon = moonInfo(new Date(derived.clock));
-            return { label: 'Moon', iconName: 'moon', value: `${moon.icon} ${moon.name}`, extra: factor.trend };
+            return { label: 'Moon', iconName: 'moon', value: moon.name, valueIcon: moonGlyph(moon.fraction), extra: factor.trend };
         }
     }
 }
+
+/**
+ * The moon as it looks tonight: the lit part drawn over the dark disc. `fraction` runs
+ * 0 (new) → 0.5 (full) → 1; the lit limb is on the right while waxing, on the left while waning.
+ */
+function moonGlyph(fraction) {
+    const r = 7;
+    const waxing = fraction < 0.5;
+    const terminator = Math.abs(Math.cos(2 * Math.PI * fraction)) * r; // half-width of the shadow's edge
+    const gibbous = fraction > 0.25 && fraction < 0.75;
+    // Down the lit limb, then back up along the terminator.
+    const limbSweep = waxing ? 1 : 0;
+    const edgeSweep = waxing === gibbous ? 1 : 0;
+    const lit = `M8 1A${r} ${r} 0 0 ${limbSweep} 8 15A${terminator.toFixed(2)} ${r} 0 0 ${edgeSweep} 8 1Z`;
+    return svg('svg', { class: 'moon-glyph', viewBox: '0 0 16 16', 'aria-hidden': 'true', focusable: 'false' },
+        svg('circle', { class: 'moon-dark', cx: 8, cy: 8, r }),
+        svg('path', { class: 'moon-lit', d: lit }));
+}
+
+/** The sprite icon for a sky; older saved snapshots carry no icon name, so fall back on the sky class. */
+const SKY_ICONS = new Set(['sun', 'moon', 'partly', 'cloud', 'fog', 'rain', 'snow', 'storm', 'thermometer']);
+const SKY_CLASS_ICONS = { clear: 'sun', partly: 'partly', overcast: 'cloud', 'light-precip': 'rain', precip: 'rain', storm: 'storm' };
+const skyIcon = (sky) => (SKY_ICONS.has(sky?.icon) ? sky.icon : SKY_CLASS_ICONS[sky?.class] ?? 'thermometer');
 
 /** ["now–9:20 PM", "Tue 4:40–7:00 AM"] */
 function describeWindows(windows, clock) {
@@ -453,6 +477,7 @@ function renderScore(derived) {
         setText('scoreBest', '');
         return;
     }
+    $('scorePin').style.left = `${Math.max(0, Math.min(100, derived.result.score))}%`;
     const { result } = derived;
     const { current } = state.weather;
     card.dataset.band = result.band.key;
@@ -460,12 +485,12 @@ function renderScore(derived) {
     setText('scoreBand', result.band.label);
     setText('scorePhrase', result.phrase);
     const feelsLike = isNum(current.feelsLikeF) ? ` · feels like ${Math.round(current.feelsLikeF)}°F` : '';
-    setText('scoreNow', `${current.sky.emoji} ${current.sky.label} · ${Math.round(current.tempF)}°F${feelsLike}`);
+    $('scoreNow').replaceChildren(icon(skyIcon(current.sky)), `${current.sky.label} · ${Math.round(current.tempF)}°F${feelsLike}`);
     setText('scoreCap', result.cap ? result.cap.reason : '');
-    // Each window is kept on one line; the list wraps between windows on a narrow card.
+    // Each window is a chip that stays on one line; the first (soonest) is highlighted.
     const best = describeWindows(derived.windows, derived.clock);
-    $('scoreBest').replaceChildren(...(best.length ? ['Best times: '] : []),
-        ...best.flatMap((text, index) => [index ? ' · ' : '', el('span', { class: 'nowrap' }, text)]));
+    $('scoreBest').replaceChildren(...(best.length ? [el('span', { class: 'eyebrow score-best-label' }, 'Best times: ')] : []),
+        ...best.flatMap((text, index) => [index ? el('span', { class: 'sep' }, ' · ') : '', el('span', { class: 'window nowrap' }, text)]));
 }
 
 function renderSpeciesGroup() {
@@ -507,7 +532,8 @@ function renderTides(derived) {
     const salt = Boolean(derived?.salt);
     $('tideCard').hidden = !salt;
     // The freshwater parts of the section have nothing to say about a bay or a beach.
-    for (const id of ['levelCard', 'waterGrid', 'waterFilter', 'waterChartCard', 'levelChartCard']) $(id).hidden = salt;
+    for (const id of ['levelCard', 'waterGrid', 'waterFilter', 'waterChartCard', 'levelChartCard', 'levelSource']) $(id).hidden = salt;
+    $('tideSource').hidden = !salt;
     setText('waterTitle', salt ? 'Tides and water temperature' : 'Water temperature, level and flow');
     if (!salt) return;
 
@@ -555,10 +581,12 @@ function renderFactors(derived) {
         const display = factorDisplay(factor, derived);
         const rating = RATING_LABELS[factor.rating];
         return el('article', { class: 'factor', dataset: { rating: factor.rating } },
-            el('h3', { class: 'factor-label' }, icon(display.iconName), display.label),
-            el('p', { class: 'factor-value' }, display.value),
-            el('p', { class: 'factor-note' }, factor.note),
-            el('p', { class: 'factor-extra' }, display.extra ?? ' '),
+            // The reading and its one-line detail are shown; what it means for the fishing is a tip.
+            el('div', { class: 'factor-head' },
+                el('h3', { class: 'factor-label' }, icon(display.iconName), display.label),
+                tip('What this means for the fishing', el('span', { class: 'factor-note' }, factor.note))),
+            el('p', { class: 'factor-value' }, display.valueIcon ?? null, display.value),
+            el('p', { class: 'factor-extra' }, display.extra ?? ''),
             el('div', { class: 'factor-foot' },
                 el('div', { class: 'meter', 'aria-hidden': 'true' },
                     el('span', { style: `width:${Math.round((factor.points / factor.max) * 100)}%` })),
@@ -605,9 +633,10 @@ function renderLures(derived) {
         : `There are no suggestions yet for ${fish}.`);
     list.replaceChildren(...picks.map((pick) => el('li', { class: 'lure' },
         el('p', { class: 'lure-target' }, `For ${pick.target}`),
-        el('h3', null, pick.name),
+        el('div', { class: 'lure-name' },
+            el('h3', null, pick.name),
+            tip('How to fish it', el('span', { class: 'lure-how' }, pick.how))),
         el('p', { class: 'lure-why' }, `${pick.why}.`),
-        el('p', { class: 'lure-how' }, pick.how),
         pick.query && el('a', {
             class: 'lure-shop',
             href: shopUrl(pick.query, tag),
@@ -617,6 +646,16 @@ function renderLures(derived) {
             // Amazon and the FTC both want the disclosure next to the link itself, not only on the page.
         }, tag ? 'Find it on Amazon (paid link)' : 'Find it on Amazon'))));
     setText('lureColour', colour);
+}
+
+/** A ring filled to a 0–100 score, with the number in the middle. Coloured by the band of the enclosing element. */
+function scoreRing(score) {
+    const filled = Math.max(0, Math.min(100, score));
+    return el('span', { class: 'score-ring' },
+        svg('svg', { viewBox: '0 0 48 48', 'aria-hidden': 'true', focusable: 'false' },
+            svg('circle', { class: 'score-ring-track', cx: 24, cy: 24, r: 20, pathLength: 100 }),
+            svg('circle', { class: 'score-ring-fill', cx: 24, cy: 24, r: 20, pathLength: 100, 'stroke-dasharray': `${filled} 100` })),
+        el('span', { class: 'score-ring-number' }, String(score)));
 }
 
 function renderOutlook(derived) {
@@ -632,9 +671,13 @@ function renderOutlook(derived) {
     outlookChart.update(samples, { timezone: state.weather.timezone, days, nights });
     setText('outlookRange', days.length > 1 ? `now to ${days[days.length - 1].label} night` : 'the rest of today');
 
-    list.replaceChildren(...days.map((day) => el('li', { class: 'outlook-day' },
+    list.replaceChildren(...days.map((day) => el('li', { class: 'outlook-day', dataset: { band: day.peak.band.key } },
         el('span', { class: 'outlook-day-name' }, day.label),
-        el('span', { class: 'outlook-day-best' }, `${day.flat ? 'About' : 'Best'} ${day.peak.score} `, el('span', null, day.peak.band.label)),
+        el('span', { class: 'outlook-day-best' },
+            // The ring shows the day's best score; screen readers also hear whether the day is flat ("About").
+            el('span', { class: 'visually-hidden' }, `${day.flat ? 'About' : 'Best'} `),
+            scoreRing(day.peak.score), ' ',
+            el('span', { class: 'outlook-day-band' }, day.peak.band.label)),
         el('span', { class: 'outlook-day-when' }, day.flat
             ? day.peak.cap ?? 'Much the same all day'
             : `${day.window.start <= derived.clock ? 'now' : clockTime(day.window.start)}–${clockTime(day.window.end)}`))));
@@ -670,7 +713,7 @@ function renderForecast() {
         return el('li', { class: 'forecast-day' },
             el('p', { class: 'forecast-name' }, isToday ? 'Today' : dayName.format(day.t),
                 el('span', { class: 'muted' }, dayDate.format(day.t))),
-            el('p', { class: 'forecast-icon', 'aria-hidden': 'true' }, day.icon),
+            el('p', { class: 'forecast-icon', 'aria-hidden': 'true' }, icon(SKY_ICONS.has(day.icon) ? day.icon : 'cloud')),
             el('p', { class: 'forecast-label' }, day.label),
             el('p', { class: 'forecast-temps' },
                 // In the evening NWS no longer forecasts a daytime high for today.
@@ -817,15 +860,24 @@ function renderLocation() {
 }
 
 function renderUpdatedAt() {
+    // "Updated 5 min ago" is shown; where the readings were taken is a tip beside it.
     let text = ' ';
+    let detail = '';
     if (state.loading) text = state.weather ? 'Refreshing…' : 'Loading conditions…';
     else if (state.weather) {
         const { station, current } = state.weather;
         text = `Updated ${timeAgo(state.weather.fetchedAt)}`;
-        if (station?.name) text += ` · weather observed at ${station.name} ${timeAgo(current.time)}`;
-        if (state.weather.pressureStation?.name) text += `, pressure at ${state.weather.pressureStation.name}`;
+        if (station?.name) detail = `${text} · weather observed at ${station.name} ${timeAgo(current.time)}`;
+        if (state.weather.pressureStation?.name) detail += `, pressure at ${state.weather.pressureStation.name}`;
     }
-    setText('updatedAt', text);
+    const node = $('updatedAt');
+    const key = `${text}|${detail}`;
+    if (node.dataset.key !== key) {
+        node.dataset.key = key;
+        const wasOpen = node.querySelector('.tip.is-open') !== null;
+        node.replaceChildren(text, detail ? tip('Where the readings come from', detail) : '');
+        if (wasOpen) node.querySelector('.tip')?.classList.add('is-open');
+    }
     $('refreshBtn').classList.toggle('is-busy', state.loading);
 }
 
@@ -1478,6 +1530,7 @@ async function offerLocalConditions() {
 
 function init() {
     initTheme();
+    initTips();
     initSearch();
     initSectionNav();
     initInstallPrompt();
