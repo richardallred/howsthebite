@@ -267,6 +267,7 @@ function deriveOutlook(inputs, clock) {
 // A change in level that matters to where fish sit: a lake up or down by 0.15 ft or more in a day
 // (new cover flooded, or the bank left dry), or a river rising or falling fast.
 const LAKE_LEVEL_SHIFT_FT = 0.15;
+const LURE_PICKS = 4; // index.html has this many placeholders
 
 function levelShift(level) {
     const trend = level?.trend;
@@ -358,7 +359,7 @@ function derive() {
     const patterns = lurePatterns(species.targets, lureInput);
     const lures = {
         species,
-        picks: recommendLures(species.targets, lureInput, { limit: 4 }),
+        picks: recommendLures(species.targets, lureInput, { limit: LURE_PICKS }),
         colour: colourAdvice(lureInput, patterns[0]?.season?.forage ?? null),
         patterns,
         trend: waterTrend,
@@ -513,9 +514,14 @@ function renderScore(derived) {
         setText('scoreValue', '–');
         setText('scoreBand', ' ');
         setText('scorePhrase', state.loadFailed ? 'Conditions unavailable' : 'Checking conditions…');
-        setText('scoreNow', '');
         setText('scoreCap', '');
-        setText('scoreBest', '');
+        // While loading, hold the room the best times and the weather will take, so the card
+        // does not grow when they arrive. The same placeholders are in index.html.
+        const waiting = !state.loadFailed;
+        $('scoreBest').replaceChildren(...(waiting
+            ? [el('span', { class: 'eyebrow score-best-label' }, 'Best times: '), el('span', { class: 'window is-placeholder' }, '\u00a0')]
+            : []));
+        setText('scoreNow', waiting ? '\u00a0' : '');
         return;
     }
     $('scorePin').style.left = `${Math.max(0, Math.min(100, derived.result.score))}%`;
@@ -713,6 +719,15 @@ function trendPanel(lures, derived) {
 /** Where the leading fish is in its year, what has changed lately, and the water temperature behind it. */
 function renderLurePattern(derived) {
     const box = $('lurePattern');
+    const waiting = !derived && !state.loadFailed;
+    box.classList.toggle('is-placeholder', waiting);
+    if (waiting) box.setAttribute('aria-hidden', 'true');
+    else box.removeAttribute('aria-hidden');
+    if (waiting) {
+        box.hidden = false;
+        box.replaceChildren();
+        return;
+    }
     const patterns = derived?.lures.patterns ?? [];
     const lead = patterns.find((entry) => entry.season);
     if (!lead) {
@@ -733,13 +748,20 @@ function renderLurePattern(derived) {
     );
 }
 
+/** A lure-shaped blank shown while the conditions load. The same four are in index.html. */
+const lurePlaceholder = () => el('li', { class: 'lure is-placeholder', 'aria-hidden': 'true' },
+    el('p', { class: 'lure-target' }, '\u00a0'),
+    el('div', { class: 'lure-name' }, el('h3', null, '\u00a0')),
+    el('p', { class: 'lure-why' }, '\u00a0', el('br'), '\u00a0'),
+    el('span', { class: 'lure-shop' }, '\u00a0'));
+
 function renderLures(derived) {
     const list = $('lureList');
     const tag = affiliateTag();
     $('affiliateDisclosure').hidden = !tag;
     renderLurePattern(derived);
     if (!derived) {
-        list.replaceChildren();
+        list.replaceChildren(...(state.loadFailed ? [] : Array.from({ length: LURE_PICKS }, lurePlaceholder)));
         setText('lureSummary', state.loadFailed ? 'Suggestions need the current conditions.' : 'Suggestions will appear with the conditions.');
         setText('lureColour', '');
         return;
@@ -1922,17 +1944,15 @@ function registerServiceWorker() {
 // ---------------------------------------------------------------------------
 
 async function offerLocalConditions() {
-    // First visit: we are showing the default city. If the browser already has
+    // First visit: we are showing the default city, and say so straight away (index.html
+    // already shows this notice, so it does not move the page). If the browser already has
     // permission, switch to the user's position; otherwise never prompt unasked.
-    try {
-        const status = await navigator.permissions?.query({ name: 'geolocation' });
-        if (status?.state === 'granted') {
-            useMyLocation();
-            return;
-        }
-    } catch { /* Permissions API unavailable */ }
     showNotice(`Showing ${APP.DEFAULT_LOCATION.name}. Search for a place or tap “Use my location” for conditions near you.`,
         { tone: 'info', action: useMyLocation, actionLabel: 'Use my location' });
+    try {
+        const status = await navigator.permissions?.query({ name: 'geolocation' });
+        if (status?.state === 'granted') useMyLocation();
+    } catch { /* Permissions API unavailable */ }
 }
 
 function init() {
@@ -2002,6 +2022,7 @@ function init() {
     });
     // Someone who followed a link came to see that place: no hint, and no switching to where they are.
     if (!saved && !linked.place) offerLocalConditions();
+    delete document.documentElement.dataset.firstVisit; // the notice is the app's now (js/theme-init.js)
 
     // Keep things fresh while the app stays open, and when it comes back to the foreground.
     const refreshIfStale = () => {
