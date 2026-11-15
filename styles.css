@@ -431,7 +431,7 @@ button, input { font: inherit; color: inherit; }
     text-wrap: balance;
 }
 .location-meta { display: flex; align-items: center; gap: 4px; margin-top: 6px; }
-.location-meta p { display: flex; align-items: center; gap: 2px; font: 400 0.75rem/1.4 var(--font-mono); color: var(--muted); }
+.location-meta p { display: flex; align-items: center; gap: 2px; min-height: 24px; font: 400 0.75rem/1.4 var(--font-mono); color: var(--muted); } /* as tall as the tip it gains */
 
 .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .chips-label { font: 500 0.6875rem/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-right: 2px; }
@@ -466,6 +466,8 @@ button, input { font: inherit; color: inherit; }
     font-size: 0.875rem;
 }
 .notice[data-tone="info"] { border-color: var(--notice-info-border); background: var(--notice-info-bg); }
+/* A first visit's notice, shown from the first paint (js/theme-init.js) until the app takes over. */
+:root[data-first-visit] .notice[hidden] { display: flex !important; } /* outranks [hidden] above */
 
 /* ---------- Sections ---------- */
 
@@ -627,6 +629,7 @@ button, input { font: inherit; color: inherit; }
 }
 .score-best .window:first-of-type { border-color: var(--accent); background: var(--accent-soft); }
 .score-best .sep { display: none; }
+.score-best .window.is-placeholder { width: 9.5em; border-color: transparent; background: var(--sunk); animation: pulse 1.6s ease-in-out infinite; }
 
 .score-now {
     display: flex;
@@ -661,7 +664,8 @@ button, input { font: inherit; color: inherit; }
 .factor[data-rating="good"] { --rating: var(--rating-good); }
 .factor[data-rating="fair"] { --rating: var(--rating-fair); }
 
-.factor.is-placeholder { min-height: 58px; animation: pulse 1.6s ease-in-out infinite; }
+/* As tall as a loaded factor (85px on phones, below), so the list does not grow when the conditions arrive. */
+.factor.is-placeholder { min-height: 67px; animation: pulse 1.6s ease-in-out infinite; }
 .factor.is-placeholder::before { content: ""; grid-area: label; width: 40%; height: 10px; border-radius: 3px; background: var(--sunk); }
 @keyframes pulse { 50% { opacity: 0.55; } }
 
@@ -723,6 +727,11 @@ button, input { font: inherit; color: inherit; }
 .lure-shop { grid-column: 2; grid-row: 2; align-self: baseline; font-size: 0.8125rem; font-weight: 500; white-space: nowrap; }
 
 .lure-season-tag { color: var(--water); }
+/* Loading: shaped like a lure, so the list is about as tall as it will be. */
+.lure.is-placeholder { animation: pulse 1.6s ease-in-out infinite; }
+.lure.is-placeholder .lure-target::before { content: none; }
+.lure.is-placeholder .lure-name { background: linear-gradient(var(--sunk), var(--sunk)) left center / 55% 12px no-repeat; }
+.lure-pattern.is-placeholder { min-height: 290px; animation: pulse 1.6s ease-in-out infinite; } /* one column; two from 620px */
 .lure-adjust { grid-column: 1 / -1; font-size: 0.8125rem; color: var(--muted); line-height: 1.4; }
 
 /* Where the fish are in their year, and how the water has been changing. */
@@ -751,6 +760,8 @@ button, input { font: inherit; color: inherit; }
 
 .lure-disclosure { padding: 10px 20px 14px; font-size: 0.75rem; color: var(--muted); }
 .lures:has(+ .lure-disclosure[hidden]) .lure:nth-last-child(-n + 2) { border-bottom: 0; }
+/* The installed app shows no disclosure (affiliateTag() in js/app.js); hide it from the first paint there too. */
+@media (display-mode: standalone) { .lure-disclosure { display: none; } }
 
 /* ---------- Forecast ---------- */
 
@@ -1098,6 +1109,7 @@ button, input { font: inherit; color: inherit; }
     .lures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .lure:nth-child(odd) { border-right: 1px solid var(--line); }
     .lure-pattern { grid-template-columns: minmax(0, 1fr) minmax(200px, 240px); }
+    .lure-pattern.is-placeholder { min-height: 160px; }
 }
 
 @media (min-width: 768px) {
@@ -1128,6 +1140,7 @@ button, input { font: inherit; color: inherit; }
     .score-number { font-size: 5.5rem; }
     .panel-head, .lure, .lure-foot, .lure-pattern, .level-card, #outlookCard { padding-inline: 16px; }
     .factor { padding-inline: 16px; grid-template-areas: "label value" "note note" "foot foot"; }
+    .factor.is-placeholder { min-height: 85px; }
     .factor-foot { justify-content: flex-start; padding-left: 25px; margin-top: 4px; }
     .meter { flex: 1; width: auto; }
     .rating-tag { min-width: 0; }

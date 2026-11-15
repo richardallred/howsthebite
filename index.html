@@ -149,9 +149,12 @@
     </section>
 
     <div class="wrap">
-        <div class="notice" id="notice" role="status" data-nosnippet hidden>
-            <p id="noticeText"></p>
-            <button class="btn btn-small" id="noticeAction" type="button" hidden>Try again</button>
+        <!-- Filled in for a first visit, so it is there in the first paint and does not push the page
+             down when the app starts (js/theme-init.js marks a first visit; styles.css shows it).
+             Keep it in step with offerLocalConditions() in js/app.js. -->
+        <div class="notice" id="notice" role="status" data-tone="info" data-nosnippet hidden>
+            <p id="noticeText">Showing Chicago, Illinois. Search for a place or tap “Use my location” for conditions near you.</p>
+            <button class="btn btn-small" id="noticeAction" type="button">Use my location</button>
         </div>
     </div>
 
@@ -167,8 +170,9 @@
                 </div>
                 <div class="species">
                     <span class="species-label" id="speciesLabel">Fishing for</span>
-                    <!-- Filled in by the app: only the fish recorded around the chosen place are offered. -->
-                    <div class="segmented" id="speciesGroup" role="group" aria-labelledby="speciesLabel"></div>
+                    <!-- Filled in by the app: only the fish recorded around the chosen place are offered.
+                         The default choices are here already so the row does not appear from nothing. -->
+                    <div class="segmented" id="speciesGroup" role="group" aria-labelledby="speciesLabel"><button type="button" data-group="any" aria-pressed="true">All species</button><button type="button" data-group="warm" aria-pressed="false">Bass &amp; panfish</button><button type="button" data-group="catfish" aria-pressed="false">Catfish</button><button type="button" data-group="cool" aria-pressed="false">Walleye &amp; pike</button><button type="button" data-group="cold" aria-pressed="false">Trout</button></div>
                     <p class="species-note" id="speciesNote" aria-live="polite"></p>
                 </div>
             </div>
@@ -186,15 +190,16 @@
                     </div>
                     <p class="score-phrase" id="scorePhrase">Checking conditions…</p>
                     <p class="score-cap" id="scoreCap"></p>
-                    <p class="score-best" id="scoreBest"></p>
-                    <p class="score-now" id="scoreNow"></p>
+                    <!-- Placeholders hold the room the best times and the weather take (see renderScore). -->
+                    <p class="score-best" id="scoreBest"><span class="eyebrow score-best-label">Best times: </span><span class="window is-placeholder">&nbsp;</span></p>
+                    <p class="score-now" id="scoreNow">&nbsp;</p>
                 </div>
                 <div class="panel factors-panel">
                     <div class="panel-head">
                         <h2 class="panel-title">Why this score</h2>
                         <p class="panel-sub">Most important first</p>
                     </div>
-                    <div class="factors" id="factors" aria-label="Score factors"></div>
+                    <div class="factors" id="factors" aria-label="Score factors"><div class="factor is-placeholder" aria-hidden="true"></div><div class="factor is-placeholder" aria-hidden="true"></div><div class="factor is-placeholder" aria-hidden="true"></div><div class="factor is-placeholder" aria-hidden="true"></div><div class="factor is-placeholder" aria-hidden="true"></div><div class="factor is-placeholder" aria-hidden="true"></div></div>
                 </div>
             </div>
         </section>
@@ -213,9 +218,10 @@
                     </span>
                 </div>
             </div>
-            <div class="lure-pattern" id="lurePattern" hidden></div>
-            <ul class="lures" id="lureList"></ul>
-            <p class="lure-disclosure" id="affiliateDisclosure" hidden>As an Amazon Associate I earn from qualifying purchases.</p>
+            <!-- Placeholders, the same as the app shows while loading (lurePlaceholder() in js/app.js). -->
+            <div class="lure-pattern is-placeholder" id="lurePattern" aria-hidden="true"></div>
+            <ul class="lures" id="lureList"><li class="lure is-placeholder" aria-hidden="true"><p class="lure-target">&nbsp;</p><div class="lure-name"><h3>&nbsp;</h3></div><p class="lure-why">&nbsp;<br>&nbsp;</p><span class="lure-shop">&nbsp;</span></li><li class="lure is-placeholder" aria-hidden="true"><p class="lure-target">&nbsp;</p><div class="lure-name"><h3>&nbsp;</h3></div><p class="lure-why">&nbsp;<br>&nbsp;</p><span class="lure-shop">&nbsp;</span></li><li class="lure is-placeholder" aria-hidden="true"><p class="lure-target">&nbsp;</p><div class="lure-name"><h3>&nbsp;</h3></div><p class="lure-why">&nbsp;<br>&nbsp;</p><span class="lure-shop">&nbsp;</span></li><li class="lure is-placeholder" aria-hidden="true"><p class="lure-target">&nbsp;</p><div class="lure-name"><h3>&nbsp;</h3></div><p class="lure-why">&nbsp;<br>&nbsp;</p><span class="lure-shop">&nbsp;</span></li></ul>
+            <p class="lure-disclosure" id="affiliateDisclosure">As an Amazon Associate I earn from qualifying purchases.</p>
         </section>
 
         <section class="section panel" id="forecast" aria-labelledby="forecastTitle">
@@ -266,7 +272,7 @@
                 <dl class="level-stats" id="levelStats"></dl>
             </div>
             <div class="water-grid" id="waterGrid">
-                <ul class="stations" id="stationList" aria-label="Nearby water temperature stations"></ul>
+                <ul class="stations" id="stationList" aria-label="Nearby water temperature stations"><li class="stations-empty">Loading stations…</li></ul>
                 <div class="map-frame">
                     <div class="map" id="stationMap" role="region" aria-label="Map of nearby water temperature stations. The station list has the same information."></div>
                 </div>
