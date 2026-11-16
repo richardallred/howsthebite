@@ -1,0 +1,76 @@
+<!doctype html>
+<!-- The link-preview card, 1200 × 630: the generic one (screenshots/share-card.png) and, with ?place=Name,
+     one per popular spot (og/<slug>.png). Rebuild both: node art/share/render.mjs (with npm start running). -->
+<html><head><meta charset="utf-8"><style>
+@font-face { font-family: "Young Serif"; src: url("../../fonts/young-serif-latin-400-normal.woff2"); }
+@font-face { font-family: "Atkinson"; src: url("../../fonts/atkinson-hyperlegible-next-latin-wght-normal.woff2"); font-weight: 200 800; }
+* { margin: 0; box-sizing: border-box; }
+body { width: 1200px; height: 630px; overflow: hidden; background: #ebe6d6; color: #1f2a22; font-family: "Atkinson"; position: relative; }
+.paper { position: absolute; inset: 28px; border-radius: 14px; background: #f6f2e5;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .7), 0 0 0 1px rgb(92 76 44 / .08), 0 14px 30px -12px rgb(70 56 30 / .35); }
+.topo { position: absolute; inset: 0; background: #a48c62; opacity: .35;
+  -webkit-mask: url("topo-tile.svg") center / 1200px 1200px; }
+.scene { position: absolute; left: 40px; bottom: 44px; width: 640px; height: 330px; background: #1f2a22;
+  -webkit-mask: url("share-scene.svg") left bottom / contain no-repeat; }
+.brand { position: absolute; left: 70px; top: 66px; display: flex; align-items: center; gap: 16px; font: 400 54px/1 "Young Serif"; letter-spacing: -.01em; }
+.brand i { width: 64px; height: 64px; background: #d9501b; -webkit-mask: url("../../icons/mark-small.svg") center / contain no-repeat; }
+.tag { position: absolute; left: 72px; top: 146px; width: 520px; font-size: 27px; line-height: 1.35; color: #434c40; }
+/* A place's card: its name where the tagline is */
+.place { position: absolute; left: 72px; top: 140px; width: 640px; }
+.place small { display: block; font: 600 24px/1 "Atkinson"; color: #66665a; }
+.place strong { display: block; margin-top: 10px; font: 400 52px/1.08 "Young Serif"; letter-spacing: -.01em; text-wrap: balance; }
+.place.is-long strong { font-size: 42px; }
+.is-place .stamp { color: #1f2a22; }
+.is-place .stamp span { font-size: 17px; letter-spacing: .12em; }
+.is-place .dial { color: #66665a !important; }
+.is-place .dial circle:not(.track) { display: none; }
+.stamp { position: absolute; left: 815px; top: 175px; width: 230px; height: 230px; color: #2b7a4b; transform: rotate(-7deg);
+  -webkit-mask: url("/drawings/stamp-ink.webp") 30% 40% / 160% 160% no-repeat; /* the app's real-ink texture */
+  display: grid; place-content: center; justify-items: center; gap: 10px; }
+.stamp::before, .stamp::after { content: ""; position: absolute; border-radius: 50%; border: 6px solid currentColor; inset: 0; }
+.stamp::after { inset: 13px; border-width: 2px; }
+.stamp b { font: 400 100px/.8 "Young Serif"; font-variant-numeric: lining-nums; }
+.stamp span { border-top: 3px solid currentColor; padding: 9px 6px 0; font: 800 21px/1 "Atkinson"; letter-spacing: .16em; }
+/* Sample dials round the stamp, as in the app's score card */
+.dial { position: absolute; width: 58px; height: 58px; margin: -29px 0 0 -29px; display: grid; place-items: center; }
+.dial svg.ring { position: absolute; inset: 0; transform: rotate(-90deg); fill: none; }
+.dial .track { stroke: rgb(31 42 34 / .12); }
+.dial svg.icon { width: 28px; height: 28px; fill: currentColor; } /* the app's woodcut glyphs (drawings/glyphs.svg) */
+.foot { position: absolute; right: 74px; bottom: 58px; font: 600 22px/1 "Atkinson"; color: #66665a; }
+</style></head><body>
+<div class="paper"><div class="topo"></div></div>
+<div class="scene"></div>
+<div class="brand"><i></i>How's the Bite</div>
+<p class="tag">The fishing forecast for any US lake, river, bay or beach: a score, the best times, and what to throw.</p>
+<script>
+const place = new URLSearchParams(location.search).get('place');
+if (place) document.documentElement.classList.add('is-place'); // before the dials are drawn
+if (place) addEventListener('DOMContentLoaded', () => {
+    // A card naming a place must not suggest a score for it: a question in the stamp, empty dials.
+    document.querySelector('.stamp b').textContent = '?';
+    document.querySelector('.stamp span').textContent = "TODAY'S SCORE";
+    const block = document.createElement('div');
+    block.className = `place${place.length > 30 ? ' is-long' : ''}`;
+    block.innerHTML = '<small>Fishing forecast for</small><strong></strong>';
+    block.querySelector('strong').textContent = place;
+    document.querySelector('.tag').replaceWith(block);
+});
+</script>
+<div class="stamp"><b>84</b><span>EXCELLENT</span></div>
+<div id="dials"></div>
+<script>
+// Sample readings, most important first: [icon path, points, of, colour]
+const GREEN = '#2b7a4b', OLIVE = '#5d8d21', AMBER = '#b57a0a';
+const DIALS = [['water', 27, 31, GREEN], ['light', 25, 28, GREEN], ['wind', 10, 12, GREEN], ['flow', 8, 9, GREEN], ['season', 7, 8, GREEN], ['moon', 4, 7, AMBER], ['pressure', 4, 5, OLIVE]];
+const cx = 930, cy = 290, radius = 168, from = -98, to = 98, r = 25, C = 2 * Math.PI * r;
+document.getElementById('dials').innerHTML = DIALS.map(([id, points, max, colour], i) => {
+    const a = (from + (to - from) * i / (DIALS.length - 1)) * Math.PI / 180;
+    const x = cx + radius * Math.sin(a), y = cy - radius * Math.cos(a), w = 3 + 2.5 * max / 31;
+    return `<div class="dial" style="left:${x}px;top:${y}px;color:${colour}">
+        <svg class="ring" viewBox="0 0 58 58"><circle class="track" cx="29" cy="29" r="${r}" stroke-width="${w}"/>
+        <circle cx="29" cy="29" r="${r}" stroke="${colour}" stroke-width="${w}" stroke-linecap="round" stroke-dasharray="${C * points / max} ${C}"/></svg>
+        <svg class="icon" viewBox="0 0 100 100"><use href="/drawings/glyphs.svg#g-${id}"/></svg></div>`;
+}).join('');
+</script>
+<p class="foot">howsthebite.io</p>
+</body></html>

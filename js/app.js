@@ -32,7 +32,7 @@ import { debounce, distanceMiles, isNum, roundCoord, timeAgo } from './core/util
 import { compassPoint } from './core/sky.js';
 import { locationKey, storage } from './storage.js';
 import { createLineChart } from './ui/charts.js';
-import { $, el, icon, setText, svg } from './ui/dom.js';
+import { $, el, glyph, icon, setText, svg } from './ui/dom.js';
 import { createStationMap } from './ui/map.js';
 import { createOutlookChart } from './ui/outlook-chart.js';
 import { initTheme } from './ui/theme.js';
@@ -618,6 +618,7 @@ function renderScore(derived) {
     const card = $('scoreCard');
     if (!derived) {
         card.dataset.band = 'loading';
+        card.dataset.state = state.loadFailed ? 'failed' : 'loading';
         $('headerScore').dataset.band = 'loading';
         setText('headerScore', '');
         setText('scoreValue', '–');
@@ -639,6 +640,7 @@ function renderScore(derived) {
     const { current } = state.weather;
     $('scorePin').style.left = `${Math.max(0, Math.min(100, result.score))}%`;
     card.dataset.band = result.band.key;
+    card.dataset.state = 'ready';
     card.dataset.day = view.now ? 'now' : 'ahead';
     // The header always gives the score now, whichever day the card is showing.
     $('headerScore').dataset.band = derived.result.band.key;
@@ -811,7 +813,7 @@ function renderDials(derived) {
                 class: 'dial-fill', cx: 21, cy: 21, r: DIAL_R, 'stroke-width': width,
                 'stroke-dasharray': `${(circumference * share).toFixed(1)} ${circumference.toFixed(1)}`,
             }) : null),
-        icon(display.iconName));
+        glyph(factor.id));
         dial.style.left = `${(DIAL_ARC.cx + DIAL_ARC.radius * Math.sin(angle)).toFixed(1)}px`;
         dial.style.top = `${(DIAL_ARC.cy - DIAL_ARC.radius * Math.cos(angle)).toFixed(1)}px`;
         return dial;
@@ -857,7 +859,7 @@ function renderFactors(derived) {
         return el('article', { class: 'factor', dataset: { rating: factor.rating } },
             // The reading and its one-line detail are shown; what it means for the fishing is a tip.
             el('div', { class: 'factor-head' },
-                el('h3', { class: 'factor-label' }, icon(display.iconName), display.label),
+                el('h3', { class: 'factor-label' }, glyph(factor.id), display.label),
                 tip('What this means for the fishing', el('span', { class: 'factor-note' }, factor.note))),
             el('p', { class: 'factor-value' }, display.valueIcon ?? null, display.value),
             el('p', { class: 'factor-extra' }, display.extra ?? ''),
@@ -944,11 +946,13 @@ function trendPanel(lures, derived) {
 }
 
 // Woodcut drawings of the fish (drawings/fish/, traced from art/): the name lures.js gives a fish,
-// and its drawing (panfish are drawn as a crappie, muskie as a pike, fluke as a flounder). styles.css maps each to its file; a fish
+// and its drawing (panfish are drawn as a crappie, muskie as a pike, fluke as a flounder,
+// sauger as its cousin the walleye). styles.css maps each to its file; a fish
 // without one just has no picture.
 const FISH_DRAWINGS = new Map([['bass', 'bass'], ['catfish', 'catfish'], ['walleye', 'walleye'], ['trout', 'trout'], ['panfish', 'crappie'], ['pike', 'pike'], ['muskie', 'pike'],
     ['redfish', 'redfish'], ['speckled trout', 'seatrout'], ['striped bass', 'striper'],
-    ['flounder', 'flounder'], ['fluke', 'flounder']]);
+    ['flounder', 'flounder'], ['fluke', 'flounder'], ['smallmouth', 'smallmouth'], ['perch', 'perch'], ['sauger', 'walleye'],
+    ['salmon', 'salmon'], ['bluefish', 'bluefish'], ['snook', 'snook'], ['pompano', 'pompano'], ['halibut', 'halibut']]);
 
 /** Where the leading fish is in its year, what has changed lately, and the water temperature behind it. */
 function renderLurePattern(derived) {
@@ -984,6 +988,29 @@ function renderLurePattern(derived) {
     );
 }
 
+// Woodcut drawings of the lures (drawings/lures/, traced from art/lures/), one per family,
+// matched on the suggestion's name. Order matters: the first family whose pattern fits wins
+// ("bladed swim jig" is a swimbait, not a jig; "nightcrawlers on the bottom" a bottom rig).
+const LURE_DRAWINGS = [
+    ['popping-cork', /popping cork/i],
+    ['bobber-rig', /bobber|float/i],
+    ['bottom-rig', /on the bottom|bottom rig|fish-finder|slip-sinker|carolina rig|pompano rig|two-hook|quick-strike|crawler harness|cut |crab/i],
+    ['spinnerbait', /spinnerbait/i],
+    ['spinner', /spinner/i],
+    ['spoon', /spoon|diamond jig|blade bait|metal|epoxy/i],
+    ['popper', /popper|prop bait|walk-the-dog|topwater|buzzbait|frog/i],
+    ['crankbait', /crankbait|lipless/i],
+    ['swimbait', /swimbait|paddle|swim jig|bladed jig|glide bait/i],
+    ['jerkbait', /jerkbait|twitchbait|plug/i],
+    ['worm', /worm|lizard|creature|eel|stick bait|senko/i],
+    ['jig', /bucktail/i],
+    ['grub', /grub|tube|twister|jighead|soft plastic|shad-shaped/i],
+    ['jig', /jig/i],
+    ['popping-cork', /shrimp|pinfish/i],
+    ['bottom-rig', /liver|stink|bait/i],
+];
+const lureDrawing = (name) => LURE_DRAWINGS.find(([, pattern]) => pattern.test(name))?.[0] ?? null;
+
 /** A lure-shaped blank shown while the conditions load. The same four are in index.html. */
 const lurePlaceholder = () => el('li', { class: 'lure is-placeholder', 'aria-hidden': 'true' },
     el('p', { class: 'lure-target' }, '\u00a0'),
@@ -1007,7 +1034,8 @@ function renderLures(derived) {
     setText('lureSummary', picks.length
         ? `Picked for ${fish} from where they are in their year (the date, the water temperature and which way it has been heading), what has changed lately (a cold snap, a front, rising or falling water), and the ${derived.salt ? 'light, tide and wind' : 'light, wind and clarity'} right now.`
         : `There are no suggestions yet for ${fish}.`);
-    list.replaceChildren(...picks.map((pick) => el('li', { class: 'lure' },
+    list.replaceChildren(...picks.map((pick) => el('li', { class: `lure${lureDrawing(pick.name) ? ' has-drawing' : ''}` },
+        lureDrawing(pick.name) && el('span', { class: 'lure-drawing', dataset: { lure: lureDrawing(pick.name) }, 'aria-hidden': 'true' }),
         el('p', { class: 'lure-target' }, `For ${pick.target}`, pick.season && el('span', { class: 'lure-season-tag' }, ` · ${pick.season}`)),
         el('div', { class: 'lure-name' },
             el('h3', null, pick.name),
@@ -2229,6 +2257,8 @@ async function offerLocalConditions() {
 }
 
 function init() {
+    // Each visit presses the stamp from a different part of the ink texture (styles.css, .score-stamp).
+    document.documentElement.style.setProperty('--ink-at', `${Math.round(Math.random() * 100)}% ${Math.round(Math.random() * 100)}%`);
     initTheme();
     initTips();
     initSearch();

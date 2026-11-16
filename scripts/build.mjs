@@ -19,7 +19,7 @@ const dist = join(root, 'dist');
 const PUBLISH = [
     'index.html', '404.html', 'styles.css', 'sw.js', 'manifest.json',
     'favicon.ico', 'favicon.svg', '_headers', 'robots.txt', '_routes.json',
-    'faq', 'spots', 'drawings', 'icons', 'fonts', 'js', 'data', 'vendor', 'screenshots',
+    'faq', 'spots', 'drawings', 'og', 'icons', 'fonts', 'js', 'data', 'vendor', 'screenshots',
 ];
 
 // Published under a name that carries a hash of the content, and cached by browsers for good

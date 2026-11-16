@@ -191,7 +191,7 @@
             </div>
             <!-- One card for the state of things now: the score as a stamp, the factors behind it as dials
                  round it (most important first), and the full readings beside it (or behind Details on a phone). -->
-            <div class="panel score-card" id="scoreCard" data-band="loading">
+            <div class="panel score-card" id="scoreCard" data-band="loading" data-state="loading">
                 <!-- Now, then each day of the outlook: the whole card follows the tab (js/app.js, renderScoreDays).
                      The same three tabs are here from the first paint so the card does not grow. -->
                 <div class="score-days" id="scoreDays" role="tablist" aria-label="Day"><button type="button" class="score-day" role="tab" aria-selected="true"><span class="score-day-name">Now</span></button><button type="button" class="score-day" role="tab" aria-selected="false" disabled><span class="score-day-name">&nbsp;</span></button><button type="button" class="score-day" role="tab" aria-selected="false" disabled><span class="score-day-name">&nbsp;</span></button></div>
@@ -208,6 +208,8 @@
                             <p class="score-number"><span class="visually-hidden">Fishing score </span><span id="scoreValue">–</span><span class="visually-hidden"> out of 100</span></p>
                             <p class="score-band" id="scoreBand">&nbsp;</p>
                         </div>
+                        <!-- Ripples while the conditions load, a still bobber when they cannot (styles.css). -->
+                        <span class="score-moment" aria-hidden="true"></span>
                       </div>
                     </div>
                     <!-- A dial's reading takes the verdict's place while the dial is pointed at or tapped;

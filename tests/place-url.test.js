@@ -111,9 +111,11 @@ test('the server redirects near-misses (keeping shared choices), 404s nonsense a
         { redirect: '/fishing/35.6,-82.55/asheville-north-carolina?fish=cold' });
     assert.deepEqual(placePage(at('/fishing/999,0/x')), { notFound: true });
     assert.deepEqual(placePage(at('/fishing/35.6,-82.55/asheville-north-carolina')),
-        { path: '/fishing/35.6,-82.55/asheville-north-carolina', name: 'Asheville, North Carolina', indexable: true });
+        { path: '/fishing/35.6,-82.55/asheville-north-carolina', name: 'Asheville, North Carolina', indexable: true, card: '/og/asheville-north-carolina.jpg' });
     assert.equal(placePage(at('/fishing/51.5,-0.12/london')).indexable, false);
     assert.equal(placePage(at('/fishing/38.63,-90.2/st-louis-missouri?name=St.+Louis%2C+Missouri')).name, 'St. Louis, Missouri');
+    // Shared under another name, the page keeps the site's card: a place's card shows the name in its address.
+    assert.equal(placePage(at('/fishing/38.63,-90.2/st-louis-missouri?name=St.+Louis%2C+Missouri')).card, null);
 });
 
 test('page titles and descriptions name the place', () => {

@@ -4,7 +4,12 @@ from PIL import Image, ImageFilter
 src, out_full, out_small = sys.argv[1:4]
 TIGHT = '--tight' in sys.argv  # crop to the drawing instead of a square
 N = int(next((a.split('=')[1] for a in sys.argv if a.startswith('--size=')), 800))
-img = Image.open(src).convert('L').filter(ImageFilter.GaussianBlur(1.2)).resize((N, N), Image.LANCZOS)
+# N is the width of the tracing grid; the height keeps the image's proportions. The blur that
+# smooths the ink edges is scaled to the source, so thin lines in a small image survive it.
+source = Image.open(src).convert('L')
+W0, H0 = source.size
+blur = max(0.35, 1.2 * W0 / 2000)
+img = source.filter(ImageFilter.GaussianBlur(blur)).resize((N, round(N * H0 / W0)), Image.LANCZOS)
 a = 1 - np.asarray(img, dtype=float) / 255  # ink = 1
 T = 0.5
 def segs(a):
@@ -75,7 +80,8 @@ def write(path, keep, pad):
     open(path, 'w').write(f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{box}"><path fill-rule="evenodd" d="{d}"/></svg>\n')
     return len(d)
 # The bobber alone: shapes inside the ball's box (original 2000px: x 560–1360, y 420–1360), scaled to N
-k = N / 2000
+k = N / W0
 inside = lambda s: s['box'][0] >= 540*k and s['box'][2] <= 1380*k and s['box'][1] >= 400*k and s['box'][3] <= 1380*k
 print('full', write(out_full, lambda s: True, 0.04), 'shapes', len(shapes))
-print('small', write(out_small, inside, 0.06), 'shapes', sum(1 for s in shapes if inside(s)))
+if any(inside(s) for s in shapes):  # the bobber's own strokes (icons); nothing for other drawings
+    print('small', write(out_small, inside, 0.06), 'shapes', sum(1 for s in shapes if inside(s)))

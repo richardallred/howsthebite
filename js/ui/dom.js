@@ -43,6 +43,12 @@ export function icon(name, className = 'icon') {
         svg('use', { href: `#i-${name}` }));
 }
 
+/** A score factor's woodcut glyph, from the shared sheet (drawings/glyphs.svg). */
+export function glyph(name, className = 'glyph') {
+    return svg('svg', { class: className, viewBox: '0 0 100 100', 'aria-hidden': 'true', focusable: 'false' },
+        svg('use', { href: `/drawings/glyphs.svg#g-${name}` }));
+}
+
 export const $ = (id) => document.getElementById(id);
 
 export function setText(id, text) {

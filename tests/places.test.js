@@ -62,3 +62,11 @@ test('the sitemap lists the pages and every linked place, on the site in the can
     assert.match(moved, /<loc>https:\/\/example\.org\/<\/loc>/);
     assert.throws(() => sitemapXml('<html></html>'), /canonical/);
 });
+
+test('every popular spot has a link-preview card of its own (node art/share/render.mjs makes them)', async () => {
+    const { access } = await import('node:fs/promises');
+    for (const { href } of links) {
+        const slug = href.split('/').pop();
+        await access(new URL(`../og/${slug}.jpg`, import.meta.url)).catch(() => assert.fail(`og/${slug}.jpg is missing`));
+    }
+});
