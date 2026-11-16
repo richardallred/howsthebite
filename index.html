@@ -263,21 +263,9 @@
 
         <section class="section panel" id="forecast" aria-labelledby="forecastTitle">
             <div class="panel-head">
-                <div class="title-row">
-                    <h2 class="panel-title" id="forecastTitle">Forecast</h2>
-                    <span class="tip">
-                        <button type="button" class="tip-btn" aria-label="How the outlook is worked out" aria-describedby="outlookNote" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button>
-                        <span class="tip-text" role="tooltip" id="outlookNote"></span>
-                    </span>
-                </div>
-                <p class="panel-sub" id="outlookRange"></p>
+                <h2 class="panel-title" id="forecastTitle">5-day weather</h2>
             </div>
-            <div class="chart-card chart--score" id="outlookCard">
-                <h3 class="visually-hidden">Fishing score outlook</h3>
-                <div class="chart" id="outlookChart"></div>
-            </div>
-            <h3 class="subhead" id="weatherTitle">5-day weather</h3>
-            <ol class="forecast" id="forecastList" aria-labelledby="weatherTitle"></ol>
+            <ol class="forecast" id="forecastList" aria-labelledby="forecastTitle"></ol>
         </section>
 
         <section class="section panel" id="water" aria-labelledby="waterTitle">
@@ -356,7 +344,7 @@
     <nav class="bottom-nav" aria-label="Sections">
         <a href="#conditions" aria-current="true"><svg class="icon" aria-hidden="true"><use href="#i-gauge"/></svg><span>Conditions</span></a>
         <a href="#lures"><svg class="icon" aria-hidden="true"><use href="#i-hook"/></svg><span>Lures</span></a>
-        <a href="#forecast"><svg class="icon" aria-hidden="true"><use href="#i-calendar"/></svg><span>Forecast</span></a>
+        <a href="#forecast"><svg class="icon" aria-hidden="true"><use href="#i-calendar"/></svg><span>Weather</span></a>
         <a href="#water"><svg class="icon" aria-hidden="true"><use href="#i-waves"/></svg><span>Water</span></a>
         <a href="#history"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>History</span></a>
     </nav>

@@ -97,7 +97,6 @@ const SHELL = [
     'js/ui/charts.js',
     'js/ui/dom.js',
     'js/ui/map.js',
-    'js/ui/outlook-chart.js',
     'js/ui/theme.js',
     'js/ui/tips.js',
     'vendor/leaflet/leaflet.css',

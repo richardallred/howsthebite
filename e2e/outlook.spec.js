@@ -3,26 +3,14 @@ import { DEFAULT_SCORE, expect, test } from './support/fixtures.js';
 const days = (page) => page.locator('#scoreDays .score-day');
 
 test.describe('score outlook', () => {
-    test('charts the score from now to the end of the day after tomorrow, with each day\'s best time', async ({ page, app }) => {
+    test('today and the next two days are tabs on the score card, each with its day score', async ({ page, app }) => {
         await app.open();
-        // The clock is Monday 15 June, 10:00 in Chicago.
-        await expect(page.locator('#outlookRange')).toHaveText('now to Wed night');
-        await expect(page.locator('#outlookChart .chart-line')).toHaveCount(1);
-        await expect(page.locator('#outlookChart .outlook-day-label')).toHaveText(['Today', 'Tue', 'Wed']);
-        await expect(page.locator('#outlookChart .outlook-night')).toHaveCount(3); // tonight, Tuesday night, Wednesday night
-        await expect(page.locator('#outlookChart .chart-dot:not([visibility="hidden"])')).toHaveCount(3); // one best moment per day
-
-        // The days are tabs on the score card, each with its day score (its best two hours).
+        // The clock is Monday 15 June, 10:00 in Chicago. A day's score is its best two hours.
         await expect(days(page).locator('.score-day-name')).toHaveText(['Today', 'Tue', 'Wed']);
         await expect(days(page).nth(0)).toHaveText(/^Today, day score \d\d$/);
         await expect(days(page).nth(1)).toHaveText(/^Tue, day score \d\d$/);
-
-        await expect(page.locator('#outlookNote')).toContainText('Water temperature and river flow are assumed to stay as they are now');
-        await expect(page.locator('#outlookChart .chart-plot')).toHaveAttribute(
-            'aria-label', new RegExp(`^Fishing score from now to the end of Wed\\. Now ${DEFAULT_SCORE}, Excellent\\. Best of each day: Today 9\\d at [78]:\\d\\d PM; Tue `),
-        );
+        await expect(page.locator('#outlookChart')).toHaveCount(0); // the strip on the card replaced the outlook chart
     });
-
     test('a day tab turns the whole score card to that day\'s best two hours, and Today turns it back', async ({ page, app }) => {
         await app.open();
         const today = await page.locator('#scoreValue').textContent();
@@ -88,60 +76,6 @@ test.describe('score outlook', () => {
         await expect(page.locator('#scoreValue')).toHaveText(today);
     });
 
-    test('the first point is the score shown at the top of the page', async ({ page, app }) => {
-        await app.open();
-        const plot = page.locator('#outlookChart .chart-plot');
-        const tooltip = page.locator('#outlookChart .chart-tooltip');
-        await plot.focus();
-        await page.keyboard.press('Home');
-        await expect(tooltip).toContainText(`${DEFAULT_SCORE} · Excellent`);
-        await expect(tooltip).toContainText('Now, 10:00 AM');
-        await expect(tooltip).not.toContainText('null'); // no cap, so no third line
-
-        await page.keyboard.press('ArrowRight'); // one hour on
-        await expect(tooltip).toContainText('Mon 11:00 AM');
-        await page.keyboard.press('End');
-        await expect(tooltip).toContainText('Thu 12:00 AM');
-        await page.keyboard.press('Escape');
-        await expect(tooltip).toBeHidden();
-    });
-
-    test('shows a read-out on hover and has a data table', async ({ page, app }) => {
-        await app.open();
-        const plot = page.locator('#outlookChart .chart-plot');
-        const tooltip = page.locator('#outlookChart .chart-tooltip');
-        await plot.scrollIntoViewIfNeeded();
-        await plot.hover();
-        await expect(tooltip).toBeVisible();
-        await expect(tooltip).toContainText(/^\d+ · (Exceptional|Excellent|Good|Fair|Poor|Very poor|Terrible)/);
-
-        await page.locator('#outlookChart summary').click();
-        const rows = page.locator('#outlookChart tbody tr');
-        await expect(rows.first()).toHaveText(`Mon 10:00 AMExcellent${DEFAULT_SCORE}`);
-        expect(await rows.count()).toBeGreaterThan(25); // every two hours over two and a half days
-    });
-
-    test('marks the moon\'s major periods under the chart, in the read-out and in the table', async ({ page, app }) => {
-        await app.open();
-        // Overhead Monday, Tuesday and Wednesday afternoon, underfoot in the small hours between.
-        await expect(page.locator('#outlookChart .outlook-moon')).toHaveCount(5);
-        await expect(page.locator('#outlookNote')).toContainText('Bars under the chart are the two hours around the moon crossing overhead or underfoot.');
-
-        const plot = page.locator('#outlookChart .chart-plot');
-        const tooltip = page.locator('#outlookChart .chart-tooltip');
-        await plot.focus();
-        await page.keyboard.press('Home');
-        await expect(tooltip).not.toContainText('Moon'); // 10:00 AM, well before the 1:32 PM crossing
-        for (let hour = 0; hour < 3; hour++) await page.keyboard.press('ArrowRight');
-        await expect(tooltip).toContainText('Mon 1:00 PM');
-        await expect(tooltip).toContainText('Moon overhead');
-
-        await page.locator('#outlookChart summary').click();
-        await expect(page.locator('#outlookChart thead th')).toHaveText(['Time', 'Rating', 'Score', 'Moon']);
-        await expect(page.locator('#outlookChart tbody tr', { hasText: 'Mon 12:00 PM' })).toContainText(/Overhead 1:3[123] PM$/);
-        await expect(page.locator('#outlookChart tbody td:last-child', { hasText: /Overhead|Underfoot/ })).toHaveCount(5);
-    });
-
     test('says so when nothing changes all day, instead of naming a best time', async ({ page, api, app }) => {
         // Near-freezing water holds the score down at every hour.
         api.stations = api.stations.map((station) => (station.id === 'USGS-05500001'
@@ -153,29 +87,29 @@ test.describe('score outlook', () => {
         await expect(page.locator('#scoreCap')).toHaveText('Held down by the water temperature');
     });
 
-    test('in salt water the outlook follows the tide', async ({ page, app }) => {
+    test('in salt water the hours follow the tide', async ({ page, app }) => {
         await app.open();
         await app.search('Galveston', 'Galveston, Texas');
         await page.getByRole('button', { name: 'Inshore', exact: true }).click();
-
-        await expect(page.locator('#outlookNote')).toContainText('light and tide are calculated');
-        // No moon factor in salt water, so no major periods are marked.
-        await expect(page.locator('#outlookChart .outlook-moon')).toHaveCount(0);
-        await expect(page.locator('#outlookChart thead th')).toHaveText(['Time', 'Rating', 'Score']);
-        // The fixture's tide turns every six hours, so the score dips at each slack: more ups and downs than light alone gives.
-        const points = (await page.locator('#outlookChart .chart-line').getAttribute('d')).split('L').map((pair) => Number(pair.split(',')[1]));
-        let turns = 0;
-        for (let i = 2; i < points.length; i++) {
-            if ((points[i] - points[i - 1]) * (points[i - 1] - points[i - 2]) < 0) turns++;
+        await days(page).nth(1).click();
+        const tide = app.factor('Tide').locator('.factor-value');
+        const track = page.locator('#stripTrack');
+        await track.focus();
+        await page.keyboard.press('Home'); // midnight
+        const readings = [];
+        // The fixture's tide turns every six hours: stepping through the day, the tide is seen to run both ways.
+        for (let hour = 0; hour < 12; hour++) {
+            readings.push(await tide.textContent());
+            await page.keyboard.press('ArrowRight');
         }
-        expect(turns).toBeGreaterThan(12);
+        expect(readings.some((text) => text.startsWith('Rising'))).toBe(true);
+        expect(readings.some((text) => text.startsWith('Falling'))).toBe(true);
+        expect(new Set(readings).size).toBeGreaterThan(6);
     });
-
-    test('with no conditions there is no chart, only an explanation', async ({ page, api }) => {
+    test('with no conditions there are no days to choose', async ({ page, api }) => {
         api.fail('nws', 500);
         await page.goto('/');
         await expect(page.locator('#noticeText')).toHaveText("Couldn't load the weather.");
-        await expect(page.locator('#outlookChart .chart-empty')).toHaveText('The outlook needs the current conditions.');
         await expect(page.locator('#scoreDays .score-day[disabled]')).toHaveCount(2); // no days ahead to choose
     });
 

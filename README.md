@@ -26,10 +26,8 @@ No framework and nothing to compile: plain HTML, CSS and ES modules. The app its
   fall feed, the bull-red run…), judged from the date, the water temperature and the last month of
   readings; what has changed lately (a cold snap, a front, a lake rising into new cover); and the
   light, wind, clarity and tide right now
-- **Score outlook**: a chart of the score from now to the end of the day after tomorrow, with
-  each day's best time, so you can pick when to go
 - **Solunar major periods** in fresh water: the Moon tile gives the next time the moon is overhead
-  or underfoot, and the outlook chart marks each one
+  or underfoot
 - **A score for the day**, not just the moment: the score card leads with each day's best two
   hours, keeps the score right now beside it, and has a strip of the day under the stamp: drag
   along it for the score hour by hour, or pick dawn, morning, afternoon, dusk or night
@@ -445,33 +443,27 @@ Overall rating: 85+ exceptional, 70+ excellent, 55+ good, 40+ fair, 25+ poor, 10
 
 ### The outlook
 
-The chart under **Forecast** is the same score worked out every 20 minutes from now to the end of
-the day after tomorrow (`scoreSeries` in `js/core/scoring.js`). Its first point is the score right
-now, as shown beside the day's score on the score card.
-
-The score card scores each hour the same way, at its middle (the hour under way is the score now).
-A day's score is the average of its best two hours still to come, and each part of the day (dawn
+The score card's day tabs and strip are the same score worked out for every hour of today and the
+next two days, at the middle of each hour (the hour under way is the score now). A day's score is the average of its best two hours still to come, and each part of the day (dawn
 from an hour before sunrise, dusk to an hour after sunset, morning and afternoon between, then
 night) the average of its hours (`js/core/day-score.js`). A dangerous-weather warning caps the
 hours it is in effect, not the whole day.
 
 - **Calculated exactly:** the sun (light), the moon, and in salt water the tide.
-- **Marked, not scored again:** in fresh water a bar under the chart shows each major period, the
-  hour either side of the moon crossing overhead or underfoot. The Moon factor already counts
-  them; the bars are there so you can see when one falls at dawn or dusk. Minor periods (moonrise
-  and moonset) are left out, because no catch data supports them.
+- **Moon:** in fresh water the Moon factor counts the major periods, the hour either side of the
+  moon crossing overhead or underfoot. Minor periods (moonrise and moonset) are left out, because
+  no catch data supports them.
 - **From forecasts:** sky and wind from the Weather Service's hour-by-hour forecast (the 12-hour
   forecast if that fails to load), and off a beach the wave-height forecast.
 - **Assumed to hold:** water temperature and river flow stay as they are now. That is the main
   reason the later days are only a rough guide: a cold front or a rise in the river will change
   them.
-- **Not carried forward:** the pressure trend (unknown ahead, scored as neutral) and current
-  weather alerts.
+- **Not carried forward:** the pressure trend (unknown ahead, scored as neutral), and weather
+  alerts beyond the hours they are in effect.
 - **Thunderstorms:** a forecast hour counts as a storm, and is capped at 15, only when storms are
   likely (55% or more). A mere chance of thunderstorms, which is in the forecast most summer
   afternoons in the South, is scored as a showery, low-light spell.
 
-Each day's card gives its best score and the stretch around it that stays within four points.
 When something holds the score flat all day (frozen water, a river in flood), the card says so
 instead of naming a best time.
 
@@ -611,7 +603,7 @@ judgement on top of it, not a fitted model.
   about 5% overall and 10–19% in the datasets where it showed, and the authors could not separate
   it from when anglers choose to fish. Moon overhead/underfoot raised trip success in the Escanaba
   data. A seven-year trout study found no lunar effect at all. The times of those crossings are
-  shown on the Moon tile and the outlook chart, which changes nothing in the score.
+  shown on the Moon tile, which changes nothing in the score.
 - **Barometric pressure** was not a significant predictor of catch in any of the three angling
   datasets found that tested it (walleye and muskie in Wisconsin; largemouth bass in Michigan and
   Illinois). The slow bite behind a cold front is near-universal testimony but has barely been
@@ -729,7 +721,7 @@ js/
     coast-api.js        NOAA tides and water temperature, NWS beach and wave forecasts, sea temperature
     usgs-api.js         USGS stations: water temperature, level, flow, their history and flow normals
   core/                 Pure logic with no DOM access (unit tested)
-    scoring.js          The fishing score (fresh, inshore, surf) and the best-times outlook
+    scoring.js          The fishing score (fresh, inshore, surf), and scored series and best windows ahead
     lures.js            Lure and bait suggestions for the season and the conditions
     tides.js            Tide height and movement between predicted highs and lows
     species.js          Which groups of fish live in a region, and what to call them
@@ -745,7 +737,6 @@ js/
     place-url.js        Place addresses (/fishing/<lat>,<lon>/<name>): build, read, page titles
   ui/
     charts.js           SVG line chart with tooltip, keyboard support and data table
-    outlook-chart.js    The score outlook chart: shaded nights, day labels, each day's best moment, major periods
     map.js              Lazy-loaded Leaflet station map
     theme.js            Light/dark toggle
     dom.js              Tiny DOM-building helpers
