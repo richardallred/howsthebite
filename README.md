@@ -380,13 +380,13 @@ The logic lives in `js/core/scoring.js` and is covered by `tests/scoring.test.js
 
 | Factor | Points | Best | How it is scored |
 |---|---|---|---|
-| Water temperature | 31 | Depends on the species setting | A smooth curve per species group: bass and panfish peak at 69–80°F, catfish at 72–86°F, walleye and pike at 62–72°F, trout at 50–64°F, "all species" at 62–76°F. Trout lose most of their points by 70°F and all of them by 75°F. An estimate (no sensor nearby) is pulled toward the middle. Dissolved oxygen below about 5 mg/L (6 for trout) cuts the factor further where a station measures it. |
+| Water temperature | 31 | Depends on the species setting | A smooth curve per species group: bass and panfish peak at 69–80°F, catfish at 72–86°F, walleye and pike at 62–72°F, trout at 50–64°F, "all species" at 62–76°F. Trout lose most of their points by 70°F and all of them by 75°F. An estimate (no sensor nearby) is pulled toward the middle. Dissolved oxygen below about 5 mg/L (6 for trout) cuts the factor further where a station measures it. Where a sensor has a few weeks of record, the trend moves it too: water warming toward the fish's range closes up to a quarter of the gap to full marks, water cooling away from it (or warming into the heat) loses up to 38%, and a cold snap (down 4°F or more in 3 days) loses 40%. |
 | Light | 28 | The hour either side of sunset | From the sun's height, computed for the spot: evening low light 100%, early morning 75%, overcast day 68%, broken cloud 55%, bright sun 45%, night 35%, blended smoothly between. For catfish, night earns 85% and bright sun 40% (see below). |
 | Wind | 12 | 5–12 mph | Calm still earns 75%. Points fall away above 15 mph and reach zero at 30. Gusts count (a gust is treated as 70% of a steady wind). |
 | River flow | 9 | Normal for the date | Current discharge against that gauge's own record for today's date (USGS day-of-year percentiles, at least 10 years). Normal flow scores full marks, low water a little less, very high water almost nothing. For catfish, flow up to the 85th percentile still scores full marks. Left out for lakes and for gauges without a long record. |
 | Season | 8 | The pre-spawn and fall feeds | Where the fish are in their year (`js/core/season.js`: pre-spawn, spawn, summer, the fall feed, winter), from the date, the water temperature and its recent trend. Each phase has a rating: the year's best feeds near 100%, a spawn when fish stop feeding or a closed season around 25–55%, winter around 30%. With several fish (all species) it is the average of their ratings and the best one, so it leans toward whatever is in season. An estimated water temperature is pulled toward the middle. Rules of thumb, not catch data, so worth less than the measured factors. |
 | Moon | 7 | New or full moon, overhead or underfoot | 35% always, up to 30% more near new/full moon, and 35% more within about an hour of the moon crossing overhead or underfoot. |
-| Barometric pressure | 5 | Steady or slowly falling | Trend only: slowly falling 5, steady or falling fast 4, rising 3, rising fast 1. The level itself earns nothing. |
+| Barometric pressure | 5 | Steady or slowly falling, or a front on its way | Trend only: slowly falling 5, steady or falling fast 4, rising 3, rising fast 1. A front overrides the 3-hour trend: one approaching earns 5, one just through earns 1, or nothing under a clear "bluebird" sky. The level itself earns nothing. |
 
 **Catfish.** Catfish are scored on their own rather than with bass, because three things differ:
 
@@ -608,6 +608,13 @@ judgement on top of it, not a fitted model.
   datasets found that tested it (walleye and muskie in Wisconsin; largemouth bass in Michigan and
   Illinois). The slow bite behind a cold front is near-universal testimony but has barely been
   measured, so the trend keeps five points and the level none.
+- **Water temperature trend and fronts.** Rating apps such as Bass Forecast lean hardest on which
+  way the water temperature is heading and on fronts, and every guide says the same: fish turn on
+  as water warms toward their range, slow down as it cools away from it, and shut down for a few
+  days after a cold snap or under the bluebird sky behind a cold front. None of it has been
+  measured against catch rates. So the weekly trend adjusts the water factor rather than earning
+  points of its own, and fronts only move the five pressure points. The 24-hour change is still
+  shown but not scored: a day's swing in a shallow river is mostly sun and shade.
 - **Dropped: air temperature and sky as a "nice day" bonus.** Air temperature had no effect of its
   own once water temperature and season are accounted for, and rain was not significant where
   tested. The old score gave a clear sky the most points; the evidence points the other way.

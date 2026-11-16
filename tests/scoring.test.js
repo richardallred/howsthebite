@@ -467,3 +467,50 @@ test('every phase of every fish has a fishing rating', async () => {
         }
     }
 });
+
+// ---------------------------------------------------------------------------
+// Water trend and fronts
+// ---------------------------------------------------------------------------
+
+const weeks = (perWeek, extra = {}) => ({ perWeek, change7: perWeek, change3: perWeek * 3 / 7, direction: Math.abs(perWeek) >= 2 ? (perWeek > 0 ? 'warming' : 'cooling') : 'steady', swing: null, ...extra });
+
+test('water warming toward the range scores higher than cooling away from it', () => {
+    const warming = scoreWaterTemp(58, { group: 'warm', trend: weeks(4) });
+    const steady = scoreWaterTemp(58, { group: 'warm', trend: weeks(0.5) });
+    const cooling = scoreWaterTemp(58, { group: 'warm', trend: weeks(-4) });
+    assert.ok(warming.share > steady.share && steady.share > cooling.share);
+    assert.equal(steady.share, scoreWaterTemp(58, { group: 'warm' }).share);
+    assert.match(warming.note, /^Warming 4\.0°F a week/);
+    assert.match(cooling.note, /^Cooling 4\.0°F a week — fish slowing/);
+});
+
+test('above the range, cooling is the good direction', () => {
+    assert.ok(scoreWaterTemp(88, { group: 'warm', trend: weeks(-3) }).share > scoreWaterTemp(88, { group: 'warm', trend: weeks(3) }).share);
+});
+
+test('a cold snap cuts the water factor and says so', () => {
+    const snap = scoreWaterTemp(60, { group: 'warm', trend: weeks(-5, { swing: 'cold-snap', change3: -6 }) });
+    assert.ok(snap.share < scoreWaterTemp(60, { group: 'warm' }).share * 0.65);
+    assert.match(snap.note, /Cold snap — down 6\.0°F in 3 days/);
+});
+
+test('a steady trend inside the prime range costs nothing; an estimate ignores trend', () => {
+    assert.equal(scoreWaterTemp(74, { group: 'warm', trend: weeks(1) }).points, FACTOR_MAX.water);
+    assert.equal(scoreWaterTemp(58, { group: 'warm', estimated: true, trend: weeks(-6) }).share, scoreWaterTemp(58, { group: 'warm', estimated: true }).share);
+});
+
+test('fronts: feed ahead of one, bluebird sky behind one is the low point', () => {
+    assert.equal(scorePressure(30.1, { change3h: 0, front: 'approaching' }).points, FACTOR_MAX.pressure);
+    assert.equal(scorePressure(30.4, { change3h: 0.03, front: 'passed', sky: 'clear' }).points, 0);
+    assert.equal(scorePressure(30.4, { change3h: 0.03, front: 'passed', sky: 'overcast' }).points, 1);
+    assert.match(scorePressure(30.4, { front: 'passed', sky: 'clear' }).note, /Bluebird/);
+});
+
+test('scoreConditions passes the water trend and front through, and drops the front ahead', () => {
+    const cold = { ...ideal, waterTempF: 58, targets: [], speciesGroup: 'warm' };
+    const flat = scoreConditions(cold);
+    const falling = scoreConditions({ ...cold, waterTrend: weeks(-5, { swing: 'cold-snap', change3: -5 }), front: 'passed' });
+    assert.ok(falling.score < flat.score);
+    const series = scoreSeries({ ...cold, front: 'passed' }, { start: ideal.date.getTime(), end: ideal.date.getTime() + 2 * HOUR });
+    assert.ok(series.length > 1);
+});

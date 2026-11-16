@@ -3,14 +3,16 @@
 // The weights follow what has actually been measured about angler catch rates
 // rather than fishing folklore (sources and reasoning are in the README):
 //
-//   Water temperature   31   strongest biological basis; the right range depends on the species
+//   Water temperature   31   strongest biological basis; the right range depends on the species.
+//                             The last week or two of trend moves it: warming toward the range helps,
+//                             cooling away from it or a cold snap hurts
 //   Light               28   dusk > dawn > overcast day > bright midday > night
 //   Wind                12   small effect on fish; a real one on whether you can fish well and safely
 //   River flow           9   only when a river gauge with a long record is in play
 //   Season               8   where the fish are in their year (pre-spawn, spawn, fall feed…);
 //                             rules of thumb rather than catch data, so kept below the measured factors
 //   Moon                 7   real but small and inconsistent
-//   Barometric pressure  5   no measured effect on catch rates; kept small, trend only
+//   Barometric pressure  5   no measured effect on catch rates; kept small, trend and fronts only
 //
 // Salt water is scored on different factors (see FACTOR_WEIGHTS and the README): there is
 // no river flow, the tide matters, and for surf fishing so does the height of the waves.
@@ -208,19 +210,73 @@ export function temperatureZone(tempF, group = 'any') {
     return share >= 0.5 ? 'warm' : 'hot';
 }
 
+// Which way the water has been heading over the last week or two, relative to the fish's range.
+// Water warming toward the range (the spring warm-up) or cooling toward it from the heat helps;
+// water cooling away from it (late fall, a cold front) hurts, and a sudden drop hurts most.
+// Like the pressure trend this rests on near-universal anglers' testimony and on how cold-blooded
+// fish respond to temperature, not on catch-rate studies, so it adjusts the water factor rather
+// than standing as a factor of its own. The rate is °F per week, signed so that positive is
+// toward the prime range.
+const TOWARD_BONUS = [[0, 0], [2, 0.12], [4, 0.25]]; // share of the remaining gap closed
+const AWAY_FACTOR = [[0, 1], [2, 0.88], [4, 0.75], [7, 0.62]]; // multiplier
+const COLD_SNAP_FACTOR = 0.6;
+const PRIME_SWING_FACTOR = [[3, 1], [6, 0.9]]; // a fast change even inside the range unsettles fish
+
+/**
+ * How the recent water trend (water-trend.js) moves the water factor's share.
+ * @returns {{ share: number, note: string|null }}  note is set only when the trend is the story
+ */
+function applyWaterTrend(share, tempF, groupId, trend) {
+    const weekly = trend?.perWeek ?? trend?.change7;
+    if (!trend || !isNum(weekly)) return { share, note: null };
+    const zone = temperatureZone(tempF, groupId);
+    const below = zone === 'cool' || zone === 'cold';
+    const perWeek = `${Math.abs(weekly).toFixed(1)}°F a week`;
+
+    if (trend.swing === 'cold-snap' && zone !== 'hot') {
+        return {
+            share: share * COLD_SNAP_FACTOR,
+            note: `Cold snap — down ${Math.abs(trend.change3).toFixed(1)}°F in 3 days; fish need a few days to adjust`,
+        };
+    }
+    if (zone === 'prime') {
+        return { share: share * curve(PRIME_SWING_FACTOR, Math.abs(weekly)), note: null };
+    }
+    const toward = below ? weekly : -weekly;
+    if (trend.direction === 'steady' || Math.abs(toward) < 1) return { share, note: null };
+    if (toward > 0) {
+        return {
+            share: share + (1 - share) * curve(TOWARD_BONUS, toward),
+            note: below ? `Warming ${perWeek} — fish waking up and moving shallow` : `Cooling ${perWeek} — relief from the heat`,
+        };
+    }
+    return {
+        share: share * curve(AWAY_FACTOR, -toward),
+        note: below ? `Cooling ${perWeek} — fish slowing down with it` : `Warming ${perWeek} — heat stress building`,
+    };
+}
+
 /**
  * @param {number} tempF
  * @param {object} [options]
  * @param {'any'|'warm'|'catfish'|'cool'|'cold'} [options.group]
  * @param {string|null} [options.label]   what the group is called in this region, for the note
  * @param {boolean} [options.estimated]   no sensor nearby: the temperature is a guess from air temperature
- * @param {number|null} [options.change24h]  shown, but not scored: its effect on catch rates is unmeasured
+ * @param {number|null} [options.change24h]  shown, but not scored: a day's change is mostly noise
+ * @param {object|null} [options.trend]  the last weeks of water temperature (water-trend.js), which is scored
  * @param {number|null} [options.oxygenMgL]  dissolved oxygen, when the station reports it
  */
-export function scoreWaterTemp(tempF, { group = 'any', label = null, estimated = false, change24h = null, oxygenMgL = null } = {}) {
+export function scoreWaterTemp(tempF, { group = 'any', label = null, estimated = false, change24h = null, trend: weeks = null, oxygenMgL = null } = {}) {
     const groupId = group in SPECIES_GROUPS ? group : 'any';
     let share = curve(SPECIES_GROUPS[groupId].curve, tempF);
     let note = waterNote(tempF, share, groupId, label);
+
+    if (!estimated) {
+        const adjusted = applyWaterTrend(share, tempF, groupId, weeks);
+        share = adjusted.share;
+        // The temperature itself stays the headline when it is the bigger story (dangerously hot, prime).
+        if (adjusted.note && share < 0.95 && !(groupId === 'cold' && tempF >= 68)) note = adjusted.note;
+    }
 
     if (estimated) {
         // A guess should not swing the score as far as a measurement: pull it toward the middle.
@@ -567,10 +623,20 @@ export function scoreSeason({ targets = [], date, waterTempF, trend = null, esti
 // Every angling dataset that tested pressure found no effect on catch rates, so the level
 // earns nothing. The trend keeps a few points as a marker of weather on the move: the
 // slow bite behind a cold front is near-universal testimony, though barely measured.
-export function scorePressure(inHg, { change3h = null } = {}) {
+// A front (trend.js frontState, from a day or two of pressure and air temperature) says more
+// than three hours of barometer: fish feed ahead of one, and the clear, high-pressure
+// "bluebird" sky that follows one is the classic tough day.
+export function scorePressure(inHg, { change3h = null, front = null, sky = 'unknown' } = {}) {
     const result = (points, note, trend) => graded(points / FACTOR_MAX.pressure, FACTOR_MAX.pressure, { note, trend });
     if (!isNum(inHg)) return result(3, 'No barometer reporting nearby', null);
     const trend = classifyTrend(change3h, { steadyBelow: 0.02, rapidAbove: 0.06 });
+    const trendLine = trendText(trend, { unit: ' inHg', digits: 2, period: '3 hr' });
+    if (front === 'passed') {
+        return sky === 'clear' || sky === 'partly'
+            ? result(0, 'Bluebird sky behind a cold front — usually a tough bite', trendLine)
+            : result(1, 'Just behind a cold front — fish often slow for a day or two', trendLine);
+    }
+    if (front === 'approaching') return result(5, 'Front on its way — fish often feed ahead of it', trendLine);
     let points;
     let note;
     if (trend.direction === 'unknown') [points, note] = [3, 'Trend not known yet'];
@@ -637,6 +703,7 @@ const limitFor = (share) => Math.round(100 * clamp(0.1 + 1.8 * share, 0, 1));
  * @param {Date} [c.date]
  * @param {string[]} [c.targets]  the fish being fished for, for the Season factor
  * @param {object|null} [c.waterTrend]  the last weeks of water temperature (water-trend.js)
+ * @param {'approaching'|'passed'|null} [c.front]  a weather front (trend.js frontState)
  */
 export function scoreConditions(c) {
     const date = c.date ?? new Date();
@@ -647,7 +714,7 @@ export function scoreConditions(c) {
     const every = {
         water: () => scoreWaterTemp(c.waterTempF, {
             group, label: c.speciesLabel, estimated: c.waterEstimated,
-            change24h: c.waterChange24h, oxygenMgL: c.oxygenMgL,
+            change24h: c.waterChange24h, trend: c.waterTrend ?? null, oxygenMgL: c.oxygenMgL,
         }),
         waves: () => scoreWaves(c.waveFt),
         tide: () => scoreTide(c.tides, date.getTime()),
@@ -658,7 +725,7 @@ export function scoreConditions(c) {
         season: () => (c.targets?.length ? scoreSeason({
             targets: c.targets, date, waterTempF: c.waterTempF, trend: c.waterTrend ?? null, estimated: c.waterEstimated,
         }) : null),
-        pressure: () => scorePressure(c.pressureInHg, { change3h: c.pressureChange3h }),
+        pressure: () => scorePressure(c.pressureInHg, { change3h: c.pressureChange3h, front: c.front ?? null, sky: c.sky }),
     };
 
     // Each factor is worked out as a share of full marks, then worth what this style of fishing gives it.
@@ -723,7 +790,7 @@ export function scoreSeries(base, { start, end, stepMinutes = 20, at = () => nul
     return times.map((t) => {
         const conditions = t === start
             ? { ...base, date: new Date(t) }
-            : { ...base, pressureChange3h: null, gustMph: null, hazard: null, ...(at(t) ?? {}), date: new Date(t) };
+            : { ...base, pressureChange3h: null, front: null, gustMph: null, hazard: null, ...(at(t) ?? {}), date: new Date(t) };
         const result = scoreConditions(conditions);
         return { t, score: result.score, band: result.band, cap: result.cap?.reason ?? null };
     });
