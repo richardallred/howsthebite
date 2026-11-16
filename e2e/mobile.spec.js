@@ -9,7 +9,7 @@ test('fits a phone screen without horizontal scrolling', async ({ page, app }) =
 
     // The location button collapses to an icon but keeps its accessible name.
     await expect(page.locator('#locateBtn span')).toBeHidden();
-    await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
+    await expect(page.locator('#nowScore')).toHaveText(DEFAULT_SCORE);
     await expect(page.locator('.factor')).toHaveCount(7);
 });
 
@@ -30,7 +30,7 @@ test('bottom navigation jumps between sections and tracks the visible one', asyn
 
 test('deep links from the installed app shortcuts land on their section', async ({ page, app }) => {
     await app.open('/#forecast');
-    await expect(page.getByRole('heading', { name: 'Forecast', exact: true })).toBeInViewport();
+    await expect(page.getByRole('heading', { name: '5-day weather', exact: true })).toBeInViewport();
 });
 
 test('stations can be chosen by touch and the chart responds to a tap', async ({ page, app }) => {

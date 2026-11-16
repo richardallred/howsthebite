@@ -189,12 +189,12 @@
                     <p class="species-note" id="speciesNote" aria-live="polite"></p>
                 </div>
             </div>
-            <!-- One card for the state of things now: the score as a stamp, the factors behind it as dials
+            <!-- One card for the day: its score as a stamp, the factors behind it as dials
                  round it (most important first), and the full readings beside it (or behind Details on a phone). -->
             <div class="panel score-card" id="scoreCard" data-band="loading" data-state="loading">
-                <!-- Now, then each day of the outlook: the whole card follows the tab (js/app.js, renderScoreDays).
+                <!-- Today, then each day of the outlook, each with its day score: the whole card follows the tab (js/app.js, renderScoreDays).
                      The same three tabs are here from the first paint so the card does not grow. -->
-                <div class="score-days" id="scoreDays" role="tablist" aria-label="Day"><button type="button" class="score-day" role="tab" aria-selected="true"><span class="score-day-name">Now</span></button><button type="button" class="score-day" role="tab" aria-selected="false" disabled><span class="score-day-name">&nbsp;</span></button><button type="button" class="score-day" role="tab" aria-selected="false" disabled><span class="score-day-name">&nbsp;</span></button></div>
+                <div class="score-days" id="scoreDays" role="tablist" aria-label="Day"><button type="button" class="score-day" role="tab" aria-selected="true"><span class="score-day-name">Today</span></button><button type="button" class="score-day" role="tab" aria-selected="false" disabled><span class="score-day-name">&nbsp;</span></button><button type="button" class="score-day" role="tab" aria-selected="false" disabled><span class="score-day-name">&nbsp;</span></button></div>
                 <div class="score-main" id="scoreMain" role="tabpanel" aria-live="polite" aria-atomic="true">
                     <div class="score-dial-frame">
                       <div class="score-dial-inner">
@@ -223,8 +223,15 @@
                         <span class="score-pin" id="scorePin"></span>
                     </div>
                     <p class="score-cap" id="scoreCap"></p>
-                    <!-- Placeholders hold the room the best times and the weather take (see renderScore). -->
-                    <p class="score-best" id="scoreBest"><span class="eyebrow score-best-label">Best times: </span><span class="window is-placeholder">&nbsp;</span></p>
+                    <!-- Placeholders hold the room what the score is for, the strip and the weather take (see renderScore). -->
+                    <p class="score-best" id="scoreBest"><span class="eyebrow score-best-label">Best two hours</span><span class="window is-placeholder">&nbsp;</span></p>
+                    <!-- The day hour by hour: drag along it (or use the arrow keys) for the score at any hour,
+                         or choose a part of the day below it (js/app.js, renderDayStrip). -->
+                    <div class="day-strip" id="dayStrip" data-state="loading">
+                        <div class="strip-track" id="stripTrack" role="slider" tabindex="0" aria-label="Score hour by hour" aria-orientation="horizontal"></div>
+                        <div class="strip-ticks" id="stripTicks" aria-hidden="true"></div>
+                        <div class="strip-parts" id="stripParts" role="group" aria-label="Parts of the day"></div>
+                    </div>
                     <p class="score-now" id="scoreNow">&nbsp;</p>
                 </div>
                 <div class="score-details">
@@ -256,21 +263,9 @@
 
         <section class="section panel" id="forecast" aria-labelledby="forecastTitle">
             <div class="panel-head">
-                <div class="title-row">
-                    <h2 class="panel-title" id="forecastTitle">Forecast</h2>
-                    <span class="tip">
-                        <button type="button" class="tip-btn" aria-label="How the outlook is worked out" aria-describedby="outlookNote" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button>
-                        <span class="tip-text" role="tooltip" id="outlookNote"></span>
-                    </span>
-                </div>
-                <p class="panel-sub" id="outlookRange"></p>
+                <h2 class="panel-title" id="forecastTitle">5-day weather</h2>
             </div>
-            <div class="chart-card chart--score" id="outlookCard">
-                <h3 class="visually-hidden">Fishing score outlook</h3>
-                <div class="chart" id="outlookChart"></div>
-            </div>
-            <h3 class="subhead" id="weatherTitle">5-day weather</h3>
-            <ol class="forecast" id="forecastList" aria-labelledby="weatherTitle"></ol>
+            <ol class="forecast" id="forecastList" aria-labelledby="forecastTitle"></ol>
         </section>
 
         <section class="section panel" id="water" aria-labelledby="waterTitle">
@@ -349,7 +344,7 @@
     <nav class="bottom-nav" aria-label="Sections">
         <a href="#conditions" aria-current="true"><svg class="icon" aria-hidden="true"><use href="#i-gauge"/></svg><span>Conditions</span></a>
         <a href="#lures"><svg class="icon" aria-hidden="true"><use href="#i-hook"/></svg><span>Lures</span></a>
-        <a href="#forecast"><svg class="icon" aria-hidden="true"><use href="#i-calendar"/></svg><span>Forecast</span></a>
+        <a href="#forecast"><svg class="icon" aria-hidden="true"><use href="#i-calendar"/></svg><span>Weather</span></a>
         <a href="#water"><svg class="icon" aria-hidden="true"><use href="#i-waves"/></svg><span>Water</span></a>
         <a href="#history"><svg class="icon" aria-hidden="true"><use href="#i-chart"/></svg><span>History</span></a>
     </nav>

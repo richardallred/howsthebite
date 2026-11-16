@@ -112,7 +112,7 @@ test.describe('recent places and persistence', () => {
 
         await page.reload();
         await expect(page.getByRole('heading', { level: 1 })).toHaveText('Asheville, North Carolina');
-        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
+        await expect(page.locator('#nowScore')).toHaveText(DEFAULT_SCORE);
         await expect(page.locator('#notice')).toBeHidden();
         expect(api.calls.length).toBe(callsBefore);
     });
@@ -152,7 +152,7 @@ test.describe('use my location, permission already granted', () => {
         await page.goto('/');
         await expect(page.getByRole('heading', { level: 1 })).toHaveText('Madison, Wisconsin');
         await expect(page).toHaveTitle("Madison, Wisconsin Fishing Forecast — How's the Bite?");
-        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
+        await expect(page.locator('#nowScore')).toHaveText(DEFAULT_SCORE);
         await expect(page.locator('#notice')).toBeHidden();
 
         // Coordinates are rounded to three decimals (about 100 m) before they leave the device…
@@ -248,7 +248,7 @@ test.describe('species on offer follow the region', () => {
     test('if the species lookup fails, conditions still load and the usual choices are offered', async ({ page, api, app }) => {
         api.fail('gbif', 503);
         await app.open();
-        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
+        await expect(page.locator('#nowScore')).toHaveText(DEFAULT_SCORE);
         await expect(choices(page)).toHaveText(['All species', 'Bass & panfish', 'Catfish', 'Walleye & pike', 'Trout']);
     });
 });

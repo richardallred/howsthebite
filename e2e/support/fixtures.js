@@ -180,6 +180,12 @@ export const test = base.extend({
                 await page.getByRole('option', { name: optionText }).click();
                 await this.loaded();
             },
+            /** Turn the score card to the score right now (it opens on the day's score). */
+            async now() {
+                const chip = page.locator('.score-live');
+                await chip.click();
+                await expect(chip).toHaveAttribute('aria-pressed', 'true');
+            },
             factor(label) {
                 return page.locator('.factor', { has: page.getByRole('heading', { name: label }) });
             },

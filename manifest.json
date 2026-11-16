@@ -29,7 +29,7 @@
       "sizes": "1280x900",
       "type": "image/png",
       "form_factor": "wide",
-      "label": "Fishing score, factor breakdown and forecast"
+      "label": "Fishing score, factor breakdown and weather"
     },
     {
       "src": "screenshots/mobile.png",
@@ -41,7 +41,7 @@
   ],
   "shortcuts": [
     {
-      "name": "Forecast",
+      "name": "Weather",
       "url": "./#forecast",
       "icons": [{ "src": "icons/icon-96x96.png", "sizes": "96x96", "type": "image/png" }]
     },

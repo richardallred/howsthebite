@@ -49,3 +49,14 @@ export function summariseAlerts(alerts, now) {
     items.sort((a, b) => (a.level === b.level ? Number(b.active) - Number(a.active) : a.level === 'danger' ? -1 : 1));
     return { hazard: items.find((item) => item.level === 'danger' && item.active)?.event ?? null, items };
 }
+
+/**
+ * The dangerous alert in effect at `time`, from summariseAlerts' items, or null. One with no
+ * end time is taken to last a few hours from `now`, not for days.
+ */
+export function hazardAt(items, time, now) {
+    const danger = (items ?? []).find((item) => item.level === 'danger'
+        && (item.onset ?? -Infinity) <= time && time < (item.ends ?? now + OPEN_ENDED_MS));
+    return danger?.event ?? null;
+}
+const OPEN_ENDED_MS = 3 * HOUR_MS;
