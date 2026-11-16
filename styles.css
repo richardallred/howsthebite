@@ -878,6 +878,7 @@ body.page { padding-bottom: 0; }
 .score-best { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
 .score-best:empty { display: none; }
 .score-best-label { width: 100%; }
+.score-whole { margin-left: auto; min-height: 32px; padding: 4px 10px; font-size: 0.8125rem; }
 .score-best .window {
     padding: 6px 10px;
     border: 1px solid var(--line);
@@ -901,6 +902,110 @@ body.page { padding-bottom: 0; }
 }
 .score-now:empty { display: none; }
 .score-now .icon { width: 18px; height: 18px; color: var(--muted); }
+.score-now { flex-wrap: wrap; row-gap: 6px; }
+.score-now-weather { display: inline-flex; align-items: center; gap: 8px; }
+/* The score this moment, beside the day's: a chip that turns the card to it. */
+.score-live {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 4px 6px 4px 12px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--ink);
+    font: 600 0.8125rem/1 var(--font);
+    cursor: pointer;
+}
+.score-live:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+.score-live[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.score-live .score-day-score { width: 28px; height: 28px; }
+
+/* ---------- The day hour by hour, under the stamp ---------- */
+
+.day-strip { display: grid; gap: 4px; margin-top: 2px; }
+@media (min-width: 960px) { .score-main > .day-strip { width: min(520px, 100%); } }
+.strip-track {
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 56px;
+    padding-top: 18px; /* room for the hour's read-out over the thumb */
+    border-bottom: 1px solid var(--line-strong);
+    cursor: ew-resize;
+    touch-action: pan-y; /* a sideways drag scrubs; an upward one still scrolls the page */
+    user-select: none;
+    -webkit-user-select: none;
+}
+.strip-track:focus-visible { outline-offset: 4px; }
+.strip-track[aria-disabled] { cursor: default; }
+.day-strip[data-state="loading"] .strip-track { background: linear-gradient(to top, var(--sunk) 40%, transparent 40%); animation: pulse 1.6s ease-in-out infinite; }
+.day-strip[data-state="empty"] { display: none; }
+.strip-bar {
+    --band: var(--muted);
+    flex: 1;
+    min-width: 0;
+    height: calc(4px + (100% - 4px) * var(--score, 0));
+    border-radius: 2px 2px 0 0;
+    background: var(--band);
+    opacity: 0.38;
+    transition: opacity 0.15s, height 0.3s ease-out;
+}
+.strip-bar[data-lit] { opacity: 1; }
+.strip-bar[data-past] { height: 3px; background: var(--line-strong); opacity: 0.6; }
+.strip-bar[data-band="exceptional"], .strip-bar[data-band="excellent"] { --band: var(--rating-excellent); }
+.strip-bar[data-band="good"] { --band: var(--rating-good); }
+.strip-bar[data-band="fair"] { --band: var(--rating-fair); }
+.strip-bar[data-band="poor"], .strip-bar[data-band="verypoor"], .strip-bar[data-band="terrible"] { --band: var(--rating-poor); }
+/* Now: a hairline across the strip. The thumb: the hour being shown, with its time over it. */
+.strip-now { position: absolute; top: 14px; bottom: -4px; width: 0; border-left: 1.5px dashed var(--ink-2); opacity: 0.6; pointer-events: none; }
+.strip-thumb { position: absolute; top: 14px; bottom: -6px; width: 3px; margin-left: -1.5px; border-radius: 2px; background: var(--ink); box-shadow: 0 0 0 2px var(--surface); pointer-events: none; }
+.strip-thumb-label {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 1px 6px;
+    border-radius: var(--radius-sm);
+    background: var(--ink);
+    color: var(--surface);
+    font: 600 0.75rem/1.3 var(--font);
+    font-variant-numeric: lining-nums tabular-nums;
+    white-space: nowrap;
+}
+.strip-thumb[data-edge="start"] .strip-thumb-label { left: 0; transform: none; }
+.strip-thumb[data-edge="end"] .strip-thumb-label { left: auto; right: 0; transform: none; }
+.strip-ticks { position: relative; height: 1.1em; font-size: 0.6875rem; color: var(--muted); font-variant-numeric: lining-nums tabular-nums; }
+.strip-tick { position: absolute; top: 0; transform: translateX(-50%); }
+/* The parts of the day, each with its own score: tap one to see it. */
+.strip-parts { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 4px; margin-top: 4px; }
+.day-strip[data-state="loading"] .strip-parts { min-height: 50px; }
+.strip-part {
+    display: grid;
+    justify-items: center;
+    gap: 3px;
+    min-width: 0;
+    min-height: 50px;
+    padding: 6px 2px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--muted);
+    font: 600 0.6875rem/1.1 var(--font);
+    cursor: pointer;
+}
+.strip-part:hover:not([disabled]) { color: var(--ink); background: color-mix(in srgb, var(--ink) 4%, transparent); }
+.strip-part[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+.strip-part[disabled] { cursor: default; opacity: 0.55; }
+.strip-part-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.strip-part-score { --band: var(--muted); color: var(--band); font: 400 1rem/1 var(--font-display); font-variant-numeric: lining-nums tabular-nums; }
+.strip-part-score[data-band="exceptional"], .strip-part-score[data-band="excellent"] { --band: var(--rating-excellent); }
+.strip-part-score[data-band="good"] { --band: var(--rating-good); }
+.strip-part-score[data-band="fair"] { --band: var(--rating-fair); }
+.strip-part-score[data-band="poor"], .strip-part-score[data-band="verypoor"], .strip-part-score[data-band="terrible"] { --band: var(--rating-poor); }
+@media (prefers-reduced-motion: reduce) { .strip-bar { transition: none; } }
 
 /* ---------- Factors: one ranked list ---------- */
 

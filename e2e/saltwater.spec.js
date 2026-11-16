@@ -2,13 +2,14 @@ import { DEFAULT_SCORE, expect, test } from './support/fixtures.js';
 
 const modes = (page) => page.locator('#modeGroup button');
 const labels = (page) => page.locator('.factor-label');
-const score = async (page) => Number(await page.locator('#scoreValue').textContent());
+const score = async (page) => Number(await page.locator('#nowScore').textContent()); // the score right now
 
-/** Open the app at Galveston, Texas: a beach town with a tide station under a mile away. */
+/** Open the app at Galveston, Texas (a beach town with a tide station under a mile away), on the score right now. */
 async function openGalveston(app, mode = null) {
     await app.open();
     await app.search('Galveston', 'Galveston, Texas');
     if (mode) await app.page.getByRole('button', { name: mode, exact: true }).click();
+    await app.now();
 }
 
 test.describe('choosing the kind of water', () => {
@@ -16,7 +17,7 @@ test.describe('choosing the kind of water', () => {
         await app.open();
         await expect(page.locator('#modeRow')).toBeHidden();
         await expect(page.locator('#tideCard')).toBeHidden();
-        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
+        await expect(page.locator('#nowScore')).toHaveText(DEFAULT_SCORE);
         expect(api.count('coops') + api.count('beach') + api.count('sst')).toBe(0);
     });
 

@@ -80,6 +80,7 @@ const SHELL = [
     'js/api/usgs-api.js',
     'js/api/weather-api.js',
     'js/core/alerts.js',
+    'js/core/day-score.js',
     'js/core/listed-places.js',
     'js/core/lures.js',
     'js/core/moon.js',

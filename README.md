@@ -30,7 +30,9 @@ No framework and nothing to compile: plain HTML, CSS and ES modules. The app its
   each day's best time, so you can pick when to go
 - **Solunar major periods** in fresh water: the Moon tile gives the next time the moon is overhead
   or underfoot, and the outlook chart marks each one
-- **Best times** for the next day and a half, from sunrise/sunset, the tide and the forecast
+- **A score for the day**, not just the moment: the score card leads with each day's best two
+  hours, keeps the score right now beside it, and has a strip of the day under the stamp: drag
+  along it for the score hour by hour, or pick dawn, morning, afternoon, dusk or night
 - **Weather alerts** from the National Weather Service; thunderstorm and other dangerous-weather
   warnings cap the score while they are in effect
 - **Live water temperature** from nearby USGS monitoring stations; pick a different station from the
@@ -444,8 +446,14 @@ Overall rating: 85+ exceptional, 70+ excellent, 55+ good, 40+ fair, 25+ poor, 10
 ### The outlook
 
 The chart under **Forecast** is the same score worked out every 20 minutes from now to the end of
-the day after tomorrow (`scoreSeries` in `js/core/scoring.js`). Its first point is the score shown
-at the top of the page.
+the day after tomorrow (`scoreSeries` in `js/core/scoring.js`). Its first point is the score right
+now, as shown beside the day's score on the score card.
+
+The score card scores each hour the same way, at its middle (the hour under way is the score now).
+A day's score is the average of its best two hours still to come, and each part of the day (dawn
+from an hour before sunrise, dusk to an hour after sunset, morning and afternoon between, then
+night) the average of its hours (`js/core/day-score.js`). A dangerous-weather warning caps the
+hours it is in effect, not the whole day.
 
 - **Calculated exactly:** the sun (light), the moon, and in salt water the tide.
 - **Marked, not scored again:** in fresh water a bar under the chart shows each major period, the
@@ -733,6 +741,7 @@ js/
     moon.js             Moon phase, overhead/underfoot position and the times of the major periods
     sky.js              NWS sky reports -> label, emoji, sky class
     util.js             Distance, formatting and other helpers
+    day-score.js        A day's score (its best two hours) and the parts of the day
     place-url.js        Place addresses (/fishing/<lat>,<lon>/<name>): build, read, page titles
   ui/
     charts.js           SVG line chart with tooltip, keyboard support and data table

@@ -12,7 +12,7 @@ test.describe('when the weather service fails', () => {
 
         api.restore('nws');
         await page.getByRole('button', { name: 'Try again' }).click();
-        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
+        await expect(page.locator('#nowScore')).toHaveText(DEFAULT_SCORE);
         await expect(page.locator('#notice')).toBeHidden();
     });
 
@@ -24,7 +24,7 @@ test.describe('when the weather service fails', () => {
         await page.getByRole('button', { name: 'Refresh conditions' }).click();
 
         await expect(page.locator('#noticeText')).toHaveText("Couldn't load the weather. Showing conditions from just now.");
-        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
+        await expect(page.locator('#nowScore')).toHaveText(DEFAULT_SCORE);
         await expect(page.locator('.factor')).toHaveCount(7);
     });
 });
@@ -37,7 +37,7 @@ test.describe('when api.weather.gov cannot be reached at all', () => {
         api.fail('nws', 'network');
         await app.open();
 
-        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
+        await expect(page.locator('#nowScore')).toHaveText(DEFAULT_SCORE);
         await expect(page.locator('#notice')).not.toHaveAttribute('data-tone', 'error');
         await expect(page.locator('#forecastList li')).not.toHaveCount(0);
         expect(api.count('nws-proxy', '/api/nws/points/41.8781,-87.6298')).toBe(1);
@@ -83,11 +83,12 @@ test.describe('weather coverage', () => {
             ],
         };
         await app.open();
+        await app.now();
 
         await expect(page.locator('#updatedAt')).toContainText('weather observed at Rocky Ridge just now, pressure at Farfield, Farfield Municipal Airport');
         await expect(app.factor('Barometric pressure').locator('.factor-value')).toHaveText('30.03 inHg');
         await expect(app.factor('Light').locator('.factor-value')).toHaveText('Clear'); // from the airport's sky sensor
-        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
+        await expect(page.locator('#nowScore')).toHaveText(DEFAULT_SCORE);
         // Only the stations that were needed were read: the nearest one, then the airport.
         expect(api.count('nws', '/stations/RKYM8/observations')).toBe(1);
         expect(api.count('nws', '/stations/TS123/observations')).toBe(0);
@@ -97,6 +98,7 @@ test.describe('weather coverage', () => {
     test('with no barometer in reach, pressure scores as neutral and sky comes from the forecast', async ({ page, api, app }) => {
         api.weather = { stations: [{ id: 'RKYM8', name: 'ROCKY RIDGE', pressure: false, sky: false }] };
         await app.open();
+        await app.now();
 
         const pressure = app.factor('Barometric pressure');
         await expect(pressure.locator('.factor-value')).toHaveText('—');
@@ -113,7 +115,8 @@ test.describe('weather coverage', () => {
             status: 404, contentType: 'application/problem+json', headers: { 'access-control-allow-origin': '*' }, body: '{"title":"Marine Forecast Not Supported"}',
         }));
         await app.open();
-        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
+        await app.now();
+        await expect(page.locator('#nowScore')).toHaveText(DEFAULT_SCORE);
         await expect(page.locator('#notice')).toContainText('Showing Chicago'); // no error
         await expect(page.locator('.forecast-day')).toHaveCount(0);
         await expect(page.locator('#forecastList')).toContainText('no daily forecast for this exact spot');
@@ -128,7 +131,7 @@ test.describe('weather coverage', () => {
             return route.fallback();
         });
         await app.open();
-        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
+        await expect(page.locator('#nowScore')).toHaveText(DEFAULT_SCORE);
         await expect(page.locator('#notice')).toContainText('Showing Chicago'); // only the first-visit hint, no error
         expect(api.count('nws', '/forecast?')).toBe(1); // the retry reached the normal mock
     });
@@ -180,6 +183,6 @@ test.describe('place name lookup', () => {
         api.weather = { place: null };
         await page.goto('/');
         await expect(page.getByRole('heading', { level: 1 })).toHaveText('My location');
-        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
+        await expect(page.locator('#nowScore')).toHaveText(DEFAULT_SCORE);
     });
 });

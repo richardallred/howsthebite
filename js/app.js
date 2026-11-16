@@ -17,18 +17,19 @@ import {
 import { HttpError, isAbort } from './api/http.js';
 import { OutsideCoverageError, fetchAlerts, fetchWeather, reverseGeocode, searchPlaces } from './api/weather-api.js';
 import { APP } from './config.js';
-import { summariseAlerts } from './core/alerts.js';
+import { hazardAt, summariseAlerts } from './core/alerts.js';
 import { colourAdvice, lureConditions, lurePatterns, recommendLures } from './core/lures.js';
 import { LISTED_WATER } from './core/listed-places.js';
 import { majorPeriods, moonInfo } from './core/moon.js';
 import { coordinateName, placeHref, placeMeta, placePath, readPlaceUrl, slugify } from './core/place-url.js';
-import { SPECIES_GROUPS, bestWindows, estimateWaterTemp, scoreConditions, scoreSeries } from './core/scoring.js';
+import { SPECIES_GROUPS, bandFor, bitePhrase, estimateWaterTemp, scoreConditions, scoreSeries } from './core/scoring.js';
+import { bestStretch, dayParts, stretchOf } from './core/day-score.js';
 import { DEFAULT_LABELS, chooseSpecies, regionalSpecies, saltSpeciesOptions, speciesOptions } from './core/species.js';
 import { sunTimes } from './core/sun.js';
 import { upcomingTides } from './core/tides.js';
 import { changeOver, classifyTrend, frontState, lastHours } from './core/trend.js';
 import { dailyMeans, describeWaterTrend, summariseWaterTrend } from './core/water-trend.js';
-import { debounce, distanceMiles, isNum, roundCoord, timeAgo } from './core/util.js';
+import { HOUR_MS, debounce, distanceMiles, isNum, roundCoord, timeAgo } from './core/util.js';
 import { compassPoint } from './core/sky.js';
 import { locationKey, storage } from './storage.js';
 import { createLineChart } from './ui/charts.js';
@@ -57,7 +58,8 @@ const state = {
     waterTrend: null, // { key, source, daily, normal, at, failed }: the last few weeks of water temperature behind the lure picks
     loading: false,
     loadFailed: false,
-    scoreDay: 0, // the score card's day: 0 is now, then each day ahead in the outlook
+    scoreDay: 0, // the score card's day: 0 is today, then each day ahead in the outlook
+    scoreFocus: null, // part of that day on the card: { kind: 'part', id } or { kind: 'hour', t }; null for the whole day
 };
 
 let loadController = null;
@@ -219,50 +221,93 @@ function nextLocalMidnight(time) {
 }
 
 /**
+ * Each hour of today and the days ahead, scored at its middle with the forecast for then (the
+ * hour under way is the score now, as observed; hours gone by are marked past). `at(time)` gives
+ * what differs then (forecast sky and wind, a warning in effect). Grouped by
+ * local day: Map of day key → [{ t, past } | { t, at, live, ahead, result, score, band }].
+ */
+function hourlyScores(inputs, clock, live, end, dayKey, at) {
+    const hourStart = clock - (clock % HOUR_MS);
+    let first = hourStart;
+    while (dayKey.format(first - HOUR_MS) === dayKey.format(hourStart)) first -= HOUR_MS;
+    const byDay = new Map();
+    for (let t = first; t < end; t += HOUR_MS) {
+        const key = dayKey.format(t);
+        if (!byDay.has(key)) byDay.set(key, []);
+        let hour;
+        if (t + HOUR_MS <= clock) hour = { t, past: true };
+        else if (t <= clock) hour = { t, at: clock, live: true, ahead: null, result: live };
+        else {
+            const middle = t + HOUR_MS / 2;
+            const ahead = at(middle);
+            const result = scoreConditions({
+                ...inputs, pressureChange3h: null, front: null, gustMph: null, hazard: null, ...(ahead ?? {}), date: new Date(middle),
+            });
+            hour = { t, at: middle, live: false, ahead, result };
+        }
+        if (hour.result) Object.assign(hour, { score: hour.result.score, band: hour.result.band });
+        byDay.get(key).push(hour);
+    }
+    return byDay;
+}
+
+/** A score for a stretch of hours, told as its best hour's conditions with the stretch's own number. */
+function stretchResult(stretch) {
+    const { result, at } = stretch.top;
+    return { ...result, score: stretch.score, band: bandFor(stretch.score), phrase: bitePhrase(stretch.score, new Date(at)) };
+}
+
+/**
  * The score from now to the end of the day after tomorrow, with what the chart needs to
  * explain it: one entry per calendar day (its best moment, and the stretch around it that
  * stays within 4 points), the nights to shade and, where the moon is scored, its major periods.
+ * Each day also carries its hours, its score (the best two hours), and its parts (dawn, dusk…)
+ * for the score card.
  */
-function deriveOutlook(inputs, clock) {
+function deriveOutlook(inputs, clock, live, at) {
     const end = nextLocalMidnight(clock) + OUTLOOK_DAYS_AHEAD * DAY_MS;
-    const samples = scoreSeries(inputs, { start: clock, end, at: (time) => forecastAt(time, clock) });
+    const samples = scoreSeries(inputs, { start: clock, end, at });
+    const { lat, lon } = state.location;
 
     const dayKey = inTimezone({ year: 'numeric', month: '2-digit', day: '2-digit' });
     const dayName = inTimezone({ weekday: 'short' });
+    const hoursByDay = hourlyScores(inputs, clock, live, end, dayKey, at);
     const byDay = new Map();
     for (const sample of samples.slice(0, -1)) { // the last sample is midnight, the first moment of a day beyond the chart
         const key = dayKey.format(sample.t);
         if (!byDay.has(key)) byDay.set(key, []);
         byDay.get(key).push(sample);
     }
-    const days = [...byDay.values()].map((list, index) => {
+    const days = [...byDay.entries()].map(([key, list], index) => {
         const best = Math.max(...list.map((sample) => sample.score));
         let first = list.findIndex((sample) => sample.score === best);
         let last = first;
         const peak = list[first];
         while (first > 0 && list[first - 1].score >= best - 4) first--;
         while (last + 1 < list.length && list[last + 1].score >= best - 4) last++;
-        const lowest = Math.min(...list.map((sample) => sample.score));
-        // The day's best moment scored in full, for the score card's day tabs: the same inputs
-        // the series used at that time (forecast sky and wind; no pressure trend, gusts or alerts).
-        const ahead = forecastAt(peak.t, clock);
-        const result = index === 0 ? null : scoreConditions({
-            ...inputs, pressureChange3h: null, front: null, gustMph: null, hazard: null, ...(ahead ?? {}), date: new Date(peak.t),
-        });
+
+        const hours = hoursByDay.get(key) ?? [];
+        const dayStart = hours[0]?.t ?? list[0].t;
+        const dayEnd = hours.length ? hours[hours.length - 1].t + HOUR_MS : dayStart + DAY_MS;
+        const { sunrise, sunset } = sunTimes(dayStart + DAY_MS / 2, lat, lon);
+        const stretch = bestStretch(hours);
+        const scored = hours.filter((hour) => !hour.past).map((hour) => hour.score);
         return {
-            result,
-            ahead,
             label: index === 0 ? 'Today' : dayName.format(list[0].t),
             start: list[0].t,
             end: Math.min(end, list[list.length - 1].t + 20 * 60 * 1000),
             peak,
             window: { start: list[first].t, end: list[last].t + 20 * 60 * 1000 },
-            flat: best - lowest < 5, // held down all day: no hour is better than another
+            hours,
+            best: stretch,
+            result: stretch ? stretchResult(stretch) : live,
+            parts: dayParts({ start: dayStart, end: dayEnd, sunrise, sunset })
+                .map((part) => ({ ...part, stretch: stretchOf(hours, part.start, part.end) })),
+            flat: Math.max(...scored) - Math.min(...scored) < 5, // held down all day: no hour is better than another
         };
     });
 
     // Shade from each sunset to the following sunrise (skipped where the sun does not set).
-    const { lat, lon } = state.location;
     const nights = [];
     for (let noon = clock - DAY_MS; noon < end + DAY_MS; noon += DAY_MS) {
         const { sunset } = sunTimes(noon, lat, lon);
@@ -336,12 +381,13 @@ function derive() {
         waterTrend,
     };
     const result = scoreConditions({ ...inputs, date: new Date(clock) });
-    const windows = bestWindows(inputs, {
-        start: clock,
-        hours: APP.OUTLOOK_HOURS,
-        at: (time) => forecastAt(time, clock),
-    });
-    const outlook = deriveOutlook(inputs, clock);
+    // Ahead of now: the forecast sky and wind, and any warning in effect at the time.
+    const at = (time) => {
+        const ahead = forecastAt(time, clock);
+        const hazard = hazardAt(alerts.items, time, clock);
+        return hazard ? { ...ahead, hazard } : ahead;
+    };
+    const outlook = deriveOutlook(inputs, clock, result, at);
 
     const factor = (id) => result.factors.find((entry) => entry.id === id);
     const tide = factor('tide')?.state ?? null;
@@ -379,7 +425,7 @@ function derive() {
         trendLoading: waterMeasured && !waterTrend && Boolean(trendSource()) && state.waterTrend?.key !== trendSource()?.key,
     };
 
-    return { result, windows, outlook, lures, alerts, clock, pressure, air, station, waterTempF, level, mode, salt, seaTemp, surf, tide };
+    return { result, outlook, lures, alerts, clock, pressure, air, station, waterTempF, level, mode, salt, seaTemp, surf, tide };
 }
 
 // ---------------------------------------------------------------------------
@@ -422,18 +468,21 @@ const ASSUMED = 'Assumed to hold until then';
 
 /**
  * A factor's reading, for the moment the score card is showing: now (the observations), or a
- * day ahead (the forecast, and what is assumed to hold: water temperature, flow, pressure).
+ * time ahead (the forecast, and what is assumed to hold: water temperature, flow, pressure).
  */
 function factorDisplay(factor, derived, view = { now: true, time: derived.clock, ahead: null }) {
     const { current } = state.weather;
     const ahead = view.ahead ?? {};
+    // Today, readings assumed to hold (water, flow, pressure) are still the ones taken now.
+    const today = !view.index;
+    const liveFactor = (id) => derived.result.factors.find((entry) => entry.id === id);
     switch (factor.id) {
         case 'water':
             return {
                 label: 'Water temperature',
                 iconName: 'droplet',
                 value: `${derived.station || derived.seaTemp ? '' : '≈ '}${derived.waterTempF.toFixed(1)}°F`,
-                extra: !view.now ? ASSUMED : derived.salt ? derived.seaTemp?.source ?? null : factor.trend,
+                extra: !today ? ASSUMED : derived.salt ? derived.seaTemp?.source ?? null : factor.trend,
             };
         case 'tide': {
             const { state: tide } = factor;
@@ -482,7 +531,7 @@ function factorDisplay(factor, derived, view = { now: true, time: derived.clock,
                 label: 'River flow',
                 iconName: 'waves',
                 value: formatFlow(derived.level.station.flow.cfs),
-                extra: view.now ? factor.trend : ASSUMED,
+                extra: today ? liveFactor('flow')?.trend ?? factor.trend : ASSUMED,
             };
         case 'season': {
             const { fish, phase } = factor;
@@ -500,8 +549,8 @@ function factorDisplay(factor, derived, view = { now: true, time: derived.clock,
             return {
                 label: 'Barometric pressure',
                 iconName: 'gauge',
-                value: view.now && isNum(current.pressureInHg) ? `${current.pressureInHg.toFixed(2)} inHg` : '—',
-                extra: view.now ? factor.trend : 'Trend not known that far ahead',
+                value: isNum(current.pressureInHg) ? `${current.pressureInHg.toFixed(2)} inHg` : '—',
+                extra: today ? liveFactor('pressure')?.trend ?? factor.trend : 'Trend not known that far ahead',
             };
         default: {
             const moon = moonInfo(new Date(view.time));
@@ -534,33 +583,37 @@ const SKY_ICONS = new Set(['sun', 'moon', 'partly', 'cloud', 'fog', 'rain', 'sno
 const SKY_CLASS_ICONS = { clear: 'sun', partly: 'partly', overcast: 'cloud', 'light-precip': 'rain', precip: 'rain', storm: 'storm' };
 const skyIcon = (sky) => (SKY_ICONS.has(sky?.icon) ? sky.icon : SKY_CLASS_ICONS[sky?.class] ?? 'thermometer');
 
-/** ["now–9:20 PM", "Tue 4:40–7:00 AM"] */
-function describeWindows(windows, clock) {
-    const dayKey = (time) => clockTime(time, { withDay: true }).split(' ')[0];
-    const today = dayKey(clock);
-    return windows.slice(0, 2).map((window) => {
-        if (window.start <= clock) return `now–${clockTime(window.end)}`;
-        const day = dayKey(window.start);
-        // "4:40–7:00 AM" when both ends share AM/PM, otherwise both in full.
-        const [from, fromHalf] = clockTime(window.start).split(/\s/);
-        const end = clockTime(window.end);
-        const range = end.endsWith(fromHalf) ? `${from}–${end}` : `${from} ${fromHalf}–${end}`;
-        return day === today ? range : `${day} ${range}`;
-    });
-}
-
-/** The moment the score card shows: now, or the best moment of a day ahead. */
+/**
+ * What the score card shows for the chosen day: the whole day (its best two hours), one part of
+ * it (dawn, dusk…), or a single hour picked on the strip. `now` is whether the conditions
+ * behind it are the ones observed now, rather than a forecast.
+ */
 function scoreView(derived) {
     const days = derived.outlook.days;
-    const index = Math.min(state.scoreDay, days.length - 1);
-    if (index <= 0) return { now: true, index: 0, result: derived.result, time: derived.clock, ahead: null, day: days[0] ?? null };
+    const index = Math.max(0, Math.min(state.scoreDay, days.length - 1));
     const day = days[index];
-    return { now: false, index, result: day.result, time: day.peak.t, ahead: day.ahead, day };
+    if (!day?.best) return { kind: 'hour', now: true, index, result: derived.result, time: derived.clock, ahead: null, day: day ?? null, hour: null };
+    const focus = state.scoreFocus;
+    const hour = focus?.kind === 'hour' ? day.hours.find((entry) => entry.t === focus.t && !entry.past) : null;
+    if (hour) return { kind: 'hour', now: hour.live, index, result: hour.result, time: hour.at, ahead: hour.ahead, day, hour };
+    const part = focus?.kind === 'part' ? day.parts.find((entry) => entry.id === focus.id && entry.stretch) : null;
+    const stretch = part?.stretch ?? day.best;
+    return {
+        kind: part ? 'part' : 'day',
+        now: Boolean(stretch.top.live),
+        index,
+        result: part ? stretchResult(stretch) : day.result,
+        time: stretch.top.at,
+        ahead: stretch.top.ahead,
+        day,
+        part,
+        stretch,
+    };
 }
 
 let lastDerived = null; // what the card was last drawn from, so a day tab can redraw it without re-deriving
 
-/** "Now", then each day ahead in the outlook with its best score: tabs that switch the whole card. */
+/** Today, then each day ahead in the outlook, each with its day score: tabs that switch the whole card. */
 function renderScoreDays(derived) {
     const container = $('scoreDays');
     if (!derived) {
@@ -569,7 +622,7 @@ function renderScoreDays(derived) {
     }
     const view = scoreView(derived);
     container.replaceChildren(...derived.outlook.days.map((day, index) => {
-        const result = index === 0 ? derived.result : day.result;
+        const result = day.result;
         const selected = index === view.index;
         return el('button', {
             type: 'button',
@@ -581,22 +634,38 @@ function renderScoreDays(derived) {
             tabindex: selected ? '0' : '-1',
             onClick: () => selectScoreDay(index),
         },
-        el('span', { class: 'score-day-name' }, index === 0 ? 'Now' : day.label),
+        el('span', { class: 'score-day-name' }, day.label),
         el('span', { class: 'score-day-score', dataset: { band: result.band.key } },
-            el('span', { class: 'visually-hidden' }, index === 0 ? ', score ' : ', best '), String(result.score)));
+            el('span', { class: 'visually-hidden' }, ', day score '), String(result.score)));
     }));
 }
 
+/** Show another day, whole; choosing the day already shown takes it back to the whole day. */
 function selectScoreDay(index) {
-    const changed = index !== state.scoreDay;
+    const changed = index !== state.scoreDay || state.scoreFocus !== null;
     state.scoreDay = index;
+    state.scoreFocus = null;
     pinnedDial = null;
     if (lastDerived) renderScoreCard(lastDerived);
-    if (changed && lastDerived) {
-        replayClass(document.querySelector('#scoreCard .score-number'), 'is-swapping');
-        replayClass($('scoreBand'), 'is-swapping');
-    }
+    if (changed) swapScore();
     $(`score-day-${index}`)?.focus();
+}
+
+/** Show part of the chosen day: { kind: 'part', id }, { kind: 'hour', t }, or null for the whole day. */
+function focusScore(focus, { animate = true } = {}) {
+    const same = JSON.stringify(focus) === JSON.stringify(state.scoreFocus);
+    if (same || !lastDerived) return false;
+    state.scoreFocus = focus;
+    pinnedDial = null;
+    renderScoreCard(lastDerived);
+    if (animate) swapScore();
+    return true;
+}
+
+function swapScore() {
+    if (!lastDerived) return;
+    replayClass(document.querySelector('#scoreCard .score-number'), 'is-swapping');
+    replayClass($('scoreBand'), 'is-swapping');
 }
 
 function initScoreDays() {
@@ -610,15 +679,27 @@ function initScoreDays() {
         event.preventDefault();
         selectScoreDay(next);
     });
+    initDayStrip();
 }
 
 /** Everything in the score card, for the day chosen. */
 function renderScoreCard(derived) {
     renderScoreDays(derived);
     renderScore(derived);
+    renderDayStrip(derived);
     renderFactors(derived);
     renderDials(derived);
 }
+
+/** "6–8 PM", "11 AM–1 PM", "6:30–8 AM": a stretch of hours, as short as it can be said. */
+function hourRange(start, end) {
+    const short = (time) => clockTime(time).replace(':00', '');
+    const [from, fromHalf] = short(start).split(/\s/);
+    const to = short(end);
+    return to.endsWith(fromHalf) ? `${from}–${to}` : `${from} ${fromHalf}–${to}`;
+}
+
+const hourName = (time) => clockTime(time).replace(':00', '');
 
 function renderScore(derived) {
     const card = $('scoreCard');
@@ -628,21 +709,21 @@ function renderScore(derived) {
         $('headerScore').dataset.band = 'loading';
         setText('headerScore', '');
         setText('scoreValue', '–');
-        setText('scoreBand', ' ');
+        setText('scoreBand', ' ');
         setText('scorePhrase', state.loadFailed ? 'Conditions unavailable' : 'Checking conditions…');
-        setText('scoreHeld', '\u00a0');
+        setText('scoreHeld', ' ');
         setText('scoreCap', '');
         // While loading, hold the room the best times and the weather will take, so the card
         // does not grow when they arrive. The same placeholders are in index.html.
         const waiting = !state.loadFailed;
         $('scoreBest').replaceChildren(...(waiting
-            ? [el('span', { class: 'eyebrow score-best-label' }, 'Best times: '), el('span', { class: 'window is-placeholder' }, '\u00a0')]
+            ? [el('span', { class: 'eyebrow score-best-label' }, 'Best two hours'), el('span', { class: 'window is-placeholder' }, ' ')]
             : []));
-        setText('scoreNow', waiting ? '\u00a0' : '');
+        setText('scoreNow', waiting ? ' ' : '');
         return;
     }
     const view = scoreView(derived);
-    const { result } = view;
+    const { result, day } = view;
     const { current } = state.weather;
     // The first score for a place (after the loading ripple) is revealed; later redraws are not.
     revealing = card.dataset.state !== 'ready';
@@ -651,30 +732,186 @@ function renderScore(derived) {
     card.dataset.band = result.band.key;
     card.dataset.state = 'ready';
     card.dataset.day = view.now ? 'now' : 'ahead';
-    // The header always gives the score now, whichever day the card is showing.
-    $('headerScore').dataset.band = derived.result.band.key;
-    setText('headerScore', String(derived.result.score));
+    card.dataset.focus = view.kind;
+    // A single hour is told by the strip's own read-out, not by re-reading the whole card each step.
+    $('scoreMain').setAttribute('aria-live', view.kind === 'hour' ? 'off' : 'polite');
+    // The header gives today's score, whichever day or hour the card is showing.
+    const today = derived.outlook.days[0]?.result ?? derived.result;
+    $('headerScore').dataset.band = today.band.key;
+    setText('headerScore', String(today.score));
     setText('scoreValue', String(result.score));
     setText('scoreBand', result.band.label);
     setText('scorePhrase', result.phrase);
     setText('scoreHeld', heldBackText(result));
     setText('scoreCap', result.cap ? result.cap.reason : '');
-    if (!view.now) {
-        // A day ahead: its best stretch, and the forecast for its best moment.
-        const { day } = view;
+
+    // What the number is for: the day's best two hours, a part of the day, or one hour.
+    const whole = el('button', { type: 'button', class: 'btn btn-quiet score-whole', onClick: () => focusScore(null) }, 'Whole day');
+    const label = (text) => el('span', { class: 'eyebrow score-best-label' }, text);
+    const chip = (text) => el('span', { class: 'window nowrap' }, text);
+    if (!day?.best) $('scoreBest').replaceChildren(label('Right now'));
+    else if (view.kind === 'day') {
+        $('scoreBest').replaceChildren(label(`Best two hours${view.index ? ` on ${day.label}` : ''}`),
+            chip(day.flat ? 'much the same all day' : hourRange(day.best.start, day.best.end)));
+    } else if (view.kind === 'part') {
+        $('scoreBest').replaceChildren(label(view.part.label), chip(hourRange(view.stretch.start, view.stretch.end)), whole);
+    } else {
+        $('scoreBest').replaceChildren(label(view.now ? 'Right now' : 'Forecast for'),
+            chip(view.now ? `until ${hourName(view.hour.t + HOUR_MS)}` : `${view.index ? `${day.label} ` : ''}${hourName(view.hour.t)}`), whole);
+    }
+
+    if (view.index > 0) {
+        // A day ahead: the forecast for the moment behind the number.
         const sky = SKY_LABELS[view.ahead?.sky];
         const wind = isNum(view.ahead?.windMph) ? `wind ${Math.round(view.ahead.windMph)} mph` : null;
-        $('scoreBest').replaceChildren(el('span', { class: 'eyebrow score-best-label' }, `Best on ${day.label}: `),
-            el('span', { class: 'window nowrap' }, day.flat ? 'much the same all day' : `${clockTime(day.window.start)}–${clockTime(day.window.end)}`));
         $('scoreNow').replaceChildren(icon('calendar'), ['Forecast', sky, wind].filter(Boolean).join(' · '));
         return;
     }
+    // Today: the score this moment, as a chip that turns the card to it, and the weather now.
+    const live = derived.result;
+    const showingLive = view.kind === 'hour' && view.now;
     const feelsLike = isNum(current.feelsLikeF) ? ` · feels like ${Math.round(current.feelsLikeF)}°F` : '';
-    $('scoreNow').replaceChildren(icon(skyIcon(current.sky)), `${current.sky.label} · ${Math.round(current.tempF)}°F${feelsLike}`);
-    // Each window is a chip that stays on one line; the first (soonest) is highlighted.
-    const best = describeWindows(derived.windows, derived.clock);
-    $('scoreBest').replaceChildren(...(best.length ? [el('span', { class: 'eyebrow score-best-label' }, 'Best times: ')] : []),
-        ...best.flatMap((text, index) => [index ? el('span', { class: 'sep' }, ' · ') : '', el('span', { class: 'window nowrap' }, text)]));
+    $('scoreNow').replaceChildren(
+        el('button', {
+            type: 'button',
+            class: 'score-live',
+            'aria-pressed': String(showingLive),
+            onClick: () => {
+                const hour = day?.hours.find((entry) => entry.live);
+                if (hour) focusScore(showingLive ? null : { kind: 'hour', t: hour.t });
+            },
+        },
+        'Right now',
+        el('span', { class: 'score-day-score', dataset: { band: live.band.key }, id: 'nowScore' }, String(live.score))),
+        el('span', { class: 'score-now-weather' }, icon(skyIcon(current.sky)), `${current.sky.label} · ${Math.round(current.tempF)}°F${feelsLike}`),
+    );
+}
+
+// ---------------------------------------------------------------------------
+// The strip of the day under the stamp: drag along it for the score hour by hour
+// ---------------------------------------------------------------------------
+
+const shortHour = (time) => hourName(time).replace(/ ([AP])M$/, (_, half) => half.toLowerCase());
+
+function renderDayStrip(derived) {
+    const strip = $('dayStrip');
+    const track = $('stripTrack');
+    const view = derived ? scoreView(derived) : null;
+    const day = view?.day;
+    if (!day?.best) {
+        strip.dataset.state = derived ? 'empty' : 'loading';
+        track.replaceChildren();
+        track.removeAttribute('aria-valuenow');
+        track.removeAttribute('aria-valuetext');
+        $('stripTicks').replaceChildren();
+        $('stripParts').replaceChildren();
+        return;
+    }
+    strip.dataset.state = 'ready';
+    const { hours } = day;
+    const count = hours.length;
+    const lit = view.kind === 'hour' ? [view.hour.t, view.hour.t + HOUR_MS] : [view.stretch.start, view.stretch.end];
+    const position = (time) => `${(100 * (time - hours[0].t)) / (count * HOUR_MS)}%`;
+
+    const bars = hours.map((hour) => {
+        const bar = el('span', {
+            class: 'strip-bar',
+            dataset: hour.past ? { past: '' } : { band: hour.band.key, ...(hour.t >= lit[0] && hour.t < lit[1] ? { lit: '' } : {}) },
+        });
+        if (!hour.past) bar.style.setProperty('--score', String(hour.score / 100));
+        return bar;
+    });
+    const marks = [];
+    const liveHour = hours.find((hour) => hour.live);
+    if (liveHour) {
+        const now = el('span', { class: 'strip-now' });
+        now.style.left = position(derived.clock);
+        marks.push(now);
+    }
+    if (view.kind === 'hour') {
+        const thumb = el('span', { class: 'strip-thumb' }, el('span', { class: 'strip-thumb-label' }, view.now ? 'Now' : shortHour(view.hour.t)));
+        thumb.style.left = position(view.hour.t + HOUR_MS / 2);
+        // Keep the read-out inside the strip at either end.
+        const share = (view.hour.t - hours[0].t) / (count * HOUR_MS);
+        thumb.dataset.edge = share < 0.08 ? 'start' : share > 0.88 ? 'end' : '';
+        marks.push(thumb);
+    }
+    track.replaceChildren(...bars, ...marks);
+
+    const ahead = hours.filter((hour) => !hour.past);
+    const current = view.kind === 'hour' ? view.hour : view.stretch.top;
+    track.setAttribute('aria-valuemin', '0');
+    track.setAttribute('aria-valuemax', String(count - 1));
+    track.setAttribute('aria-valuenow', String(hours.indexOf(current)));
+    track.setAttribute('aria-valuetext', `${current.live ? 'Now' : hourName(current.t)}, score ${current.score}, ${current.band.label}`);
+    track.setAttribute('aria-label', `${day.label === 'Today' ? "Today's" : `${day.label}'s`} score hour by hour`);
+    track.toggleAttribute('aria-disabled', ahead.length < 2);
+
+    $('stripTicks').replaceChildren(...hours.flatMap((hour, index) => {
+        if (index % 6 || index === 0) return [];
+        const tick = el('span', { class: 'strip-tick' }, shortHour(hour.t));
+        tick.style.left = position(hour.t);
+        return [tick];
+    }));
+
+    $('stripParts').replaceChildren(...day.parts.map((part) => {
+        const pressed = view.kind === 'part' && view.part.id === part.id;
+        return el('button', {
+            type: 'button',
+            class: 'strip-part',
+            'aria-pressed': String(pressed),
+            disabled: !part.stretch,
+            title: part.stretch ? hourRange(part.stretch.start, part.stretch.end) : `${part.label} has passed`,
+            onClick: () => focusScore(pressed ? null : { kind: 'part', id: part.id }),
+        },
+        el('span', { class: 'strip-part-name' }, part.label),
+        el('span', { class: 'strip-part-score', dataset: part.stretch ? { band: bandFor(part.stretch.score).key } : {} },
+            part.stretch ? String(part.stretch.score) : '–'));
+    }));
+}
+
+function initDayStrip() {
+    const track = $('stripTrack');
+    const hoursShown = () => (lastDerived ? scoreView(lastDerived).day?.hours ?? [] : []);
+    /** Show the hour under the pointer (the first one still to come, when it is over hours gone by). */
+    const pick = (event) => {
+        const hours = hoursShown();
+        if (!hours.length) return;
+        const rect = track.getBoundingClientRect();
+        const index = Math.max(0, Math.min(hours.length - 1, Math.floor(((event.clientX - rect.left) / rect.width) * hours.length)));
+        const hour = hours[index].past ? hours.find((entry) => !entry.past) : hours[index];
+        if (hour && focusScore({ kind: 'hour', t: hour.t }, { animate: false })) {
+            try { navigator.vibrate?.(4); } catch { /* not everywhere */ }
+        }
+    };
+    let dragging = false;
+    track.addEventListener('pointerdown', (event) => {
+        if (event.button !== 0 || !hoursShown().length) return;
+        dragging = true;
+        track.setPointerCapture(event.pointerId);
+        pick(event);
+    });
+    track.addEventListener('pointermove', (event) => { if (dragging) pick(event); });
+    const stop = () => { dragging = false; };
+    track.addEventListener('pointerup', stop);
+    track.addEventListener('pointercancel', stop);
+
+    track.addEventListener('keydown', (event) => {
+        if (!lastDerived) return;
+        if (event.key === 'Escape') {
+            if (state.scoreFocus) { event.preventDefault(); focusScore(null); }
+            return;
+        }
+        const view = scoreView(lastDerived);
+        const ahead = view.day?.hours.filter((hour) => !hour.past) ?? [];
+        if (!ahead.length || !['ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) return;
+        event.preventDefault();
+        const from = ahead.indexOf(view.kind === 'hour' ? view.hour : view.stretch.top);
+        const step = { ArrowLeft: -1, ArrowRight: 1, PageUp: -3, PageDown: 3 }[event.key] ?? 0;
+        const index = event.key === 'Home' ? 0 : event.key === 'End' ? ahead.length - 1
+            : Math.max(0, Math.min(ahead.length - 1, from + step));
+        focusScore({ kind: 'hour', t: ahead[index].t }, { animate: false });
+    });
 }
 
 function renderSpeciesGroup() {
@@ -1904,6 +2141,7 @@ function setLocation(place, { address = true } = {}) {
     state.stationsError = null;
     state.selectedStationId = null;
     state.scoreDay = 0;
+    state.scoreFocus = null;
     state.waterHistory = [];
     state.levelHistory = [];
     state.flowNormals = null;

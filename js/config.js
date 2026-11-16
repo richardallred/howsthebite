@@ -58,7 +58,6 @@ export const APP = {
     PRESSURE_TREND_HOURS: 3,
     TEMP_TREND_HOURS: 24,
     FORECAST_DAYS: 5,
-    OUTLOOK_HOURS: 36,
 
     // Refresh
     STALE_AFTER_MS: 15 * 60 * 1000,

@@ -8,15 +8,24 @@ test.describe('first visit', () => {
         // The default city is a stand-in, so the page keeps the title search engines should index.
         await expect(page).toHaveTitle("Fishing Forecast and Best Times to Fish Today — How's the Bite?");
 
-        // Ideal water, wind and flow, but mid-morning under a bright sun: excellent, not exceptional.
+        // The card opens on today's score: its best two hours, around sunset (8:28 PM in Chicago on 15 June).
+        await expect(page.locator('#scoreDays .score-day').first()).toHaveAttribute('aria-selected', 'true');
+        await expect(page.locator('#scoreBest')).toHaveText(/^Best two hours[78]–(9|10) PM$/);
+        const today = await page.locator('#scoreValue').textContent();
+        expect(Number(today)).toBeGreaterThan(Number(DEFAULT_SCORE));
+        await expect(page.locator('#headerScore')).toHaveText(today);
+        await expect(page.locator('#stripParts .strip-part')).toHaveText([/^Dawn–$/, /^Morning\d+$/, /^Afternoon\d+$/, /^Dusk\d+$/, /^Night\d+$/]);
+
+        // Beside it, the score right now: ideal water, wind and flow, but mid-morning under a bright sun.
+        await expect(page.locator('#nowScore')).toHaveText(DEFAULT_SCORE);
+        await expect(page.locator('#scoreNow')).toHaveText(`Right now${DEFAULT_SCORE}Clear · 72°F`);
+        await app.now();
         await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
         await expect(page.locator('#scoreBand')).toHaveText('Excellent');
         await expect(page.locator('#scorePhrase')).toHaveText(/^[A-Z][\w’', ]+$/);
         await expect(page.locator('#scoreCard')).toHaveAttribute('data-band', 'excellent');
-        await expect(page.locator('#scoreNow')).toHaveText('Clear · 72°F');
+        await expect(page.locator('#scoreBest')).toHaveText('Right nowuntil 11 AMWhole day');
         await expect(page.locator('#scoreCap')).toBeHidden(); // nothing is holding the score down
-        // Sunset in Chicago on 15 June is 8:28 PM; dawn the next day is the runner-up.
-        await expect(page.locator('#scoreBest')).toHaveText(/^Best times: 7:\d\d–9:\d\d PM · Tue 4:\d\d–\d:\d\d AM$/);
         await expect(page.locator('#alerts')).toBeHidden();
         await expect(page.locator('#updatedAt')).toContainText('weather observed at Testville, Test Regional Airport just now');
 
@@ -49,6 +58,7 @@ test.describe('first visit', () => {
 test.describe('factor details', () => {
     test('each tile shows the live value, a plain-language note and the trend', async ({ page, app }) => {
         await app.open();
+        await app.now();
 
         const water = app.factor('Water temperature');
         await expect(water.locator('.factor-value')).toHaveText('68.0°F');
@@ -83,14 +93,18 @@ test.describe('factor details', () => {
         };
         await at(10); // 8 PM in Chicago, half an hour before sunset
         await app.open();
+        await expect(page.locator('#scoreBest')).toHaveText(/^Best two hours8–10 PM$/); // what is left of the day
+        await app.now();
         const evening = Number(await page.locator('#scoreValue').textContent());
         await expect(app.factor('Light').locator('.factor-value')).toHaveText('Evening light');
         await expect(app.factor('Light').locator('.factor-points')).toHaveText(/^28\/28/);
         await expect(app.factor('Light')).toContainText('Sunset 8:28 PM');
-        await expect(page.locator('#scoreBest')).toHaveText(/^Best times: now–9:\d\d PM/);
 
         await at(15); // 1 AM
         await page.getByRole('button', { name: 'Refresh conditions' }).click();
+        // 8 PM Monday has gone, so the card is back on the whole day (Tuesday's, now).
+        await expect(page.locator('.score-live')).toHaveAttribute('aria-pressed', 'false');
+        await app.now();
         await expect(app.factor('Light').locator('.factor-value')).toHaveText('After dark');
         await expect(app.factor('Light')).toContainText('Sunrise 5:16 AM');
         const night = Number(await page.locator('#scoreValue').textContent());
@@ -154,6 +168,7 @@ test.describe('factor details', () => {
 test.describe('the dials round the stamp', () => {
     test('one per factor, most important first; a dial shows its reading, and a tap keeps it up', async ({ page, app }) => {
         await app.open();
+        await app.now();
         const dials = page.locator('.dial');
         await expect(dials).toHaveCount(7);
         await expect(dials.first()).toHaveAttribute('data-factor', 'water');
@@ -181,6 +196,10 @@ test.describe('weather alerts', () => {
 
         await expect(page.locator('#alerts .alert')).toHaveText(['Severe Thunderstorm Warning until Mon 11:00 AM — stay off the water']);
         await expect(page.locator('#alerts .alert')).toHaveAttribute('data-level', 'danger');
+        // The warning ends in an hour, so the rest of the day is still worth going out for.
+        expect(Number(await page.locator('#scoreValue').textContent())).toBeGreaterThan(Number(DEFAULT_SCORE));
+        await expect(page.locator('#nowScore')).toHaveText('15');
+        await app.now();
         await expect(page.locator('#scoreValue')).toHaveText('15');
         await expect(page.locator('#scoreCap')).toHaveText('Severe Thunderstorm Warning in effect');
         // The factors still show what the conditions would otherwise be worth.
@@ -196,13 +215,13 @@ test.describe('weather alerts', () => {
         await expect(page.locator('#alerts .alert')).toHaveText([
             'Flood Advisory until Mon 4:00 PM', 'Lake Wind Advisory from Mon 1:00 PM',
         ]);
-        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
+        await expect(page.locator('#nowScore')).toHaveText(DEFAULT_SCORE);
     });
 
     test('an alerts outage never blocks the conditions', async ({ page, context, app }) => {
         await context.route('**/api.weather.gov/alerts/**', (route) => route.fulfill({ status: 503, body: '{}', headers: { 'access-control-allow-origin': '*' } }));
         await app.open();
-        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
+        await expect(page.locator('#nowScore')).toHaveText(DEFAULT_SCORE);
         await expect(page.locator('#alerts')).toBeHidden();
     });
 
@@ -213,6 +232,7 @@ test.describe('weather alerts', () => {
         };
         api.stations = [];
         await app.open();
+        await app.now();
 
         const score = Number(await page.locator('#scoreValue').textContent());
         expect(score).toBeLessThan(25);

@@ -26,13 +26,13 @@ test('after one visit the app opens offline and shows the last conditions with t
     await page.reload();
 
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Asheville, North Carolina');
-    await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
+    await expect(page.locator('#nowScore')).toHaveText(DEFAULT_SCORE);
     await expect(page.locator('.factor')).toHaveCount(7);
     await expect(page.locator('#pressureChart .chart-line')).toBeVisible();
 
     await page.getByRole('button', { name: 'Refresh conditions' }).click();
     await expect(page.locator('#noticeText')).toHaveText("You're offline. Showing conditions from just now.");
-    await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
+    await expect(page.locator('#nowScore')).toHaveText(DEFAULT_SCORE);
 
     await context.setOffline(false);
     services.forEach((service) => api.restore(service));

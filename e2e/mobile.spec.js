@@ -9,7 +9,7 @@ test('fits a phone screen without horizontal scrolling', async ({ page, app }) =
 
     // The location button collapses to an icon but keeps its accessible name.
     await expect(page.locator('#locateBtn span')).toBeHidden();
-    await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
+    await expect(page.locator('#nowScore')).toHaveText(DEFAULT_SCORE);
     await expect(page.locator('.factor')).toHaveCount(7);
 });
 
