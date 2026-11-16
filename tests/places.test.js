@@ -3,10 +3,13 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
 import { inCoverage, nameFromSlug, parsePlacePath } from '../js/core/place-url.js';
+import { LISTED_WATER } from '../js/core/listed-places.js';
 import { placeLinks, sitemapXml } from '../scripts/sitemap.mjs';
 
-const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
-// <a href="/fishing/…" data-water="lake">Name</a>, as written in the popular places list.
+const home = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+const html = await readFile(new URL('../spots/index.html', import.meta.url), 'utf8');
+const faq = await readFile(new URL('../faq/index.html', import.meta.url), 'utf8');
+// <a href="/fishing/…" data-water="lake">Name</a>, as written in the popular spots page.
 const links = [...html.matchAll(/<a href="(\/fishing\/[^"]+)"(?: data-water="([^"]*)")?>([^<]+)<\/a>/g)]
     .map(([, href, water, text]) => ({ href, water, text }));
 
@@ -37,15 +40,25 @@ test('the kind of water is lake, river or left out', () => {
     for (const { href, water } of links) assert.ok([undefined, 'lake', 'river'].includes(water), `${href}: data-water="${water}"`);
 });
 
-test('the sitemap lists the home page and every linked place, on the site in the canonical link', () => {
-    const xml = sitemapXml(html);
+test('the app knows the kind of water at every listed place, and only those', () => {
+    const listed = Object.fromEntries(links.filter((link) => link.water).map((link) => [link.href, link.water]));
+    assert.deepEqual(LISTED_WATER, listed, 'js/core/listed-places.js is out of step with spots/index.html');
+});
+
+test('the home page links to the spots and questions pages', () => {
+    assert.match(home, /<a href="\/spots\/">/);
+    assert.match(home, /<a href="\/faq\/">/);
+});
+
+test('the sitemap lists the pages and every linked place, on the site in the canonical link', () => {
+    const xml = sitemapXml(home, { '/spots/': html, '/faq/': faq });
     const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]);
-    assert.equal(locs[0], 'https://howsthebite.io/');
-    assert.deepEqual(locs.slice(1), links.map((link) => `https://howsthebite.io${link.href}`));
+    assert.deepEqual(locs.slice(0, 3), ['https://howsthebite.io/', 'https://howsthebite.io/spots/', 'https://howsthebite.io/faq/']);
+    assert.deepEqual(locs.slice(3), links.map((link) => `https://howsthebite.io${link.href}`));
     assert.match(xml, /^<\?xml version="1\.0" encoding="UTF-8"\?>\n<urlset xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">\n/);
     assert.doesNotMatch(xml, /lastmod|priority|changefreq/);
 
-    const moved = sitemapXml(html.replace('<link rel="canonical" href="https://howsthebite.io/">', '<link rel="canonical" href="https://example.org/">'));
-    assert.match(moved, /<loc>https:\/\/example\.org\/fishing\//);
+    const moved = sitemapXml(home.replace('<link rel="canonical" href="https://howsthebite.io/">', '<link rel="canonical" href="https://example.org/">'));
+    assert.match(moved, /<loc>https:\/\/example\.org\/<\/loc>/);
     assert.throws(() => sitemapXml('<html></html>'), /canonical/);
 });

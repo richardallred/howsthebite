@@ -8,9 +8,10 @@
 export const NOW = Date.parse('2026-06-15T15:00:00Z'); // 10:00 in Chicago, on a new moon
 
 // What the default scenario scores: every factor at full marks except the light
-// (bright sun, mid-morning: 14/30) and the moon (new, but not overhead: 5/8).
-export const DEFAULT_SCORE = '81';
-export const DEFAULT_POINTS = [/^35\/35/, /^14\/30/, /^12\/12/, /^10\/10/, /^5\/8/, /^5\/5/];
+// (bright sun, mid-morning: 13/28), the season (68°F in mid-June: bass on their beds, 4/8)
+// and the moon (new, but not overhead: 5/7).
+export const DEFAULT_SCORE = '79';
+export const DEFAULT_POINTS = [/^31\/31/, /^13\/28/, /^4\/8/, /^12\/12/, /^9\/9/, /^5\/7/, /^5\/5/];
 
 const HOUR = 3600_000;
 const DAY = 24 * HOUR;

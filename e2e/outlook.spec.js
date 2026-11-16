@@ -1,6 +1,6 @@
 import { DEFAULT_SCORE, expect, test } from './support/fixtures.js';
 
-const days = (page) => page.locator('#outlookDays .outlook-day');
+const days = (page) => page.locator('#scoreDays .score-day');
 
 test.describe('score outlook', () => {
     test('charts the score from now to the end of the day after tomorrow, with each day\'s best time', async ({ page, app }) => {
@@ -12,17 +12,39 @@ test.describe('score outlook', () => {
         await expect(page.locator('#outlookChart .outlook-night')).toHaveCount(3); // tonight, Tuesday night, Wednesday night
         await expect(page.locator('#outlookChart .chart-dot:not([visibility="hidden"])')).toHaveCount(3); // one best moment per day
 
-        await expect(days(page).locator('.outlook-day-name')).toHaveText(['Today', 'Tue', 'Wed']);
-        // Sunset is 8:28 PM: the evening is the best of each day here, and well above the mid-morning score.
-        await expect(days(page).nth(0)).toHaveText(/^TodayBest 9\d Exceptional7:\d0 PM–9:\d0 PM$/);
-        await expect(days(page).nth(1)).toContainText(/Best \d\d /);
-        const best = Number((await days(page).nth(0).locator('.outlook-day-best').textContent()).match(/\d+/)[0]);
-        expect(best).toBeGreaterThan(Number(DEFAULT_SCORE) + 10);
+        // The days are tabs on the score card: now, then each day ahead with its best score.
+        await expect(days(page).locator('.score-day-name')).toHaveText(['Now', 'Tue', 'Wed']);
+        await expect(days(page).nth(0)).toHaveText(`Now, score ${DEFAULT_SCORE}`);
+        await expect(days(page).nth(1)).toHaveText(/^Tue, best \d\d$/);
 
         await expect(page.locator('#outlookNote')).toContainText('Water temperature and river flow are assumed to stay as they are now');
         await expect(page.locator('#outlookChart .chart-plot')).toHaveAttribute(
             'aria-label', new RegExp(`^Fishing score from now to the end of Wed\\. Now ${DEFAULT_SCORE}, Excellent\\. Best of each day: Today 9\\d at [78]:\\d\\d PM; Tue `),
         );
+    });
+
+    test('a day tab turns the whole score card to that day\'s best moment, and Now turns it back', async ({ page, app }) => {
+        await app.open();
+        const tuesday = days(page).nth(1);
+        const best = (await tuesday.locator('.score-day-score').textContent()).match(/\d+/)[0];
+        // Sunset is 8:28 PM: Tuesday evening beats the mid-morning score now.
+        expect(Number(best)).toBeGreaterThan(Number(DEFAULT_SCORE) + 10);
+
+        await tuesday.click();
+        await expect(tuesday).toHaveAttribute('aria-selected', 'true');
+        await expect(page.locator('#scoreValue')).toHaveText(best);
+        await expect(page.locator('#scoreBest')).toHaveText(/^Best on Tue: [78]:\d\d PM–9:\d\d PM$/);
+        await expect(page.locator('#scoreNow')).toHaveText(/^Forecast/);
+        await expect(page.locator('#headerScore')).toHaveText(DEFAULT_SCORE); // the header keeps the score now
+        await expect(app.factor('Light')).toContainText('Forecast for Tue');
+        await expect(app.factor('Water temperature')).toContainText('Assumed to hold until then');
+        await expect(app.factor('Barometric pressure')).toContainText('Trend not known that far ahead');
+        await expect(page.locator('.dial[data-factor="light"]')).toHaveAttribute('aria-label', /^Light: Evening light/);
+
+        await page.keyboard.press('ArrowLeft'); // arrow keys move along the tabs
+        await expect(days(page).nth(0)).toHaveAttribute('aria-selected', 'true');
+        await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
+        await expect(page.locator('#scoreBest')).toHaveText(/^Best times: /);
     });
 
     test('the first point is the score shown at the top of the page', async ({ page, app }) => {
@@ -85,8 +107,9 @@ test.describe('score outlook', () => {
             ? { ...station, readings: { ...station.readings, '00010': 0.5 } }
             : station));
         await app.open();
-        await expect(days(page).nth(1)).toContainText(/^TueAbout \d+ /);
-        await expect(days(page).nth(1)).toContainText('Held down by the water temperature');
+        await days(page).nth(1).click();
+        await expect(page.locator('#scoreBest')).toHaveText('Best on Tue: much the same all day');
+        await expect(page.locator('#scoreCap')).toHaveText('Held down by the water temperature');
     });
 
     test('in salt water the outlook follows the tide', async ({ page, app }) => {
@@ -112,7 +135,7 @@ test.describe('score outlook', () => {
         await page.goto('/');
         await expect(page.locator('#noticeText')).toHaveText("Couldn't load the weather.");
         await expect(page.locator('#outlookChart .chart-empty')).toHaveText('The outlook needs the current conditions.');
-        await expect(days(page)).toHaveCount(0);
+        await expect(page.locator('#scoreDays .score-day[disabled]')).toHaveCount(2); // no days ahead to choose
     });
 
     test('still works from the 12-hour forecast when the hourly one fails', async ({ page, context, app }) => {
@@ -122,6 +145,6 @@ test.describe('score outlook', () => {
         await app.open();
         await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
         await expect(days(page)).toHaveCount(3);
-        await expect(days(page).nth(0)).toHaveText(/^TodayBest 9\d Exceptional7:\d0 PM–9:\d0 PM$/);
+        await expect(days(page).nth(1)).toHaveText(/^Tue, best \d\d$/);
     });
 });

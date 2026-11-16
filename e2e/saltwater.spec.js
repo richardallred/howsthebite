@@ -47,11 +47,11 @@ test.describe('choosing the kind of water', () => {
 });
 
 test.describe('inshore', () => {
-    test('scores water temperature, tide, light, wind and pressure, and shows the tides', async ({ page, app }) => {
+    test('scores water temperature, tide, light, season, wind and pressure, and shows the tides', async ({ page, app }) => {
         await openGalveston(app, 'Inshore');
 
-        await expect(labels(page)).toHaveText(['Water temperature', 'Tide', 'Light', 'Wind', 'Barometric pressure']);
-        await expect(page.locator('.factor-points')).toHaveText([/\/35/, /^27\/27/, /\/18/, /\/17/, /\/3/]);
+        await expect(labels(page)).toHaveText(['Water temperature', 'Tide', 'Light', 'Season', 'Wind', 'Barometric pressure']);
+        await expect(page.locator('.factor-points')).toHaveText([/\/32/, /^25\/25/, /\/17/, /\/8/, /\/15/, /\/3/]);
 
         const water = app.factor('Water temperature');
         await expect(water.locator('.factor-value')).toHaveText('76.0°F'); // the tide station's own thermometer
@@ -131,7 +131,7 @@ test.describe('inshore', () => {
         await openGalveston(app, 'Inshore');
         api.fail('coops', 503);
         await page.getByRole('button', { name: 'Refresh conditions' }).click();
-        await expect(labels(page)).toHaveText(['Water temperature', 'Light', 'Wind', 'Barometric pressure']);
+        await expect(labels(page)).toHaveText(['Water temperature', 'Light', 'Season', 'Wind', 'Barometric pressure']);
         await expect(page.locator('#tideSource')).toHaveText('Tide predictions are unavailable right now.');
         await expect(page.locator('#scoreValue')).toHaveText(/^\d+$/);
     });
@@ -140,13 +140,13 @@ test.describe('inshore', () => {
 test.describe('surf', () => {
     test('adds the surf from the beach forecast, with the rip-current risk', async ({ page, app }) => {
         await openGalveston(app, 'Surf');
-        await expect(labels(page)).toHaveText(['Water temperature', 'Surf', 'Tide', 'Light', 'Wind', 'Barometric pressure']);
+        await expect(labels(page)).toHaveText(['Water temperature', 'Surf', 'Tide', 'Light', 'Season', 'Wind', 'Barometric pressure']);
 
         const surf = app.factor('Surf');
         await expect(surf.locator('.factor-value')).toHaveText('3 ft');
         await expect(surf).toContainText('Fishable surf');
         await expect(surf).toContainText('Rip current risk: low');
-        await expect(surf.locator('.factor-points')).toHaveText(/^22\/22/);
+        await expect(surf.locator('.factor-points')).toHaveText(/^21\/21/);
         await expect(page.locator('#speciesGroup button')).toHaveText(['Redfish & whiting', 'Pompano']);
     });
 
@@ -170,7 +170,7 @@ test.describe('surf', () => {
     test('with no wave information at all the surf is left out, not guessed', async ({ page, api, app }) => {
         api.coast = { beach: { name: 'N/A', rip: null, surf: null, wtemp: null }, waveFt: null };
         await openGalveston(app, 'Surf');
-        await expect(labels(page)).toHaveText(['Water temperature', 'Tide', 'Light', 'Wind', 'Barometric pressure']);
+        await expect(labels(page)).toHaveText(['Water temperature', 'Tide', 'Light', 'Season', 'Wind', 'Barometric pressure']);
     });
 
     test('heavy surf holds the score down and a high rip risk is flagged', async ({ page, api, app }) => {
@@ -245,7 +245,7 @@ test.describe('lure suggestions', () => {
 
         // In a browser tab the links carry the Associates tag, and say so beside the link and on the page.
         const link = page.locator('.lure-shop').first();
-        await expect(link).toHaveText('Find it on Amazon (paid link)');
+        await expect(link).toHaveText('Amazon · paid link');
         await expect(link).toHaveAttribute('href', 'https://www.amazon.com/s?k=soft+plastic+lizard+bass&tag=howsthebite-20');
         await expect(link).toHaveAttribute('rel', 'sponsored nofollow noopener');
         await expect(link).toHaveAttribute('target', '_blank');
@@ -267,7 +267,7 @@ test.describe('lure suggestions', () => {
         });
         await app.open();
         const link = page.locator('.lure-shop').first();
-        await expect(link).toHaveText('Find it on Amazon');
+        await expect(link).toHaveText('Amazon');
         await expect(link).toHaveAttribute('href', 'https://www.amazon.com/s?k=soft+plastic+lizard+bass');
         await expect(link).toHaveAttribute('rel', 'nofollow noopener');
         await expect(page.locator('#affiliateDisclosure')).toBeHidden();

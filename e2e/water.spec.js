@@ -169,5 +169,5 @@ test('a searched lake takes its level from the lake gauge even when the thermome
     await expect(page.locator('#levelStats')).toContainText('759.32 ft');
     await expect(page.locator('#levelSource')).toContainText('USGS gauge: Clear Lake at Test Dam, IL');
     // River flow says nothing about a lake, so it is not scored there.
-    await expect(page.locator('.factor-label')).toHaveText(['Water temperature', 'Light', 'Wind', 'Moon', 'Barometric pressure']);
+    await expect(page.locator('.factor-label')).toHaveText(['Water temperature', 'Light', 'Season', 'Wind', 'Moon', 'Barometric pressure']);
 });

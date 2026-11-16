@@ -18,7 +18,7 @@
 // the names in SHELL to the fingerprinted ones. As written here, the file is what runs
 // when the source tree is served directly (npm start, the tests).
 
-const CACHE = 'htb-shell-v9';
+const CACHE = 'htb-shell-v11';
 
 // "name.<10 hex digits>.ext": a name the build derived from the content. No file in the
 // source tree matches, so served unbuilt everything is fetched network-first.
@@ -28,14 +28,20 @@ const SHELL = [
     './',
     'index.html',
     'styles.css',
-    'fonts/archivo-variable.woff2',
-    'fonts/instrument-sans-latin-400-normal.woff2',
-    'fonts/instrument-sans-latin-500-normal.woff2',
-    'fonts/instrument-sans-latin-600-normal.woff2',
-    'fonts/ibm-plex-mono-latin-400-normal.woff2',
-    'fonts/ibm-plex-mono-latin-500-normal.woff2',
+    'fonts/young-serif-latin-400-normal.woff2',
+    'fonts/atkinson-hyperlegible-next-latin-wght-normal.woff2',
     'manifest.json',
     'favicon.svg',
+    'drawings/fish/bass.svg',
+    'drawings/fish/catfish.svg',
+    'drawings/fish/walleye.svg',
+    'drawings/fish/trout.svg',
+    'drawings/fish/crappie.svg',
+    'drawings/fish/pike.svg',
+    'drawings/fish/redfish.svg',
+    'drawings/fish/seatrout.svg',
+    'drawings/fish/striper.svg',
+    'drawings/fish/flounder.svg',
     'icons/icon-192x192.png',
     'icons/icon-512x512.png',
     'js/app.js',
@@ -50,6 +56,7 @@ const SHELL = [
     'js/api/usgs-api.js',
     'js/api/weather-api.js',
     'js/core/alerts.js',
+    'js/core/listed-places.js',
     'js/core/lures.js',
     'js/core/moon.js',
     'js/core/place-url.js',

@@ -381,10 +381,46 @@ const SEASONS = {
     },
 };
 
+// ---------------------------------------------------------------------------
+// How good each phase usually is for fishing (0–1), for the score's Season factor
+// ---------------------------------------------------------------------------
+//
+// Read from the same widely published patterns as the phases above, and rated as a share of
+// "the year's best": the pre-spawn and fall feeds near 1, a spawn when fish stop feeding or
+// a closed season low, the dead of summer and winter in between or below. Like the phase
+// thresholds these are rules of thumb, not figures from catch data, which is why Season is
+// worth few points (scoring.js). Water temperature already counts the cold of winter and the
+// heat of summer, so these rate what temperature alone misses: whether the fish are feeding
+// hard, spread out, on beds or gone.
+
+const BITE = {
+    bass: { winter: 0.3, prespawn: 1, spawn: 0.55, postspawn: 0.4, summer: 0.55, fall: 0.9, latefall: 0.75 },
+    smallmouth: { winter: 0.3, prespawn: 0.95, spawn: 0.5, summer: 0.65, fall: 1, latefall: 0.6 },
+    panfish: { winter: 0.4, prespawn: 0.85, spawn: 1, bluegill: 0.9, summer: 0.55, fall: 0.7 },
+    catfish: { winter: 0.35, prespawn: 1, spawn: 0.4, summer: 0.7, fall: 0.85 },
+    walleye: { winter: 0.4, spawn: 0.25, postspawn: 0.45, earlysummer: 1, summer: 0.55, fall: 0.9, latefall: 0.7 },
+    pike: { winter: 0.45, spawn: 0.3, postspawn: 0.9, summer: 0.5, fall: 1 },
+    perch: { winter: 0.65, spawn: 0.8, summer: 0.6, fall: 0.9 },
+    sauger: { winter: 0.9, spawn: 0.75, summer: 0.4, fall: 0.65 },
+    trout: { winter: 0.35, spring: 1, summer: 0.5, fall: 0.8 },
+    salmon: { run: 0.85, spring: 0.7, openwater: 0.6 },
+    seatrout: { winter: 0.4, spring: 0.85, summer: 0.65, fall: 1, latefall: 0.7 },
+    redfish: { winter: 0.55, spring: 0.8, summer: 0.65, fall: 1, latefall: 0.7 },
+    flounder: { winter: 0.15, spring: 0.7, summer: 0.75, fall: 1 },
+    halibut: { spawn: 0.9, offseason: 0.35 },
+    snook: { winter: 0.35, spring: 0.9, summer: 0.75, fall: 1 },
+    striper: { winter: 0.3, spring: 0.9, summer: 0.55, fall: 1 },
+    bluefish: { winter: 0.1, spring: 0.8, summer: 0.65, fall: 1 },
+    pompano: { winter: 0.2, spring: 0.9, summer: 0.55, fall: 1 },
+    whiting: { cold: 0.4, peak: 1, summer: 0.55 },
+    surfperch: { peak: 1, summer: 0.5 },
+};
+
 /** Fish that share another fish's seasons. */
 const ALIASES = { muskie: 'pike', fluke: 'flounder', corbina: 'surfperch', croaker: 'surfperch' };
 
 const seasonsFor = (target) => SEASONS[target] ?? SEASONS[ALIASES[target]] ?? null;
+const biteFor = (target, id) => (BITE[target] ?? BITE[ALIASES[target]])[id];
 
 /**
  * @typedef {object} SeasonalPhase
@@ -393,6 +429,7 @@ const seasonsFor = (target) => SEASONS[target] ?? SEASONS[ALIASES[target]] ?? nu
  * @property {string} pattern   what the fish are doing, as a sentence without the full stop
  * @property {string|null} forage
  * @property {'warming'|'cooling'} half
+ * @property {number} bite      how good this phase usually is for fishing, 0–1 (see BITE)
  */
 
 /**
@@ -410,7 +447,7 @@ export function seasonalPhase(target, { date, waterTempF, trend = null }) {
         && (entry.below === undefined || waterTempF < entry.below)
         && (!entry.months || entry.months.includes(month)));
     const id = found?.id ?? seasons.steps[seasons.steps.length - 1].id;
-    return { id, ...seasons.phases[id], half };
+    return { id, ...seasons.phases[id], half, bite: biteFor(target, id) };
 }
 
 export const knownSeasons = (target) => Boolean(seasonsFor(target));
