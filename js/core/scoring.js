@@ -3,11 +3,12 @@
 // The weights follow what has actually been measured about angler catch rates
 // rather than fishing folklore (sources and reasoning are in the README):
 //
-//   Water temperature   31   strongest biological basis; the right range depends on the species.
+//   Water temperature   35   strongest biological basis; the right range depends on the species.
 //                             The last week or two of trend moves it: warming toward the range helps,
 //                             cooling away from it or a cold snap hurts
 //   Light               28   dusk > dawn > overcast day > bright midday > night
-//   Wind                12   small effect on fish; a real one on whether you can fish well and safely
+//   Wind                 8   no measured effect on bass or walleye; costs points mainly for boat
+//                             control and safety, and a gale sets a ceiling (see LIMITING) anyway
 //   River flow           9   only when a river gauge with a long record is in play
 //   Season               8   where the fish are in their year (pre-spawn, spawn, fall feed…);
 //                             rules of thumb rather than catch data, so kept below the measured factors
@@ -41,7 +42,7 @@ import { clamp, isNum } from './util.js';
  *   surf     casting from an ocean beach
  */
 export const FACTOR_WEIGHTS = {
-    fresh: { water: 31, light: 28, season: 8, wind: 12, flow: 9, moon: 7, pressure: 5 },
+    fresh: { water: 35, light: 28, season: 8, wind: 8, flow: 9, moon: 7, pressure: 5 },
     inshore: { water: 32, tide: 25, light: 17, season: 8, wind: 15, pressure: 3 },
     surf: { water: 27, waves: 21, tide: 14, light: 14, season: 8, wind: 13, pressure: 3 },
 };

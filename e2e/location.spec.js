@@ -202,7 +202,7 @@ test.describe('species on offer follow the region', () => {
         await expect(page.getByRole('button', { name: 'Bass & panfish' })).toHaveAttribute('aria-pressed', 'true');
         // 68°F sits just under the top of the bass curve, where "all species" would have given full marks.
         await expect(app.factor('Water temperature')).toContainText('Prime range for bass & panfish');
-        await expect(app.factor('Water temperature').locator('.factor-points')).toHaveText(/^30\/31/);
+        await expect(app.factor('Water temperature').locator('.factor-points')).toHaveText(/^34\/35/);
     });
 
     test('catfish have their own score and lures, and the choice is remembered', async ({ page, app }) => {

@@ -11,7 +11,7 @@ export const NOW = Date.parse('2026-06-15T15:00:00Z'); // 10:00 in Chicago, on a
 // (bright sun, mid-morning: 13/28), the season (68°F in mid-June: bass on their beds, 4/8)
 // and the moon (new, but not overhead: 5/7).
 export const DEFAULT_SCORE = '79';
-export const DEFAULT_POINTS = [/^31\/31/, /^13\/28/, /^4\/8/, /^12\/12/, /^9\/9/, /^5\/7/, /^5\/5/];
+export const DEFAULT_POINTS = [/^35\/35/, /^13\/28/, /^4\/8/, /^8\/8/, /^9\/9/, /^5\/7/, /^5\/5/];
 
 const HOUR = 3600_000;
 const DAY = 24 * HOUR;
