@@ -247,7 +247,7 @@ function deriveOutlook(inputs, clock) {
         // the series used at that time (forecast sky and wind; no pressure trend, gusts or alerts).
         const ahead = forecastAt(peak.t, clock);
         const result = index === 0 ? null : scoreConditions({
-            ...inputs, pressureChange3h: null, gustMph: null, hazard: null, ...(ahead ?? {}), date: new Date(peak.t),
+            ...inputs, pressureChange3h: null, front: null, gustMph: null, hazard: null, ...(ahead ?? {}), date: new Date(peak.t),
         });
         return {
             result,
@@ -324,6 +324,7 @@ function derive() {
         oxygenMgL: (station?.oxygen ?? gauge?.oxygen)?.mgL ?? null,
         pressureInHg: current.pressureInHg,
         pressureChange3h: changeOver(pressure, APP.PRESSURE_TREND_HOURS),
+        front: frontState(pressure, air),
         windMph: current.windMph,
         gustMph: current.gustMph,
         sky: current.sky.class,
@@ -365,7 +366,7 @@ function derive() {
         waveFt: surf?.heightFt ?? null,
         date: new Date(clock),
         trend: waterTrend,
-        front: frontState(pressure, air),
+        front: inputs.front,
         level: levelShift(level),
     });
     const patterns = lurePatterns(species.targets, lureInput);
@@ -587,9 +588,14 @@ function renderScoreDays(derived) {
 }
 
 function selectScoreDay(index) {
+    const changed = index !== state.scoreDay;
     state.scoreDay = index;
     pinnedDial = null;
     if (lastDerived) renderScoreCard(lastDerived);
+    if (changed && lastDerived) {
+        replayClass(document.querySelector('#scoreCard .score-number'), 'is-swapping');
+        replayClass($('scoreBand'), 'is-swapping');
+    }
     $(`score-day-${index}`)?.focus();
 }
 
@@ -638,6 +644,9 @@ function renderScore(derived) {
     const view = scoreView(derived);
     const { result } = view;
     const { current } = state.weather;
+    // The first score for a place (after the loading ripple) is revealed; later redraws are not.
+    revealing = card.dataset.state !== 'ready';
+    if (revealing) playReveal();
     $('scorePin').style.left = `${Math.max(0, Math.min(100, result.score))}%`;
     card.dataset.band = result.band.key;
     card.dataset.state = 'ready';
@@ -756,6 +765,25 @@ const DIAL_ARC = { cx: 144, cy: 148, radius: 125, from: -96, to: 96 };
 const DIAL_R = 18; // ring radius inside a 42-px dial
 const DIAL_NAMES = { water: 'water temperature', light: 'light', season: 'season', wind: 'wind', flow: 'river flow', moon: 'moon', pressure: 'pressure', tide: 'tide', waves: 'surf' };
 let pinnedDial = null; // the factor whose reading stays up after a tap
+let dialShares = new Map(); // how full each ring was last drawn, so a new day or reading slides from there
+let revealing = false; // the score has just arrived: the card plays its reveal (styles.css, .is-revealing)
+let revealTimer = null;
+
+/** Restart a CSS animation that a class runs, even if the class is already on. */
+function replayClass(node, className) {
+    if (!node) return;
+    node.classList.remove(className);
+    void node.offsetWidth; // a reflow, so the browser sees the class come back
+    node.classList.add(className);
+}
+
+/** The stamp is pressed on and the dials fill in turn; the class comes off once it has played. */
+function playReveal() {
+    const card = $('scoreCard');
+    replayClass(card, 'is-revealing');
+    clearTimeout(revealTimer);
+    revealTimer = setTimeout(() => card.classList.remove('is-revealing'), 1600);
+}
 
 /** "Moon · First Quarter · 2 of 7, poor" */
 function dialDetail(factor, derived) {
@@ -777,10 +805,14 @@ function renderDials(derived) {
     if (!derived) {
         container.replaceChildren();
         pinnedDial = null;
+        dialShares = new Map();
         showDial(null);
         return;
     }
     const view = scoreView(derived);
+    const previous = revealing ? new Map() : dialShares;
+    dialShares = new Map();
+    const fills = [];
     const factors = [...view.result.factors].sort((a, b) => b.max - a.max);
     const heaviest = factors[0].max;
     const step = factors.length > 1 ? (DIAL_ARC.to - DIAL_ARC.from) / (factors.length - 1) : 0;
@@ -791,6 +823,19 @@ function renderDials(derived) {
         const display = factorDisplay(factor, derived, view);
         const share = factor.points / factor.max;
         const width = 2.5 + 2.5 * (factor.max / heaviest); // the factors that count most have the heaviest rings
+        // The ring is drawn where it was last time (empty on a reveal), then moved to its new
+        // value on the next frame so the change shows as a slide.
+        const from = previous.get(factor.id) ?? (revealing ? 0 : share);
+        dialShares.set(factor.id, share);
+        const dash = (value) => `${(circumference * value).toFixed(1)} ${circumference.toFixed(1)}`;
+        const fill = svg('circle', {
+            class: `dial-fill${from > 0 ? '' : ' is-empty'}`, cx: 21, cy: 21, r: DIAL_R, 'stroke-width': width,
+            'stroke-dasharray': dash(from),
+        });
+        if (from !== share) fills.push(() => {
+            fill.setAttribute('stroke-dasharray', dash(share));
+            fill.classList.toggle('is-empty', share <= 0);
+        });
         const dial = el('button', {
             type: 'button',
             class: 'dial',
@@ -809,15 +854,15 @@ function renderDials(derived) {
         },
         svg('svg', { class: 'dial-ring', viewBox: '0 0 42 42', 'aria-hidden': 'true', focusable: 'false' },
             svg('circle', { class: 'dial-track', cx: 21, cy: 21, r: DIAL_R, 'stroke-width': width }),
-            share > 0 ? svg('circle', {
-                class: 'dial-fill', cx: 21, cy: 21, r: DIAL_R, 'stroke-width': width,
-                'stroke-dasharray': `${(circumference * share).toFixed(1)} ${circumference.toFixed(1)}`,
-            }) : null),
+            fill),
         glyph(factor.id));
+        dial.style.setProperty('--i', String(index));
         dial.style.left = `${(DIAL_ARC.cx + DIAL_ARC.radius * Math.sin(angle)).toFixed(1)}px`;
         dial.style.top = `${(DIAL_ARC.cy - DIAL_ARC.radius * Math.cos(angle)).toFixed(1)}px`;
         return dial;
     }));
+    // Two frames: the first paints the starting point, the second starts the transition from it.
+    if (fills.length) requestAnimationFrame(() => requestAnimationFrame(() => fills.forEach((move) => move())));
     restore();
 }
 
