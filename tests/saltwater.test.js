@@ -16,6 +16,7 @@ const CHARLESTON = { lat: 32.78, lon: -79.93 };
 const inshore = {
     mode: 'inshore', ...CHARLESTON, speciesGroup: 'warmsalt', waterTempF: 76, pressureInHg: 30, pressureChange3h: 0,
     windMph: 8, sky: 'partly', tides: TIDES, date: new Date(T0 + 9 * HOUR), // mid-way down the ebb, late morning
+    targets: ['redfish'],
 };
 const points = (result, id) => result.factors.find((factor) => factor.id === id)?.points;
 
@@ -119,7 +120,7 @@ test('salt-water light: dawn and dusk equal, night about as good as day', () => 
 
 test('inshore: the factors, and a slack tide costing about a sixth of the score', () => {
     const running = scoreConditions(inshore);
-    assert.deepEqual(running.factors.map((factor) => factor.id), ['water', 'tide', 'light', 'wind', 'pressure']);
+    assert.deepEqual(running.factors.map((factor) => factor.id), ['water', 'tide', 'light', 'season', 'wind', 'pressure']);
     assert.equal(points(running, 'tide'), FACTOR_WEIGHTS.inshore.tide);
     assert.equal(running.available, 100);
 
@@ -130,7 +131,7 @@ test('inshore: the factors, and a slack tide costing about a sixth of the score'
 test('surf: wave height is a factor and a limiting one', () => {
     const base = { ...inshore, mode: 'surf' };
     const fair = scoreConditions({ ...base, waveFt: 2 });
-    assert.deepEqual(fair.factors.map((factor) => factor.id), ['water', 'waves', 'tide', 'light', 'wind', 'pressure']);
+    assert.deepEqual(fair.factors.map((factor) => factor.id), ['water', 'waves', 'tide', 'light', 'season', 'wind', 'pressure']);
     assert.equal(points(fair, 'waves'), FACTOR_WEIGHTS.surf.waves);
 
     const heavy = scoreConditions({ ...base, waveFt: 9 });
@@ -145,7 +146,7 @@ test('surf: wave height is a factor and a limiting one', () => {
 
 test('without tide predictions the tide is left out, and salt water has no flow or moon factor', () => {
     const result = scoreConditions({ ...inshore, tides: null, flow: { cfs: 9000, percentiles: { 5: 1, 10: 2, 25: 3, 50: 4, 75: 5, 90: 6, 95: 7 } } });
-    assert.deepEqual(result.factors.map((factor) => factor.id), ['water', 'light', 'wind', 'pressure']);
+    assert.deepEqual(result.factors.map((factor) => factor.id), ['water', 'light', 'season', 'wind', 'pressure']);
     assert.equal(result.available, 100 - FACTOR_WEIGHTS.inshore.tide);
 });
 

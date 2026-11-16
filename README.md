@@ -342,18 +342,19 @@ Amazon turns out to be a poor fit.
     app adds `<meta name="robots" content="noindex">` instead, which keeps it from being indexed
     as an empty page.
 - **Popular fishing spots.** Search engines find pages by following links, and place pages are
-  otherwise reached only through the search box. The list at the foot of the page (`#places` in
-  `index.html`) links to well-known lakes, rivers and coastal towns, and because every place
-  page is the same file, each of them links to the others. To add a water, add a link:
+  otherwise reached only through the search box. The spots page (`spots/index.html`, served at
+  `/spots/` and linked from the footer) links to well-known lakes, rivers and coastal towns.
+  To add a water, add a link:
   - the address is the canonical one, `/fishing/<lat>,<lon>/<slug>`, with coordinates rounded to
     2 decimals, and the link text is exactly the name the slug turns back into
     (`tests/places.test.js` checks both, and that no place is listed twice);
-  - `data-water="lake"` or `"river"` says what kind of water it is, so the right gauges are used
-    whether someone picks it from the list or arrives at its address from a search engine;
+  - `data-water="lake"` or `"river"` says what kind of water it is, and the same entry goes in
+    `js/core/listed-places.js`, so the right gauges are used whether someone picks it from the
+    list or arrives at its address from a search engine (the test checks the two agree);
   - river entries are named for the river and a town on it ("Kenai River at Soldotna, Alaska")
     and use the town's coordinates.
-- **The sitemap is written by the build** (`scripts/sitemap.mjs`): the home page plus every place
-  linked from `index.html`, so the two cannot disagree. It has no `<lastmod>`, which Google uses
+- **The sitemap is written by the build** (`scripts/sitemap.mjs`): the home page, the spots and
+  questions pages, and every place they link to, so the pages and the sitemap cannot disagree. It has no `<lastmod>`, which Google uses
   only when it is verifiably accurate, and no `<priority>` or `<changefreq>`, which it ignores.
 - The page says who made it: a line in the footer, `<meta name="author">`, and a `Person` in the
   structured data that the site and the app point to. Google's guidance asks sites to make clear
@@ -361,7 +362,8 @@ Amazon turns out to be a poor fit.
 - Before any script runs, the `<h1>` reads "Fishing forecast" on the home page and the place's
   name on a place page. The notice and the install banner carry `data-nosnippet`, so their
   wording is never quoted as the page's description in search results.
-- The "Fishing questions, answered" section is plain HTML so it can be indexed. Each answer ends
+- The "Fishing questions, answered" page (`faq/index.html`, served at `/faq/`) is plain HTML so
+  it can be indexed. Each answer ends
   with links to the studies behind it (the same ones listed under "Why these weights" and "Salt
   water"). Keep its figures in line with `js/core/scoring.js` and those sections when the score
   changes, and cite only sources that test the claim as worded.
@@ -378,11 +380,12 @@ The logic lives in `js/core/scoring.js` and is covered by `tests/scoring.test.js
 
 | Factor | Points | Best | How it is scored |
 |---|---|---|---|
-| Water temperature | 35 | Depends on the species setting | A smooth curve per species group: bass and panfish peak at 69–80°F, catfish at 72–86°F, walleye and pike at 62–72°F, trout at 50–64°F, "all species" at 62–76°F. Trout lose most of their points by 70°F and all of them by 75°F. An estimate (no sensor nearby) is pulled toward the middle. Dissolved oxygen below about 5 mg/L (6 for trout) cuts the factor further where a station measures it. |
-| Light | 30 | The hour either side of sunset | From the sun's height, computed for the spot: evening low light 100%, early morning 75%, overcast day 68%, broken cloud 55%, bright sun 45%, night 35%, blended smoothly between. For catfish, night earns 85% and bright sun 40% (see below). |
+| Water temperature | 31 | Depends on the species setting | A smooth curve per species group: bass and panfish peak at 69–80°F, catfish at 72–86°F, walleye and pike at 62–72°F, trout at 50–64°F, "all species" at 62–76°F. Trout lose most of their points by 70°F and all of them by 75°F. An estimate (no sensor nearby) is pulled toward the middle. Dissolved oxygen below about 5 mg/L (6 for trout) cuts the factor further where a station measures it. |
+| Light | 28 | The hour either side of sunset | From the sun's height, computed for the spot: evening low light 100%, early morning 75%, overcast day 68%, broken cloud 55%, bright sun 45%, night 35%, blended smoothly between. For catfish, night earns 85% and bright sun 40% (see below). |
 | Wind | 12 | 5–12 mph | Calm still earns 75%. Points fall away above 15 mph and reach zero at 30. Gusts count (a gust is treated as 70% of a steady wind). |
-| River flow | 10 | Normal for the date | Current discharge against that gauge's own record for today's date (USGS day-of-year percentiles, at least 10 years). Normal flow scores full marks, low water a little less, very high water almost nothing. For catfish, flow up to the 85th percentile still scores full marks. Left out for lakes and for gauges without a long record. |
-| Moon | 8 | New or full moon, overhead or underfoot | 35% always, up to 30% more near new/full moon, and 35% more within about an hour of the moon crossing overhead or underfoot. |
+| River flow | 9 | Normal for the date | Current discharge against that gauge's own record for today's date (USGS day-of-year percentiles, at least 10 years). Normal flow scores full marks, low water a little less, very high water almost nothing. For catfish, flow up to the 85th percentile still scores full marks. Left out for lakes and for gauges without a long record. |
+| Season | 8 | The pre-spawn and fall feeds | Where the fish are in their year (`js/core/season.js`: pre-spawn, spawn, summer, the fall feed, winter), from the date, the water temperature and its recent trend. Each phase has a rating: the year's best feeds near 100%, a spawn when fish stop feeding or a closed season around 25–55%, winter around 30%. With several fish (all species) it is the average of their ratings and the best one, so it leans toward whatever is in season. An estimated water temperature is pulled toward the middle. Rules of thumb, not catch data, so worth less than the measured factors. |
+| Moon | 7 | New or full moon, overhead or underfoot | 35% always, up to 30% more near new/full moon, and 35% more within about an hour of the moon crossing overhead or underfoot. |
 | Barometric pressure | 5 | Steady or slowly falling | Trend only: slowly falling 5, steady or falling fast 4, rising 3, rising fast 1. The level itself earns nothing. |
 
 **Catfish.** Catfish are scored on their own rather than with bass, because three things differ:
@@ -473,11 +476,12 @@ the angler knows whether they are fishing salt water there.
 
 | Factor | Inshore | Surf | How it is scored |
 |---|---|---|---|
-| Water temperature | 35 | 30 | A curve per group of fish: snook, tarpon and pompano peak at 74–86°F; redfish, seatrout and flounder at 65–82°F; striped bass, bluefish and fluke at 55–70°F; southern California halibut and surf fish at 60–72°F; salmon and northern surfperch at 48–58°F. Snook score almost nothing below 58°F. |
-| Tide | 27 | 15 | How fast the water is moving, from NOAA's predicted highs and lows: full marks at mid-tide, 40% at slack. Rising and falling score the same. |
-| Surf | — | 22 | Wave height at the beach. Up to 3 ft scores full marks and flat water 90%; points fall away above 4 ft and are gone by 10 ft. |
-| Light | 18 | 15 | Dawn and dusk 100%; daytime 60–78% by cloud; night 65%. |
-| Wind | 17 | 15 | The freshwater curve. |
+| Water temperature | 32 | 27 | A curve per group of fish: snook, tarpon and pompano peak at 74–86°F; redfish, seatrout and flounder at 65–82°F; striped bass, bluefish and fluke at 55–70°F; southern California halibut and surf fish at 60–72°F; salmon and northern surfperch at 48–58°F. Snook score almost nothing below 58°F. |
+| Tide | 25 | 14 | How fast the water is moving, from NOAA's predicted highs and lows: full marks at mid-tide, 40% at slack. Rising and falling score the same. |
+| Surf | — | 21 | Wave height at the beach. Up to 3 ft scores full marks and flat water 90%; points fall away above 4 ft and are gone by 10 ft. |
+| Light | 17 | 14 | Dawn and dusk 100%; daytime 60–78% by cloud; night 65%. |
+| Season | 8 | 8 | As in fresh water: the fall runs of redfish, seatrout, flounder, stripers and pompano score highest. |
+| Wind | 15 | 13 | The freshwater curve. |
 | Barometric pressure | 3 | 3 | Trend only. |
 
 Water temperature, surf and wind can each set a ceiling on the total, as in fresh water. There is
@@ -504,8 +508,7 @@ factors against each other for shore anglers.
 - **Light.** Fish are most active around dawn and dusk, but a creel survey of 1,862 Mississippi
   shore anglers found night and day catch rates essentially the same, so night is not marked down.
 - **Not scored:** wind direction, water clarity and salinity after rain (species-specific or
-  untested, and not measured widely enough to use), and season (handled by which fish are offered
-  and by temperature).
+  untested, and not measured widely enough to use).
 
 Sources: [summer flounder telemetry](https://bioone.org/journals/marine-and-coastal-fisheries/volume-6/issue-6/19425120.2014.893468/Small-Scale-Vertical-Movements-of-Summer-Flounder-Relative-to-Diurnal/10.1080/19425120.2014.893468.full) ·
 [Mississippi day/night shore creel](https://gsmfc.org/publications/GSMFC%20Number%20113.pdf) ·
@@ -740,7 +743,7 @@ functions/
   api/nws/[[path]].js   Cloudflare Pages Function: stand-in route to the Weather Service API
 scripts/build.mjs       Copies the publishable files to dist/, writes the sitemap, fingerprints file names
 scripts/fingerprint.mjs Names files after their content and rewrites the references to them
-scripts/sitemap.mjs     The sitemap, worked out from the links in index.html
+scripts/sitemap.mjs     The sitemap, worked out from the pages and the places they link to
 scripts/serve.mjs       Local static server (npm start, browser tests) that also serves place addresses
 tests/                  Unit tests (node --test)
 e2e/                    Browser tests (Playwright)

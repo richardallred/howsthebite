@@ -3,11 +3,13 @@
 // The weights follow what has actually been measured about angler catch rates
 // rather than fishing folklore (sources and reasoning are in the README):
 //
-//   Water temperature   35   strongest biological basis; the right range depends on the species
-//   Light               30   dusk > dawn > overcast day > bright midday > night
+//   Water temperature   31   strongest biological basis; the right range depends on the species
+//   Light               28   dusk > dawn > overcast day > bright midday > night
 //   Wind                12   small effect on fish; a real one on whether you can fish well and safely
-//   River flow          10   only when a river gauge with a long record is in play
-//   Moon                 8   real but small and inconsistent
+//   River flow           9   only when a river gauge with a long record is in play
+//   Season               8   where the fish are in their year (pre-spawn, spawn, fall feed…);
+//                             rules of thumb rather than catch data, so kept below the measured factors
+//   Moon                 7   real but small and inconsistent
 //   Barometric pressure  5   no measured effect on catch rates; kept small, trend only
 //
 // Salt water is scored on different factors (see FACTOR_WEIGHTS and the README): there is
@@ -24,6 +26,7 @@
 
 import { BITE_PHRASES, SCORE_BANDS } from '../config.js';
 import { moonInfo, moonTransit } from './moon.js';
+import { seasonalPhase } from './season.js';
 import { sunAltitude, sunTimes } from './sun.js';
 import { tideAt } from './tides.js';
 import { classifyTrend, mean } from './trend.js';
@@ -36,9 +39,9 @@ import { clamp, isNum } from './util.js';
  *   surf     casting from an ocean beach
  */
 export const FACTOR_WEIGHTS = {
-    fresh: { water: 35, light: 30, wind: 12, flow: 10, moon: 8, pressure: 5 },
-    inshore: { water: 35, tide: 27, light: 18, wind: 17, pressure: 3 },
-    surf: { water: 30, waves: 22, tide: 15, light: 15, wind: 15, pressure: 3 },
+    fresh: { water: 31, light: 28, season: 8, wind: 12, flow: 9, moon: 7, pressure: 5 },
+    inshore: { water: 32, tide: 25, light: 17, season: 8, wind: 15, pressure: 3 },
+    surf: { water: 27, waves: 21, tide: 14, light: 14, season: 8, wind: 13, pressure: 3 },
 };
 export const FACTOR_MAX = FACTOR_WEIGHTS.fresh;
 
@@ -517,6 +520,47 @@ export function scoreMoon(date = new Date(), lon = null) {
 }
 
 // ---------------------------------------------------------------------------
+// Season
+// ---------------------------------------------------------------------------
+
+const capitalised = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/**
+ * Where the fish are in their year (season.js): the pre-spawn and fall feeds score high, a
+ * spawn when they stop feeding, a closed season or the dead of summer low. With several
+ * fish (all species), it leans toward whichever is in its best season, since someone
+ * fishing for anything can fish for that.
+ *
+ * @param {object} c
+ * @param {string[]} c.targets  the fish being fished for ('bass', 'walleye'…)
+ * @param {Date} c.date
+ * @param {number} c.waterTempF
+ * @param {object|null} [c.trend]  the last weeks of water temperature (water-trend.js), which settles spring or fall near the turns
+ * @param {boolean} [c.estimated]  the water temperature is a guess, so the phase is too
+ * @returns {object|null}  null when none of the fish has known seasons
+ */
+export function scoreSeason({ targets = [], date, waterTempF, trend = null, estimated = false }) {
+    const fish = [...new Set(targets)]
+        .map((target) => ({ target, phase: seasonalPhase(target, { date, waterTempF, trend }) }))
+        .filter((entry) => entry.phase);
+    if (!fish.length) return null;
+    const best = fish.reduce((top, entry) => (entry.phase.bite > top.phase.bite ? entry : top));
+    const average = fish.reduce((sum, entry) => sum + entry.phase.bite, 0) / fish.length;
+    let share = (average + best.phase.bite) / 2;
+    if (estimated) share = 0.5 + (share - 0.5) * 0.6; // a guessed temperature, a guessed phase
+
+    const quality = best.phase.bite >= 0.85 ? 'one of the best times of year'
+        : best.phase.bite >= 0.6 ? 'a good time of year'
+            : best.phase.bite >= 0.4 ? 'an in-between time of year' : 'a slow time of year';
+    const who = fish.length > 1 ? `For ${best.target}, ${quality}` : capitalised(quality);
+    return graded(share, FACTOR_MAX.season, {
+        note: `${who}. ${best.phase.pattern}`,
+        phase: best.phase,
+        fish: fish.map(({ target, phase }) => ({ target, label: phase.label, bite: phase.bite })),
+    });
+}
+
+// ---------------------------------------------------------------------------
 // Barometric pressure
 // ---------------------------------------------------------------------------
 
@@ -562,7 +606,7 @@ export function bitePhrase(score, date = new Date()) {
     const band = bandFor(score);
     const phrases = BITE_PHRASES[band.key];
     const day = Math.floor(date.getTime() / 86400000);
-    return `The bite is ${phrases[(day * 7 + score) % phrases.length]}`;
+    return phrases[(day * 7 + score) % phrases.length];
 }
 
 // Factors that can spoil the fishing on their own, and the ceiling one of them sets:
@@ -591,6 +635,8 @@ const limitFor = (share) => Math.round(100 * clamp(0.1 + 1.8 * share, 0, 1));
  * @param {number} [c.lat]
  * @param {number} [c.lon]
  * @param {Date} [c.date]
+ * @param {string[]} [c.targets]  the fish being fished for, for the Season factor
+ * @param {object|null} [c.waterTrend]  the last weeks of water temperature (water-trend.js)
  */
 export function scoreConditions(c) {
     const date = c.date ?? new Date();
@@ -609,6 +655,9 @@ export function scoreConditions(c) {
         wind: () => scoreWind(c.windMph, { gustMph: c.gustMph }),
         flow: () => scoreFlow(c.flow, { species: group }),
         moon: () => scoreMoon(date, c.lon),
+        season: () => (c.targets?.length ? scoreSeason({
+            targets: c.targets, date, waterTempF: c.waterTempF, trend: c.waterTrend ?? null, estimated: c.waterEstimated,
+        }) : null),
         pressure: () => scorePressure(c.pressureInHg, { change3h: c.pressureChange3h }),
     };
 

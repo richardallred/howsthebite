@@ -27,7 +27,7 @@ test('after one visit the app opens offline and shows the last conditions with t
 
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Asheville, North Carolina');
     await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
-    await expect(page.locator('.factor')).toHaveCount(6);
+    await expect(page.locator('.factor')).toHaveCount(7);
     await expect(page.locator('#pressureChart .chart-line')).toBeVisible();
 
     await page.getByRole('button', { name: 'Refresh conditions' }).click();

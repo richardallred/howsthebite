@@ -1,7 +1,7 @@
 import { DEFAULT_POINTS, DEFAULT_SCORE, NOW, expect, test } from './support/fixtures.js';
 
 test.describe('first visit', () => {
-    test('shows the default city with a score, six factors and a five-day forecast', async ({ page, app }) => {
+    test('shows the default city with a score, seven factors and a five-day forecast', async ({ page, app }) => {
         await app.open();
 
         await expect(page.getByRole('heading', { level: 1 })).toHaveText('Chicago, Illinois');
@@ -11,7 +11,7 @@ test.describe('first visit', () => {
         // Ideal water, wind and flow, but mid-morning under a bright sun: excellent, not exceptional.
         await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
         await expect(page.locator('#scoreBand')).toHaveText('Excellent');
-        await expect(page.locator('#scorePhrase')).toHaveText(/^The bite is \w+/);
+        await expect(page.locator('#scorePhrase')).toHaveText(/^[A-Z][\w’', ]+$/);
         await expect(page.locator('#scoreCard')).toHaveAttribute('data-band', 'excellent');
         await expect(page.locator('#scoreNow')).toHaveText('Clear · 72°F');
         await expect(page.locator('#scoreCap')).toBeHidden(); // nothing is holding the score down
@@ -20,9 +20,9 @@ test.describe('first visit', () => {
         await expect(page.locator('#alerts')).toBeHidden();
         await expect(page.locator('#updatedAt')).toContainText('weather observed at Testville, Test Regional Airport just now');
 
-        await expect(page.locator('.factor')).toHaveCount(6);
+        await expect(page.locator('.factor')).toHaveCount(7);
         await expect(page.locator('.factor-label')).toHaveText([
-            'Water temperature', 'Light', 'Wind', 'River flow', 'Moon', 'Barometric pressure',
+            'Water temperature', 'Light', 'Season', 'Wind', 'River flow', 'Moon', 'Barometric pressure',
         ]);
         await expect(page.locator('.factor-points')).toHaveText(DEFAULT_POINTS);
 
@@ -85,7 +85,7 @@ test.describe('factor details', () => {
         await app.open();
         const evening = Number(await page.locator('#scoreValue').textContent());
         await expect(app.factor('Light').locator('.factor-value')).toHaveText('Evening light');
-        await expect(app.factor('Light').locator('.factor-points')).toHaveText(/^30\/30/);
+        await expect(app.factor('Light').locator('.factor-points')).toHaveText(/^28\/28/);
         await expect(app.factor('Light')).toContainText('Sunset 8:28 PM');
         await expect(page.locator('#scoreBest')).toHaveText(/^Best times: now–9:\d\d PM/);
 
@@ -136,7 +136,7 @@ test.describe('factor details', () => {
     test('flow is left out, not guessed, when the gauge has no long-term record', async ({ page, api, app }) => {
         api.stations = api.stations.map((station) => ({ ...station, normals: false }));
         await app.open();
-        await expect(page.locator('.factor-label')).toHaveText(['Water temperature', 'Light', 'Wind', 'Moon', 'Barometric pressure']);
+        await expect(page.locator('.factor-label')).toHaveText(['Water temperature', 'Light', 'Season', 'Wind', 'Moon', 'Barometric pressure']);
         await expect(page.locator('#levelStats')).toContainText('1,250 cfs'); // still shown, just not scored
     });
 
@@ -148,6 +148,29 @@ test.describe('factor details', () => {
         await expect(app.factor('Water temperature')).toContainText('Low oxygen (3.2 mg/L)');
         await expect(page.locator('#levelStats')).toContainText('Dissolved oxygen3.2 mg/Llow');
         await expect(page.locator('#levelStats')).toContainText('Turbidity64 FNUmuddy');
+    });
+});
+
+test.describe('the dials round the stamp', () => {
+    test('one per factor, most important first; a dial shows its reading, and a tap keeps it up', async ({ page, app }) => {
+        await app.open();
+        const dials = page.locator('.dial');
+        await expect(dials).toHaveCount(7);
+        await expect(dials.first()).toHaveAttribute('data-factor', 'water');
+        await expect(dials.last()).toHaveAttribute('data-factor', 'pressure');
+        await expect(page.locator('#scoreHeld')).toHaveText(/^Held back by the light/); // bright mid-morning sun costs the most
+
+        const light = page.locator('.dial[data-factor="light"]');
+        await light.hover();
+        await expect(page.locator('#dialDetail')).toBeVisible();
+        await expect(page.locator('#dialDetail')).toHaveText(/^Light · .* · 13 of 28, fair$/);
+        await light.click();
+        await expect(light).toHaveAttribute('aria-pressed', 'true');
+        await page.mouse.move(0, 0);
+        await expect(page.locator('#dialDetail')).toBeVisible(); // pinned
+        await light.click();
+        await page.mouse.move(0, 0);
+        await expect(page.locator('#scorePhrase')).toBeVisible();
     });
 });
 

@@ -80,41 +80,50 @@ export const SCORE_BANDS = [
     { min: 0, key: 'terrible', label: 'Terrible' },
 ];
 
+// One plain sentence under the score, in the voice of a fishing report: no hype. Several per
+// band so it is not the same words every day; bitePhrase() picks one, stable for the day.
 export const BITE_PHRASES = {
     exceptional: [
-        'absolutely legendary', 'insanely hot', 'completely bonkers', 'off the charts',
-        'absolutely electric', 'totally insane', 'completely mental', 'absolutely wicked',
-        'ridiculously hot', 'completely nuts', 'absolutely bananas', 'totally lit',
+        'About as good as it gets',
+        'Hard to pick a better time to go',
+        'Everything is lining up',
+        'Conditions don’t get much better than this',
     ],
     excellent: [
-        'absolutely stellar', 'incredibly hot', 'super active', 'really cooking',
-        'totally dialed in', 'completely locked in', 'absolutely crushing', 'really cranking',
-        'super charged', 'totally fired up', 'absolutely pumping', 'really rolling',
+        'Fish should be feeding',
+        'A very good time to be on the water',
+        'Most things are in your favor',
+        'Worth making time for',
     ],
     good: [
-        'pretty solid', 'fairly active', 'quite decent', 'reasonably good',
-        'looking promising', 'holding steady', 'pretty consistent', 'fairly reliable',
-        'quite encouraging', 'reasonably active', 'pretty hopeful', 'fairly positive',
+        'Worth getting out',
+        'Decent conditions for fishing',
+        'Fish should be catchable',
+        'Good odds if you put in the time',
     ],
     fair: [
-        'somewhat mixed', 'kinda spotty', 'pretty hit or miss', 'a bit unpredictable',
-        'sorta iffy', 'somewhat inconsistent', 'kinda up and down', 'a bit scattered',
-        'pretty variable', 'somewhat temperamental', 'kinda moody', 'a bit finicky',
+        'Could go either way',
+        'Expect to work for your bites',
+        'Fishable, but nothing special',
+        'Slow stretches are likely',
     ],
     poor: [
-        'pretty slow', 'quite tough', 'rather challenging', 'pretty sluggish',
-        'quite difficult', 'pretty stubborn', 'rather uncooperative', 'quite picky',
-        'pretty finicky', 'rather selective', 'quite hesitant', 'pretty reluctant',
+        'Expect a slow day',
+        'Fish will be hard to find',
+        'Tough conditions right now',
+        'Bites will be few and far between',
     ],
     verypoor: [
-        'really tough', 'extremely challenging', 'pretty brutal', 'quite miserable',
-        'really stubborn', 'extremely difficult', 'pretty unforgiving', 'quite punishing',
-        'really harsh', 'extremely tough', 'pretty merciless', 'quite ruthless',
+        'Very slow conditions',
+        'Probably not worth a special trip',
+        'Little is going your way right now',
+        'Fish are unlikely to cooperate',
     ],
     terrible: [
-        'absolutely brutal', 'completely dead', 'totally lifeless', 'utterly hopeless',
-        'completely shut down', 'absolutely terrible', 'totally awful', 'completely dreadful',
-        'absolutely miserable', 'totally dismal', 'completely pathetic', 'utterly depressing',
+        'Not a day for fishing',
+        'Save it for another day',
+        'About as bad as conditions get',
+        'Better to stay off the water',
     ],
 };
 

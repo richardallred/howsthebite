@@ -2,20 +2,16 @@
 
 Self-hosted so the app works offline and the Content-Security-Policy needs no third-party font host.
 
-- Archivo (variable, width and weight axes): https://github.com/Omnibus-Type/Archivo
-- Instrument Sans: https://github.com/Instrument/instrument-sans
-- IBM Plex Mono: https://github.com/IBM/plex
+- Young Serif: https://github.com/noirblancrouge/YoungSerif
+- Atkinson Hyperlegible Next (variable, weight axis), by the Braille Institute: https://github.com/googlefonts/atkinson-hyperlegible-next
 
-All three are licensed under the SIL Open Font License 1.1, reproduced below (copyright lines from each project).
+Both are licensed under the SIL Open Font License 1.1, reproduced below (copyright lines from each project).
 
 ```
-Copyright 2022 The Instrument Sans Project Authors (https://github.com/Instrument/instrument-sans) InstrumentSans-Italic[wdth,wght].ttf: Copyright 2022 The Instrument Sans Project Authors (https://github.com/Instrument/instrument-sans)
+Copyright 2023 The Young Serif Project Authors (https://github.com/noirblancrouge/YoungSerif)
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
-Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-ThinItalic.ttf: Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-ExtraLight.ttf: Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-ExtraLightItalic.ttf: Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-Light.ttf: Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-LightItalic.ttf: Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-Regular.ttf: Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-Italic.ttf: Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-Medium.ttf: Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-MediumItalic.ttf: Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-SemiBold.ttf: Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-SemiBoldItalic.ttf: Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-Bold.ttf: Copyright 2017 IBM Corp. All rights reserved. IBMPlexMono-BoldItalic.ttf: Copyright 2017 IBM Corp. All rights reserved.
-
-This Font Software is licensed under the SIL Open Font License, Version 1.1.
-Copyright 2020 The Archivo Project Authors (https://github.com/Omnibus-Type/Archivo) Archivo-Italic[wdth,wght].ttf: Copyright 2020 The Archivo Project Authors (https://github.com/Omnibus-Type/Archivo)
+Copyright 2020-2024 The Atkinson Hyperlegible Next Project Authors (https://github.com/googlefonts/atkinson-hyperlegible-next)
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:

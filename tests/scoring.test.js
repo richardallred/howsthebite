@@ -3,8 +3,9 @@ import { test } from 'node:test';
 
 import {
     FACTOR_MAX, HAZARD_CAP, SPECIES_GROUPS, bandFor, bestWindows, bitePhrase, estimateWaterTemp, flowPercentile,
-    scoreConditions, scoreFlow, scoreLight, scoreMoon, scorePressure, scoreSeries, scoreWaterTemp, scoreWind,
+    scoreConditions, scoreFlow, scoreLight, scoreMoon, scorePressure, scoreSeason, scoreSeries, scoreWaterTemp, scoreWind,
 } from '../js/core/scoring.js';
+import { BITE_PHRASES } from '../js/config.js';
 
 const HOUR = 3600_000;
 const CHICAGO = { lat: 41.8781, lon: -87.6298 };
@@ -22,6 +23,7 @@ const ideal = {
     sky: 'clear',
     flow: { cfs: 1250, percentiles: NORMALS },
     date: local(20), // half an hour before sunset
+    targets: ['catfish'], // 68°F and warming in June: catfish pre-spawn, their best season
 };
 const points = (result, id) => result.factors.find((factor) => factor.id === id)?.points;
 
@@ -362,7 +364,7 @@ test('bands and phrases', () => {
 
     const day = new Date('2026-06-01T12:00:00Z');
     assert.equal(bitePhrase(72, day), bitePhrase(72, new Date('2026-06-01T20:00:00Z')));
-    assert.match(bitePhrase(72, day), /^The bite is /);
+    assert.ok(BITE_PHRASES.excellent.includes(bitePhrase(72, day)));
 });
 
 test('water temperature estimate lags the air temperature', () => {
@@ -421,4 +423,47 @@ test('catfish: the overall score at night favours them over bass', () => {
     const series = scoreSeries({ ...night, speciesGroup: 'catfish' }, { start, end: start + 18 * HOUR });
     const at = (hour) => series.find((sample) => sample.t === local(hour).getTime()).score;
     assert.ok(at(24 + 1) > at(13));
+});
+
+test('season: the pre-spawn and fall feeds score high, a spawn and the dead of winter low', () => {
+    const at = (iso, waterTempF, targets = ['bass']) => scoreSeason({ targets, date: new Date(iso), waterTempF });
+    const prespawn = at('2026-03-20T12:00:00', 56);
+    const spawn = at('2026-05-05T12:00:00', 66);
+    const winter = at('2026-01-20T12:00:00', 44);
+    const fall = at('2026-10-10T12:00:00', 66);
+    assert.equal(prespawn.phase.label, 'Pre-spawn');
+    assert.equal(spawn.phase.label, 'Spawn');
+    assert.equal(fall.phase.label, 'Fall feed');
+    assert.ok(prespawn.share > spawn.share && fall.share > spawn.share && spawn.share > winter.share);
+    // The same water temperature in spring and fall is not the same season.
+    assert.notEqual(at('2026-04-10T12:00:00', 57).phase.id, at('2026-11-10T12:00:00', 57).phase.id);
+});
+
+test('season: with several fish it leans toward the one in its best season, and says which', () => {
+    const date = new Date('2026-04-20T12:00:00');
+    const result = scoreSeason({ targets: ['walleye', 'bass'], date, waterTempF: 53 }); // walleye just after the spawn, bass pre-spawn
+    const walleye = scoreSeason({ targets: ['walleye'], date, waterTempF: 53 });
+    assert.ok(result.share > walleye.share);
+    assert.equal(result.phase.label, 'Pre-spawn');
+    assert.match(result.note, /^For bass, one of the best times of year/);
+    assert.equal(scoreSeason({ targets: ['unknown fish'], date, waterTempF: 48 }), null);
+});
+
+test('season: a guessed water temperature counts for less', () => {
+    const c = { targets: ['bass'], date: new Date('2026-03-20T12:00:00'), waterTempF: 56 };
+    assert.ok(scoreSeason({ ...c, estimated: true }).share < scoreSeason(c).share);
+});
+
+test('every phase of every fish has a fishing rating', async () => {
+    const { seasonalPhase } = await import('../js/core/season.js');
+    const fish = ['bass', 'smallmouth', 'panfish', 'catfish', 'walleye', 'pike', 'perch', 'sauger', 'trout', 'salmon',
+        'seatrout', 'redfish', 'flounder', 'halibut', 'snook', 'striper', 'bluefish', 'pompano', 'whiting', 'surfperch'];
+    for (const target of fish) {
+        for (let month = 0; month < 12; month += 1) {
+            for (const waterTempF of [36, 45, 52, 58, 64, 70, 76, 84]) {
+                const phase = seasonalPhase(target, { date: new Date(2026, month, 15), waterTempF });
+                assert.ok(phase.bite >= 0 && phase.bite <= 1, `${target} ${phase.id} has no rating`);
+            }
+        }
+    }
 });

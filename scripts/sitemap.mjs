@@ -1,5 +1,5 @@
-// The sitemap, worked out from index.html so the two cannot disagree: the home page, plus
-// every place the page links to (the "popular fishing spots" list).
+// The sitemap, worked out from the pages themselves so they cannot disagree: the home page, the
+// other pages (popular spots, questions), and every place those pages link to.
 //
 // - The site's address comes from the canonical link, so a change of domain is made there only.
 // - Only canonical addresses are listed, which is what a sitemap is for.
@@ -12,11 +12,16 @@ export function placeLinks(html) {
     return [...new Set([...html.matchAll(/<a\s[^>]*href="(\/fishing\/[^"#?]+)"/g)].map((match) => match[1]))];
 }
 
-/** sitemap.xml for the site whose index.html this is. */
-export function sitemapXml(html) {
+/**
+ * sitemap.xml for the site whose index.html this is.
+ * @param {string} html  the home page, whose canonical link gives the site address
+ * @param {Record<string, string>} [pages]  the other pages, by path ('/spots/'): their HTML
+ */
+export function sitemapXml(html, pages = {}) {
     const canonical = /<link rel="canonical" href="(https:\/\/[^"]+)">/.exec(html)?.[1];
     if (!canonical) throw new Error('index.html has no canonical link to take the site address from');
-    const urls = ['/', ...placeLinks(html)].map((path) => new URL(path, canonical).href);
+    const places = placeLinks([html, ...Object.values(pages)].join('\n'));
+    const urls = ['/', ...Object.keys(pages), ...places].map((path) => new URL(path, canonical).href);
     const escape = (text) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     return [
         '<?xml version="1.0" encoding="UTF-8"?>',

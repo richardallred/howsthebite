@@ -19,7 +19,7 @@ const dist = join(root, 'dist');
 const PUBLISH = [
     'index.html', '404.html', 'styles.css', 'sw.js', 'manifest.json',
     'favicon.ico', 'favicon.svg', '_headers', 'robots.txt', '_routes.json',
-    'icons', 'fonts', 'js', 'data', 'vendor', 'screenshots',
+    'faq', 'spots', 'drawings', 'og', 'icons', 'fonts', 'js', 'data', 'vendor', 'screenshots',
 ];
 
 // Published under a name that carries a hash of the content, and cached by browsers for good
@@ -52,9 +52,13 @@ for (const entry of PUBLISH) {
     await cp(join(root, entry), join(dist, entry), { recursive: true });
 }
 
-// The sitemap: the home page and every place the page links to. Written before the files are
-// hashed below, so a change to the list is a new version like any other.
-await writeFile(join(dist, 'sitemap.xml'), sitemapXml(await readFile(join(dist, 'index.html'), 'utf8')));
+// The sitemap: the pages and every place they link to. Written before the files are hashed
+// below, so a change to the list is a new version like any other.
+const page = (path) => readFile(join(dist, path), 'utf8');
+await writeFile(join(dist, 'sitemap.xml'), sitemapXml(await page('index.html'), {
+    '/spots/': await page('spots/index.html'),
+    '/faq/': await page('faq/index.html'),
+}));
 
 // Fingerprint: rename, and rewrite every reference in the pages, styles, scripts and sw.js.
 const published = new Map();

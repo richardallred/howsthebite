@@ -100,25 +100,60 @@ test.describe('place addresses', () => {
         await app.search('Madison', 'Madison, Wisconsin');
         await expect(page.locator('#recentLocations .chip')).toHaveAttribute('href', ASHEVILLE);
     });
+
+    test('the empty search box offers recent places, by mouse or keyboard', async ({ page, app }) => {
+        await app.open();
+        await app.search('Asheville', 'Asheville, North Carolina');
+        await app.search('Madison', 'Madison, Wisconsin');
+
+        const input = page.locator('#searchInput');
+        await input.focus();
+        const options = page.locator('#searchResults [role="option"]');
+        await expect(page.locator('#searchResults')).toContainText('Recent places');
+        await expect(options).toHaveText([/^Asheville, North Carolina/]); // not the place already showing
+        await input.press('ArrowDown');
+        await input.press('Enter');
+        await expect(heading(page)).toHaveText('Asheville, North Carolina');
+    });
+
+    test('once the heading scrolls away, the header names the place and its score', async ({ page, app }) => {
+        await app.open();
+        const place = page.locator('#headerPlace');
+        await expect(place).toBeHidden();
+        await page.locator('#forecast').scrollIntoViewIfNeeded();
+        await expect(place).toBeVisible();
+        await expect(place).toContainText('Chicago, Illinois');
+        await expect(page.locator('#headerScore')).toHaveText(await page.locator('#scoreValue').textContent());
+        await place.click();
+        await expect(place).toBeHidden(); // back at the top, with the heading in view
+    });
 });
 
 test.describe('popular places', () => {
     const LAKE_NORMAN = '/fishing/35.59,-80.93/lake-norman-north-carolina';
 
-    test('are ordinary links to place addresses, and open without loading a new page', async ({ page, app }) => {
+    test('have their own page, linked from the home page, with ordinary links to place addresses', async ({ page, app }) => {
         await app.open();
-        await page.locator('#places summary', { hasText: 'Lakes' }).click();
+        await expect(page.locator('#places')).toHaveCount(0); // no longer on the home page
+        await page.getByRole('link', { name: 'Popular fishing spots' }).click();
+        await expect(page).toHaveURL(/\/spots\/$/);
         const link = page.getByRole('link', { name: 'Lake Norman, North Carolina' });
         await expect(link).toHaveAttribute('href', LAKE_NORMAN); // what a search engine follows
 
-        await page.evaluate(() => { window.sameDocument = true; });
         await link.click();
-        await expect(heading(page)).toHaveText('Lake Norman, North Carolina');
         await app.loaded();
-        expect(await page.evaluate(() => window.sameDocument)).toBe(true);
-        expect(await page.evaluate(() => window.scrollY)).toBe(0); // back at the score, not left at the foot of the page
-        // The list knows it is a lake, as a search for it would.
+        await expect(heading(page)).toHaveText('Lake Norman, North Carolina');
+        // The app knows it is a lake, as a search for it would.
         await expect(page).toHaveURL(new RegExp(`${LAKE_NORMAN.replace('.', '\\.')}\\?water=lake`));
+    });
+
+    test('the questions have their own page, linked from the home page', async ({ page, app }) => {
+        await app.open();
+        await expect(page.locator('#questions')).toHaveCount(0);
+        await page.getByRole('link', { name: 'Fishing questions, answered' }).click();
+        await expect(page).toHaveURL(/\/faq\/$/);
+        await expect(page.getByRole('heading', { level: 1 })).toHaveText('Fishing questions, answered');
+        await expect(page.locator('#questions details')).not.toHaveCount(0);
     });
 
     test('someone who arrives at a listed place from a search engine gets its kind of water too', async ({ page, app }) => {

@@ -13,12 +13,14 @@
 // - Places outside the Weather Service's coverage are served, but marked noindex.
 // - The canonical origin comes from the canonical link in index.html, so a change of
 //   domain is made there only.
+// - A place with a link-preview card of its own (og/<slug>.jpg, made for the popular spots by
+//   art/share/render.mjs) gets it as its Open Graph image; any other keeps the site's card.
 
 import { parsePlacePath, placeMeta, placeName, inCoverage } from '../../js/core/place-url.js';
 
 /**
  * What to do with a request for a place address.
- * @returns {{ redirect: string } | { notFound: true } | { path: string, name: string, indexable: boolean }}
+ * @returns {{ redirect: string } | { notFound: true } | { path: string, name: string, indexable: boolean, card: string|null }}
  */
 export function placePage(url) {
     if (url.pathname === '/fishing' || url.pathname === '/fishing/') return { redirect: '/' };
@@ -29,6 +31,8 @@ export function placePage(url) {
         path: parsed.canonical,
         name: placeName(parsed, url.searchParams.get('name')),
         indexable: inCoverage(parsed.lat, parsed.lon),
+        // A card shows the name from the address, so a page shared under another name keeps the site's card.
+        card: url.searchParams.has('name') || !parsed.slug ? null : `/og/${parsed.slug}.jpg`,
     };
 }
 
@@ -44,7 +48,12 @@ const absolute = (path) => ({
 /** The elements of index.html that are rewritten; tests/place-url.test.js checks they exist. */
 export function rewriter(page) {
     const meta = placeMeta(page.name);
-    return new HTMLRewriter()
+    const html = new HTMLRewriter();
+    if (page.card) {
+        html.on('meta[property="og:image"]', absolute(page.card))
+            .on('meta[property="og:image:alt"]', setAttribute('content', `How's the Bite? fishing forecast for ${page.name}`));
+    }
+    return html
         .on('title', setText(meta.title))
         .on('meta[name="description"]', setAttribute('content', meta.description))
         .on('link[rel="canonical"]', absolute(page.path))
@@ -61,8 +70,12 @@ export async function onRequest({ request, env, next }) {
     if (page.redirect) return Response.redirect(new URL(page.redirect, url).href, 301);
     if (page.notFound) return next(); // no such file: Pages answers with 404.html and a 404 status
 
-    const shell = await env.ASSETS.fetch(new URL('/', url));
+    const [shell, card] = await Promise.all([
+        env.ASSETS.fetch(new URL('/', url)),
+        page.card ? env.ASSETS.fetch(new URL(page.card, url), { method: 'HEAD' }) : null,
+    ]);
     if (!shell.ok) return shell;
+    if (!card?.ok) page.card = null; // most places have no card of their own
     const headers = new Headers(shell.headers);
     headers.delete('etag'); // the body differs from the file's
     headers.delete('content-length');

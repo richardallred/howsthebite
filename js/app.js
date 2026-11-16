@@ -19,6 +19,7 @@ import { OutsideCoverageError, fetchAlerts, fetchWeather, reverseGeocode, search
 import { APP } from './config.js';
 import { summariseAlerts } from './core/alerts.js';
 import { colourAdvice, lureConditions, lurePatterns, recommendLures } from './core/lures.js';
+import { LISTED_WATER } from './core/listed-places.js';
 import { majorPeriods, moonInfo } from './core/moon.js';
 import { coordinateName, placeHref, placeMeta, placePath, readPlaceUrl, slugify } from './core/place-url.js';
 import { SPECIES_GROUPS, bestWindows, estimateWaterTemp, scoreConditions, scoreSeries } from './core/scoring.js';
@@ -31,7 +32,7 @@ import { debounce, distanceMiles, isNum, roundCoord, timeAgo } from './core/util
 import { compassPoint } from './core/sky.js';
 import { locationKey, storage } from './storage.js';
 import { createLineChart } from './ui/charts.js';
-import { $, el, icon, setText, svg } from './ui/dom.js';
+import { $, el, glyph, icon, setText, svg } from './ui/dom.js';
 import { createStationMap } from './ui/map.js';
 import { createOutlookChart } from './ui/outlook-chart.js';
 import { initTheme } from './ui/theme.js';
@@ -56,6 +57,7 @@ const state = {
     waterTrend: null, // { key, source, daily, normal, at, failed }: the last few weeks of water temperature behind the lure picks
     loading: false,
     loadFailed: false,
+    scoreDay: 0, // the score card's day: 0 is now, then each day ahead in the outlook
 };
 
 let loadController = null;
@@ -241,7 +243,15 @@ function deriveOutlook(inputs, clock) {
         while (first > 0 && list[first - 1].score >= best - 4) first--;
         while (last + 1 < list.length && list[last + 1].score >= best - 4) last++;
         const lowest = Math.min(...list.map((sample) => sample.score));
+        // The day's best moment scored in full, for the score card's day tabs: the same inputs
+        // the series used at that time (forecast sky and wind; no pressure trend, gusts or alerts).
+        const ahead = forecastAt(peak.t, clock);
+        const result = index === 0 ? null : scoreConditions({
+            ...inputs, pressureChange3h: null, gustMph: null, hazard: null, ...(ahead ?? {}), date: new Date(peak.t),
+        });
         return {
+            result,
+            ahead,
             label: index === 0 ? 'Today' : dayName.format(list[0].t),
             start: list[0].t,
             end: Math.min(end, list[list.length - 1].t + 20 * 60 * 1000),
@@ -301,6 +311,7 @@ function derive() {
         alerts.items.push({ event: 'High rip current risk at the beach today', level: 'caution', active: true, onset: null, ends: null });
     }
     const species = speciesChoice().chosen;
+    const waterTrend = waterMeasured ? currentWaterTrend(clock) : null;
     const inputs = {
         mode,
         lat: state.location.lat,
@@ -320,6 +331,8 @@ function derive() {
         tides: salt ? state.coast?.tides ?? null : null,
         waveFt: surf?.heightFt ?? null,
         hazard: alerts.hazard,
+        targets: species.targets,
+        waterTrend,
     };
     const result = scoreConditions({ ...inputs, date: new Date(clock) });
     const windows = bestWindows(inputs, {
@@ -340,7 +353,6 @@ function derive() {
         ),
     };
 
-    const waterTrend = waterMeasured ? currentWaterTrend(clock) : null;
     const lureInput = lureConditions({
         mode,
         waterTempF,
@@ -404,15 +416,23 @@ function nextMajorPeriod(clock) {
     return period.start <= clock ? `${name} now, until ${clockTime(period.end)}` : `${name} ${clockTime(period.t)}`;
 }
 
-function factorDisplay(factor, derived) {
+const SKY_LABELS = { clear: 'Clear', partly: 'Partly cloudy', overcast: 'Cloudy', 'light-precip': 'Light rain', precip: 'Rain', storm: 'Thunderstorms' };
+const ASSUMED = 'Assumed to hold until then';
+
+/**
+ * A factor's reading, for the moment the score card is showing: now (the observations), or a
+ * day ahead (the forecast, and what is assumed to hold: water temperature, flow, pressure).
+ */
+function factorDisplay(factor, derived, view = { now: true, time: derived.clock, ahead: null }) {
     const { current } = state.weather;
+    const ahead = view.ahead ?? {};
     switch (factor.id) {
         case 'water':
             return {
                 label: 'Water temperature',
                 iconName: 'droplet',
                 value: `${derived.station || derived.seaTemp ? '' : '≈ '}${derived.waterTempF.toFixed(1)}°F`,
-                extra: derived.salt ? derived.seaTemp?.source ?? null : factor.trend,
+                extra: !view.now ? ASSUMED : derived.salt ? derived.seaTemp?.source ?? null : factor.trend,
             };
         case 'tide': {
             const { state: tide } = factor;
@@ -426,21 +446,30 @@ function factorDisplay(factor, derived) {
         }
         case 'waves': {
             const rip = state.coast?.beach?.rip;
+            const heightFt = view.now ? derived.surf.heightFt : ahead.waveFt ?? derived.surf.heightFt;
             return {
                 label: 'Surf',
                 iconName: 'waves',
-                value: `${derived.surf.heightFt < 1 ? 'Under 1' : Math.round(derived.surf.heightFt)} ft`,
-                extra: rip ? `Rip current risk: ${rip}` : derived.surf.source,
+                value: `${heightFt < 1 ? 'Under 1' : Math.round(heightFt)} ft`,
+                extra: !view.now ? (isNum(ahead.waveFt) ? 'Wave forecast' : ASSUMED) : rip ? `Rip current risk: ${rip}` : derived.surf.source,
             };
         }
         case 'light':
             return {
                 label: 'Light',
                 iconName: 'sun',
-                value: LIGHT_LABELS[factor.phase] ?? current.sky.label,
-                extra: nextSunEvent(derived.clock),
+                value: LIGHT_LABELS[factor.phase] ?? (view.now ? current.sky.label : SKY_LABELS[ahead.sky] ?? 'Daylight'),
+                extra: view.now ? nextSunEvent(derived.clock) : `Forecast for ${clockTime(view.time, { withDay: true })}`,
             };
         case 'wind':
+            if (!view.now) {
+                return {
+                    label: 'Wind',
+                    iconName: 'wind',
+                    value: `${Math.round(isNum(ahead.windMph) ? ahead.windMph : current.windMph)} mph`,
+                    extra: isNum(ahead.windMph) ? 'Forecast' : ASSUMED,
+                };
+            }
             return {
                 label: 'Wind',
                 iconName: 'wind',
@@ -452,18 +481,30 @@ function factorDisplay(factor, derived) {
                 label: 'River flow',
                 iconName: 'waves',
                 value: formatFlow(derived.level.station.flow.cfs),
-                extra: factor.trend,
+                extra: view.now ? factor.trend : ASSUMED,
             };
+        case 'season': {
+            const { fish, phase } = factor;
+            return {
+                label: 'Season',
+                iconName: 'calendar',
+                value: phase.label,
+                // With several fish, where each one is; with one, which way the water is heading.
+                extra: fish.length > 1
+                    ? fish.map((entry) => `${capitalise(entry.target)} ${entry.label.toLowerCase()}`).join(' · ')
+                    : phase.half === 'warming' ? 'Water warming toward summer' : 'Water cooling toward winter',
+            };
+        }
         case 'pressure':
             return {
                 label: 'Barometric pressure',
                 iconName: 'gauge',
-                value: isNum(current.pressureInHg) ? `${current.pressureInHg.toFixed(2)} inHg` : '—',
-                extra: factor.trend,
+                value: view.now && isNum(current.pressureInHg) ? `${current.pressureInHg.toFixed(2)} inHg` : '—',
+                extra: view.now ? factor.trend : 'Trend not known that far ahead',
             };
         default: {
-            const moon = moonInfo(new Date(derived.clock));
-            const extra = [nextMajorPeriod(derived.clock), factor.trend].filter(Boolean).join(' · ');
+            const moon = moonInfo(new Date(view.time));
+            const extra = [nextMajorPeriod(view.time), factor.trend].filter(Boolean).join(' · ');
             return { label: 'Moon', iconName: 'moon', value: moon.name, valueIcon: moonGlyph(moon.fraction), extra };
         }
     }
@@ -507,13 +548,83 @@ function describeWindows(windows, clock) {
     });
 }
 
+/** The moment the score card shows: now, or the best moment of a day ahead. */
+function scoreView(derived) {
+    const days = derived.outlook.days;
+    const index = Math.min(state.scoreDay, days.length - 1);
+    if (index <= 0) return { now: true, index: 0, result: derived.result, time: derived.clock, ahead: null, day: days[0] ?? null };
+    const day = days[index];
+    return { now: false, index, result: day.result, time: day.peak.t, ahead: day.ahead, day };
+}
+
+let lastDerived = null; // what the card was last drawn from, so a day tab can redraw it without re-deriving
+
+/** "Now", then each day ahead in the outlook with its best score: tabs that switch the whole card. */
+function renderScoreDays(derived) {
+    const container = $('scoreDays');
+    if (!derived) {
+        container.querySelectorAll('.score-day').forEach((tab, index) => tab.toggleAttribute('disabled', index > 0));
+        return;
+    }
+    const view = scoreView(derived);
+    container.replaceChildren(...derived.outlook.days.map((day, index) => {
+        const result = index === 0 ? derived.result : day.result;
+        const selected = index === view.index;
+        return el('button', {
+            type: 'button',
+            class: 'score-day',
+            role: 'tab',
+            id: `score-day-${index}`,
+            'aria-selected': String(selected),
+            'aria-controls': 'scoreMain',
+            tabindex: selected ? '0' : '-1',
+            onClick: () => selectScoreDay(index),
+        },
+        el('span', { class: 'score-day-name' }, index === 0 ? 'Now' : day.label),
+        el('span', { class: 'score-day-score', dataset: { band: result.band.key } },
+            el('span', { class: 'visually-hidden' }, index === 0 ? ', score ' : ', best '), String(result.score)));
+    }));
+}
+
+function selectScoreDay(index) {
+    state.scoreDay = index;
+    pinnedDial = null;
+    if (lastDerived) renderScoreCard(lastDerived);
+    $(`score-day-${index}`)?.focus();
+}
+
+function initScoreDays() {
+    // Arrow keys move between the tabs, as in any tab list.
+    $('scoreDays').addEventListener('keydown', (event) => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key) || !lastDerived) return;
+        const count = lastDerived.outlook.days.length;
+        const current = scoreView(lastDerived).index;
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? count - 1
+            : (current + (event.key === 'ArrowRight' ? 1 : -1) + count) % count;
+        event.preventDefault();
+        selectScoreDay(next);
+    });
+}
+
+/** Everything in the score card, for the day chosen. */
+function renderScoreCard(derived) {
+    renderScoreDays(derived);
+    renderScore(derived);
+    renderFactors(derived);
+    renderDials(derived);
+}
+
 function renderScore(derived) {
     const card = $('scoreCard');
     if (!derived) {
         card.dataset.band = 'loading';
+        card.dataset.state = state.loadFailed ? 'failed' : 'loading';
+        $('headerScore').dataset.band = 'loading';
+        setText('headerScore', '');
         setText('scoreValue', '–');
         setText('scoreBand', ' ');
         setText('scorePhrase', state.loadFailed ? 'Conditions unavailable' : 'Checking conditions…');
+        setText('scoreHeld', '\u00a0');
         setText('scoreCap', '');
         // While loading, hold the room the best times and the weather will take, so the card
         // does not grow when they arrive. The same placeholders are in index.html.
@@ -524,16 +635,33 @@ function renderScore(derived) {
         setText('scoreNow', waiting ? '\u00a0' : '');
         return;
     }
-    $('scorePin').style.left = `${Math.max(0, Math.min(100, derived.result.score))}%`;
-    const { result } = derived;
+    const view = scoreView(derived);
+    const { result } = view;
     const { current } = state.weather;
+    $('scorePin').style.left = `${Math.max(0, Math.min(100, result.score))}%`;
     card.dataset.band = result.band.key;
+    card.dataset.state = 'ready';
+    card.dataset.day = view.now ? 'now' : 'ahead';
+    // The header always gives the score now, whichever day the card is showing.
+    $('headerScore').dataset.band = derived.result.band.key;
+    setText('headerScore', String(derived.result.score));
     setText('scoreValue', String(result.score));
     setText('scoreBand', result.band.label);
     setText('scorePhrase', result.phrase);
+    setText('scoreHeld', heldBackText(result));
+    setText('scoreCap', result.cap ? result.cap.reason : '');
+    if (!view.now) {
+        // A day ahead: its best stretch, and the forecast for its best moment.
+        const { day } = view;
+        const sky = SKY_LABELS[view.ahead?.sky];
+        const wind = isNum(view.ahead?.windMph) ? `wind ${Math.round(view.ahead.windMph)} mph` : null;
+        $('scoreBest').replaceChildren(el('span', { class: 'eyebrow score-best-label' }, `Best on ${day.label}: `),
+            el('span', { class: 'window nowrap' }, day.flat ? 'much the same all day' : `${clockTime(day.window.start)}–${clockTime(day.window.end)}`));
+        $('scoreNow').replaceChildren(icon('calendar'), ['Forecast', sky, wind].filter(Boolean).join(' · '));
+        return;
+    }
     const feelsLike = isNum(current.feelsLikeF) ? ` · feels like ${Math.round(current.feelsLikeF)}°F` : '';
     $('scoreNow').replaceChildren(icon(skyIcon(current.sky)), `${current.sky.label} · ${Math.round(current.tempF)}°F${feelsLike}`);
-    setText('scoreCap', result.cap ? result.cap.reason : '');
     // Each window is a chip that stays on one line; the first (soonest) is highlighted.
     const best = describeWindows(derived.windows, derived.clock);
     $('scoreBest').replaceChildren(...(best.length ? [el('span', { class: 'eyebrow score-best-label' }, 'Best times: ')] : []),
@@ -618,19 +746,120 @@ function renderAlerts(derived) {
     }));
 }
 
+// ---------------------------------------------------------------------------
+// The dials round the stamp
+// ---------------------------------------------------------------------------
+
+// Where the dials sit: an arc over the stamp, in the frame's own pixels (styles.css,
+// .score-dial-frame: 288 × 240, stamp centred at 144, 148 with a radius of 88).
+const DIAL_ARC = { cx: 144, cy: 148, radius: 125, from: -96, to: 96 };
+const DIAL_R = 18; // ring radius inside a 42-px dial
+const DIAL_NAMES = { water: 'water temperature', light: 'light', season: 'season', wind: 'wind', flow: 'river flow', moon: 'moon', pressure: 'pressure', tide: 'tide', waves: 'surf' };
+let pinnedDial = null; // the factor whose reading stays up after a tap
+
+/** "Moon · First Quarter · 2 of 7, poor" */
+function dialDetail(factor, derived) {
+    const display = factorDisplay(factor, derived, scoreView(derived));
+    return `${display.label} · ${display.value} · ${factor.points} of ${factor.max}, ${RATING_LABELS[factor.rating].toLowerCase()}`;
+}
+
+function showDial(factor, derived) {
+    const detail = $('dialDetail');
+    $('scoreCard').classList.toggle('is-showing-dial', Boolean(factor));
+    if (!factor) return;
+    detail.textContent = dialDetail(factor, derived);
+    detail.dataset.rating = factor.rating;
+}
+
+/** One dial per factor, the ones worth most first, its ring filled as far as the factor scores. */
+function renderDials(derived) {
+    const container = $('scoreDials');
+    if (!derived) {
+        container.replaceChildren();
+        pinnedDial = null;
+        showDial(null);
+        return;
+    }
+    const view = scoreView(derived);
+    const factors = [...view.result.factors].sort((a, b) => b.max - a.max);
+    const heaviest = factors[0].max;
+    const step = factors.length > 1 ? (DIAL_ARC.to - DIAL_ARC.from) / (factors.length - 1) : 0;
+    const circumference = 2 * Math.PI * DIAL_R;
+    const restore = () => showDial(factors.find((factor) => factor.id === pinnedDial) ?? null, derived);
+    container.replaceChildren(...factors.map((factor, index) => {
+        const angle = ((factors.length > 1 ? DIAL_ARC.from + step * index : 0) * Math.PI) / 180;
+        const display = factorDisplay(factor, derived, view);
+        const share = factor.points / factor.max;
+        const width = 2.5 + 2.5 * (factor.max / heaviest); // the factors that count most have the heaviest rings
+        const dial = el('button', {
+            type: 'button',
+            class: 'dial',
+            dataset: { rating: factor.rating, factor: factor.id },
+            'aria-pressed': String(pinnedDial === factor.id),
+            'aria-label': `${display.label}: ${display.value}, ${factor.points} of ${factor.max}, ${RATING_LABELS[factor.rating].toLowerCase()}`,
+            onMouseenter: () => showDial(factor, derived),
+            onFocus: () => showDial(factor, derived),
+            onMouseleave: restore,
+            onBlur: restore,
+            onClick: () => {
+                pinnedDial = pinnedDial === factor.id ? null : factor.id;
+                container.querySelectorAll('.dial').forEach((other) => other.setAttribute('aria-pressed', String(other.dataset.factor === pinnedDial)));
+                showDial(pinnedDial ? factor : null, derived);
+            },
+        },
+        svg('svg', { class: 'dial-ring', viewBox: '0 0 42 42', 'aria-hidden': 'true', focusable: 'false' },
+            svg('circle', { class: 'dial-track', cx: 21, cy: 21, r: DIAL_R, 'stroke-width': width }),
+            share > 0 ? svg('circle', {
+                class: 'dial-fill', cx: 21, cy: 21, r: DIAL_R, 'stroke-width': width,
+                'stroke-dasharray': `${(circumference * share).toFixed(1)} ${circumference.toFixed(1)}`,
+            }) : null),
+        glyph(factor.id));
+        dial.style.left = `${(DIAL_ARC.cx + DIAL_ARC.radius * Math.sin(angle)).toFixed(1)}px`;
+        dial.style.top = `${(DIAL_ARC.cy - DIAL_ARC.radius * Math.cos(angle)).toFixed(1)}px`;
+        return dial;
+    }));
+    restore();
+}
+
+/**
+ * "Held back by the moon and light": the factors costing the most points, when they are
+ * doing poorly enough to matter. A ceiling on the score already says this, so it gives way.
+ */
+function heldBackText(result) {
+    if (result.cap) return '\u00a0';
+    const costly = result.factors
+        .filter((factor) => factor.points / factor.max < 0.6 && factor.max - factor.points >= 3)
+        .sort((a, b) => (b.max - b.points) - (a.max - a.points))
+        .slice(0, 2)
+        .map((factor) => DIAL_NAMES[factor.id] ?? factor.id);
+    if (!costly.length) return 'Nothing is holding it back';
+    return `Held back by ${costly.length === 2 ? `the ${costly[0]} and ${costly[1]}` : `the ${costly[0]}`}`;
+}
+
+function initDetailsToggle() {
+    const toggle = $('detailsToggle');
+    toggle.addEventListener('click', () => {
+        const open = toggle.getAttribute('aria-expanded') !== 'true';
+        toggle.setAttribute('aria-expanded', String(open));
+        $('scoreCard').classList.toggle('is-open', open);
+        toggle.textContent = open ? 'Hide details' : 'Details';
+    });
+}
+
 function renderFactors(derived) {
     const container = $('factors');
     if (!derived) {
         container.replaceChildren(...Array.from({ length: 6 }, () => el('div', { class: 'factor is-placeholder', 'aria-hidden': 'true' })));
         return;
     }
-    container.replaceChildren(...derived.result.factors.map((factor) => {
-        const display = factorDisplay(factor, derived);
+    const view = scoreView(derived);
+    container.replaceChildren(...view.result.factors.map((factor) => {
+        const display = factorDisplay(factor, derived, view);
         const rating = RATING_LABELS[factor.rating];
         return el('article', { class: 'factor', dataset: { rating: factor.rating } },
             // The reading and its one-line detail are shown; what it means for the fishing is a tip.
             el('div', { class: 'factor-head' },
-                el('h3', { class: 'factor-label' }, icon(display.iconName), display.label),
+                el('h3', { class: 'factor-label' }, glyph(factor.id), display.label),
                 tip('What this means for the fishing', el('span', { class: 'factor-note' }, factor.note))),
             el('p', { class: 'factor-value' }, display.valueIcon ?? null, display.value),
             el('p', { class: 'factor-extra' }, display.extra ?? ''),
@@ -716,6 +945,15 @@ function trendPanel(lures, derived) {
         el('p', { class: 'lure-trend-source' }, text));
 }
 
+// Woodcut drawings of the fish (drawings/fish/, traced from art/): the name lures.js gives a fish,
+// and its drawing (panfish are drawn as a crappie, muskie as a pike, fluke as a flounder,
+// sauger as its cousin the walleye). styles.css maps each to its file; a fish
+// without one just has no picture.
+const FISH_DRAWINGS = new Map([['bass', 'bass'], ['catfish', 'catfish'], ['walleye', 'walleye'], ['trout', 'trout'], ['panfish', 'crappie'], ['pike', 'pike'], ['muskie', 'pike'],
+    ['redfish', 'redfish'], ['speckled trout', 'seatrout'], ['striped bass', 'striper'],
+    ['flounder', 'flounder'], ['fluke', 'flounder'], ['smallmouth', 'smallmouth'], ['perch', 'perch'], ['sauger', 'walleye'],
+    ['salmon', 'salmon'], ['bluefish', 'bluefish'], ['snook', 'snook'], ['pompano', 'pompano'], ['halibut', 'halibut']]);
+
 /** Where the leading fish is in its year, what has changed lately, and the water temperature behind it. */
 function renderLurePattern(derived) {
     const box = $('lurePattern');
@@ -737,8 +975,10 @@ function renderLurePattern(derived) {
     }
     const others = patterns.filter((entry) => entry !== lead && entry.season);
     box.hidden = false;
+    const drawing = FISH_DRAWINGS.get(lead.target);
     box.replaceChildren(
-        el('div', { class: 'lure-season' },
+        el('div', { class: `lure-season${drawing ? ' has-drawing' : ''}` },
+            drawing && el('span', { class: 'fish-drawing', dataset: { fish: drawing }, 'aria-hidden': 'true' }),
             el('p', { class: 'lure-kicker' }, `${capitalise(lead.target)} · `, el('strong', null, lead.season.label)),
             el('p', { class: 'lure-pattern-text' }, `${lead.season.pattern}.`),
             lead.situations.map((text) => el('p', { class: 'lure-situation' }, `${text}.`)),
@@ -747,6 +987,29 @@ function renderLurePattern(derived) {
         trendPanel(derived.lures, derived),
     );
 }
+
+// Woodcut drawings of the lures (drawings/lures/, traced from art/lures/), one per family,
+// matched on the suggestion's name. Order matters: the first family whose pattern fits wins
+// ("bladed swim jig" is a swimbait, not a jig; "nightcrawlers on the bottom" a bottom rig).
+const LURE_DRAWINGS = [
+    ['popping-cork', /popping cork/i],
+    ['bobber-rig', /bobber|float/i],
+    ['bottom-rig', /on the bottom|bottom rig|fish-finder|slip-sinker|carolina rig|pompano rig|two-hook|quick-strike|crawler harness|cut |crab/i],
+    ['spinnerbait', /spinnerbait/i],
+    ['spinner', /spinner/i],
+    ['spoon', /spoon|diamond jig|blade bait|metal|epoxy/i],
+    ['popper', /popper|prop bait|walk-the-dog|topwater|buzzbait|frog/i],
+    ['crankbait', /crankbait|lipless/i],
+    ['swimbait', /swimbait|paddle|swim jig|bladed jig|glide bait/i],
+    ['jerkbait', /jerkbait|twitchbait|plug/i],
+    ['worm', /worm|lizard|creature|eel|stick bait|senko/i],
+    ['jig', /bucktail/i],
+    ['grub', /grub|tube|twister|jighead|soft plastic|shad-shaped/i],
+    ['jig', /jig/i],
+    ['popping-cork', /shrimp|pinfish/i],
+    ['bottom-rig', /liver|stink|bait/i],
+];
+const lureDrawing = (name) => LURE_DRAWINGS.find(([, pattern]) => pattern.test(name))?.[0] ?? null;
 
 /** A lure-shaped blank shown while the conditions load. The same four are in index.html. */
 const lurePlaceholder = () => el('li', { class: 'lure is-placeholder', 'aria-hidden': 'true' },
@@ -771,7 +1034,8 @@ function renderLures(derived) {
     setText('lureSummary', picks.length
         ? `Picked for ${fish} from where they are in their year (the date, the water temperature and which way it has been heading), what has changed lately (a cold snap, a front, rising or falling water), and the ${derived.salt ? 'light, tide and wind' : 'light, wind and clarity'} right now.`
         : `There are no suggestions yet for ${fish}.`);
-    list.replaceChildren(...picks.map((pick) => el('li', { class: 'lure' },
+    list.replaceChildren(...picks.map((pick) => el('li', { class: `lure${lureDrawing(pick.name) ? ' has-drawing' : ''}` },
+        lureDrawing(pick.name) && el('span', { class: 'lure-drawing', dataset: { lure: lureDrawing(pick.name) }, 'aria-hidden': 'true' }),
         el('p', { class: 'lure-target' }, `For ${pick.target}`, pick.season && el('span', { class: 'lure-season-tag' }, ` · ${pick.season}`)),
         el('div', { class: 'lure-name' },
             el('h3', null, pick.name),
@@ -784,26 +1048,16 @@ function renderLures(derived) {
             target: '_blank',
             // "sponsored" is how search engines ask for paid links to be marked.
             rel: tag ? 'sponsored nofollow noopener' : 'nofollow noopener',
+            // Four links all reading "Amazon" need a fuller name for screen readers.
+            'aria-label': `Find ${pick.name.toLowerCase()} on Amazon${tag ? ' (paid link)' : ''}`,
             // Amazon and the FTC both want the disclosure next to the link itself, not only on the page.
-        }, tag ? 'Find it on Amazon (paid link)' : 'Find it on Amazon'))));
+        }, 'Amazon', tag && el('span', { class: 'lure-paid' }, ' · paid link')))));
     setText('lureColour', colour);
 }
 
-/** A ring filled to a 0–100 score, with the number in the middle. Coloured by the band of the enclosing element. */
-function scoreRing(score) {
-    const filled = Math.max(0, Math.min(100, score));
-    return el('span', { class: 'score-ring' },
-        svg('svg', { viewBox: '0 0 48 48', 'aria-hidden': 'true', focusable: 'false' },
-            svg('circle', { class: 'score-ring-track', cx: 24, cy: 24, r: 20, pathLength: 100 }),
-            svg('circle', { class: 'score-ring-fill', cx: 24, cy: 24, r: 20, pathLength: 100, 'stroke-dasharray': `${filled} 100` })),
-        el('span', { class: 'score-ring-number' }, String(score)));
-}
-
 function renderOutlook(derived) {
-    const list = $('outlookDays');
     if (!derived) {
         outlookChart.update([], { emptyText: state.loadFailed ? 'The outlook needs the current conditions.' : 'The outlook will appear with the conditions.' });
-        list.replaceChildren();
         setText('outlookRange', '');
         setText('outlookNote', '');
         return;
@@ -811,17 +1065,6 @@ function renderOutlook(derived) {
     const { samples, days, nights, moon } = derived.outlook;
     outlookChart.update(samples, { timezone: state.weather.timezone, days, nights, moon });
     setText('outlookRange', days.length > 1 ? `now to ${days[days.length - 1].label} night` : 'the rest of today');
-
-    list.replaceChildren(...days.map((day) => el('li', { class: 'outlook-day', dataset: { band: day.peak.band.key } },
-        el('span', { class: 'outlook-day-name' }, day.label),
-        el('span', { class: 'outlook-day-best' },
-            // The ring shows the day's best score; screen readers also hear whether the day is flat ("About").
-            el('span', { class: 'visually-hidden' }, `${day.flat ? 'About' : 'Best'} `),
-            scoreRing(day.peak.score), ' ',
-            el('span', { class: 'outlook-day-band' }, day.peak.band.label)),
-        el('span', { class: 'outlook-day-when' }, day.flat
-            ? day.peak.cap ?? 'Much the same all day'
-            : `${day.window.start <= derived.clock ? 'now' : clockTime(day.window.start)}–${clockTime(day.window.end)}`))));
 
     const calculated = derived.salt ? 'light and tide are calculated' : 'light and moon are calculated';
     const held = derived.salt
@@ -994,8 +1237,15 @@ function renderCharts(derived) {
     });
 }
 
+/** "35.58° N · 80.92° W", printed over the place like the corner of a survey sheet. */
+function coordinates({ lat, lon }) {
+    return `${Math.abs(lat).toFixed(2)}° ${lat < 0 ? 'S' : 'N'} · ${Math.abs(lon).toFixed(2)}° ${lon < 0 ? 'W' : 'E'}`;
+}
+
 function renderLocation() {
     setText('locationName', state.location?.name ?? 'Choose a location');
+    setText('headerPlaceName', state.location?.name ?? '');
+    setText('locationCoords', state.location ? coordinates(state.location) : '\u00a0');
     // The page's own title stays while a first visit shows the default city, so search engines
     // (which have no saved place) index the site for what it is, not for Chicago. A place's
     // title matches the one its page is served with (functions/fishing/[[path]].js).
@@ -1051,10 +1301,10 @@ function render() {
     const derived = derive();
     renderLocation();
     renderAlerts(derived);
-    renderScore(derived);
+    lastDerived = derived;
+    renderScoreCard(derived);
     renderModeGroup();
     renderSpeciesGroup();
-    renderFactors(derived);
     renderLures(derived);
     renderOutlook(derived);
     renderForecast();
@@ -1165,25 +1415,14 @@ function knownPlace(linked) {
 }
 
 /**
- * The popular places listed in the page (index.html, #places) say whether each is a lake or
- * a river, which an address alone cannot. Someone arriving at one of them from a search
- * engine gets the same gauges and score as someone who picked it from the list.
+ * The popular places (spots/index.html) are each known to be a lake or a river, which an
+ * address alone cannot say. Someone arriving at one of them from that page or a search
+ * engine gets the same gauges and score as someone who searched for it.
  */
 function withListedKind(place) {
     if (place.kind) return place;
-    const water = document.querySelector(`#places a[href="${placePath(place)}"]`)?.dataset.water;
-    return water === 'lake' || water === 'river' ? { ...place, kind: water } : place;
-}
-
-/** Open a place from the list without reloading the page. Modified clicks (new tab) are left to the browser. */
-function onPlaceLinkClick(event) {
-    const link = event.target.closest('a[href]');
-    if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    const { place } = readPlaceUrl(new URL(link.href));
-    if (!place) return;
-    event.preventDefault();
-    setLocation(withListedKind(place));
-    window.scrollTo({ top: 0, behavior: 'instant' }); // the page is about somewhere else now
+    const water = LISTED_WATER[placePath(place)];
+    return water ? { ...place, kind: water } : place;
 }
 
 /** Back and Forward: show the place that history entry was showing. */
@@ -1619,6 +1858,7 @@ function setLocation(place, { address = true } = {}) {
     state.stations = [];
     state.stationsError = null;
     state.selectedStationId = null;
+    state.scoreDay = 0;
     state.waterHistory = [];
     state.levelHistory = [];
     state.flowNormals = null;
@@ -1725,6 +1965,33 @@ async function useMyLocation() {
 }
 
 // ---------------------------------------------------------------------------
+// The place in the header
+// ---------------------------------------------------------------------------
+
+/**
+ * Once the place's heading scrolls up under the header, the header shows the place and its
+ * score instead of the site's name, so it is always clear what the page is about. Clicking
+ * it goes back to the top.
+ */
+function initHeaderPlace() {
+    const header = document.querySelector('.app-header');
+    const place = $('headerPlace');
+    const show = (on) => {
+        header.classList.toggle('is-scrolled', on);
+        place.tabIndex = on ? 0 : -1;
+        place.toggleAttribute('aria-hidden', !on);
+    };
+    place.addEventListener('click', (event) => {
+        event.preventDefault();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    if (!('IntersectionObserver' in window)) return;
+    new IntersectionObserver(([entry]) => {
+        show(!entry.isIntersecting && entry.boundingClientRect.top < header.offsetHeight);
+    }, { rootMargin: `-${header.offsetHeight}px 0px 0px 0px` }).observe($('locationName'));
+}
+
+// ---------------------------------------------------------------------------
 // Search (combobox with a results listbox)
 // ---------------------------------------------------------------------------
 
@@ -1770,6 +2037,31 @@ function initSearch() {
         setLocation(place);
     };
 
+    /** With nothing typed, the box offers the places looked at lately. */
+    const showRecents = () => {
+        const current = state.location ? locationKey(state.location) : null;
+        const recents = storage.getRecents().filter((item) => locationKey(item) !== current);
+        results = recents;
+        activeIndex = -1;
+        if (!recents.length) {
+            close();
+            return;
+        }
+        open([
+            el('li', { class: 'search-heading', role: 'presentation' }, 'Recent places'),
+            ...recents.map((place, index) => el('li', {
+                id: `search-option-${index}`,
+                class: 'search-option',
+                role: 'option',
+                'aria-selected': 'false',
+                onMousedown: (event) => {
+                    event.preventDefault();
+                    choose(place);
+                },
+            }, el('span', null, place.name), place.kind ? el('span', { class: 'muted' }, place.kind === 'lake' ? 'Lake' : place.kind === 'river' ? 'River' : '') : null)),
+        ]);
+    };
+
     async function search(query) {
         controller?.abort();
         controller = new AbortController();
@@ -1808,7 +2100,8 @@ function initSearch() {
         if (query.length < APP.SEARCH_MIN_CHARS) {
             controller?.abort();
             results = [];
-            close();
+            if (query) close();
+            else showRecents();
             return;
         }
         searchSoon(query);
@@ -1817,6 +2110,9 @@ function initSearch() {
     input.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
             close();
+        } else if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && !input.value.trim() && list.hidden) {
+            event.preventDefault();
+            showRecents();
         } else if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && results.length && !list.hidden) {
             event.preventDefault();
             const step = event.key === 'ArrowDown' ? 1 : -1;
@@ -1825,7 +2121,8 @@ function initSearch() {
     });
 
     input.addEventListener('focus', () => {
-        if (results.length && input.value.trim().length >= APP.SEARCH_MIN_CHARS) {
+        if (!input.value.trim()) showRecents();
+        else if (results.length && input.value.trim().length >= APP.SEARCH_MIN_CHARS) {
             list.hidden = false;
             input.setAttribute('aria-expanded', 'true');
         }
@@ -1835,6 +2132,10 @@ function initSearch() {
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
         const query = input.value.trim();
+        if (!query && activeIndex >= 0 && results[activeIndex]) { // a recent place, picked with the arrow keys
+            choose(results[activeIndex]);
+            return;
+        }
         if (query.length < APP.SEARCH_MIN_CHARS) return;
         if (activeIndex >= 0 && results[activeIndex]) {
             choose(results[activeIndex]);
@@ -1956,9 +2257,14 @@ async function offerLocalConditions() {
 }
 
 function init() {
+    // Each visit presses the stamp from a different part of the ink texture (styles.css, .score-stamp).
+    document.documentElement.style.setProperty('--ink-at', `${Math.round(Math.random() * 100)}% ${Math.round(Math.random() * 100)}%`);
     initTheme();
     initTips();
     initSearch();
+    initHeaderPlace();
+    initDetailsToggle();
+    initScoreDays();
     initSectionNav();
     initInstallPrompt();
     registerServiceWorker();
@@ -1981,7 +2287,6 @@ function init() {
     $('locateBtn').addEventListener('click', useMyLocation);
     $('refreshBtn').addEventListener('click', () => load());
     $('shareBtn').addEventListener('click', sharePlace);
-    $('places').addEventListener('click', onPlaceLinkClick);
     window.addEventListener('popstate', onHistoryNavigation);
     $('waterFilter').addEventListener('click', (event) => {
         const filter = event.target.closest('button')?.dataset.filter;

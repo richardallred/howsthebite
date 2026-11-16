@@ -10,7 +10,7 @@ test('fits a phone screen without horizontal scrolling', async ({ page, app }) =
     // The location button collapses to an icon but keeps its accessible name.
     await expect(page.locator('#locateBtn span')).toBeHidden();
     await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
-    await expect(page.locator('.factor')).toHaveCount(6);
+    await expect(page.locator('.factor')).toHaveCount(7);
 });
 
 test('bottom navigation jumps between sections and tracks the visible one', async ({ page, app }) => {
@@ -37,6 +37,9 @@ test('stations can be chosen by touch and the chart responds to a tap', async ({
     await app.open();
     await app.station('Clear Lake').tap();
     await expect(app.station('Clear Lake')).toHaveAttribute('aria-pressed', 'true');
+    // The dial round the stamp says it at a glance; the full readings are behind Details on a phone.
+    await expect(page.locator('.dial[data-factor="water"]')).toHaveAttribute('aria-label', /^Water temperature: 71\.6°F/);
+    await page.getByRole('button', { name: 'Details' }).tap();
     await expect(app.factor('Water temperature').locator('.factor-value')).toHaveText('71.6°F');
 
     const plot = page.locator('#pressureChart .chart-plot');

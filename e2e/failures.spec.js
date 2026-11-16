@@ -25,7 +25,7 @@ test.describe('when the weather service fails', () => {
 
         await expect(page.locator('#noticeText')).toHaveText("Couldn't load the weather. Showing conditions from just now.");
         await expect(page.locator('#scoreValue')).toHaveText(DEFAULT_SCORE);
-        await expect(page.locator('.factor')).toHaveCount(6);
+        await expect(page.locator('.factor')).toHaveCount(7);
     });
 });
 
