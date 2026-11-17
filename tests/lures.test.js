@@ -82,7 +82,8 @@ test('without a date the picks fall back on the conditions alone', () => {
     assert.equal(names(['bass'], { waterTempF: 76, windMph: 15 })[0], 'Spinnerbait or crankbait');
     assert.equal(names(['bass'], { waterTempF: 76 })[0], 'Plastic worm or jig');
     assert.ok(picks(['bass'], { waterTempF: 76 }).every((pick) => pick.season === null));
-    assert.deepEqual(lurePatterns(['bass'], conditions({})), [{ target: 'bass', season: null, situations: [] }]);
+    const [plain] = lurePatterns(['bass'], conditions({}));
+    assert.deepEqual({ ...plain, presentation: undefined }, { target: 'bass', season: null, situations: [], presentation: undefined });
 });
 
 test('"cold" is judged against each fish, not on one scale', () => {
@@ -231,4 +232,43 @@ test('catfish on their own fill the list, judged against their own temperature r
     assert.equal(night[0].name, 'Prepared "stink" bait on the bottom');
     // 66°F is short of the catfish's prime, so cool-water advice (cut bait over prepared bait) applies.
     assert.ok(names(['catfish'], { waterTempF: 66, phase: 'night', date: OCTOBER }).includes('Cut bait on the bottom'));
+});
+
+// ----- Speed and finesse-or-power dials ---------------------------------------
+
+const dials = (target, overrides) => lurePatterns([target], conditions(overrides))[0].presentation;
+
+test('cold water is a firm call to slow down', () => {
+    const { speed } = dials('bass', { waterTempF: 40, date: JANUARY });
+    assert.equal(speed.firm, true);
+    assert.ok(speed.value < 0.2, `speed ${speed.value}`);
+    assert.equal(speed.label, 'dead slow');
+});
+
+test('a cold snap slows the retrieve even in mild water', () => {
+    const snap = waterTrend({ from: 62, to: 61, lastThree: 55 });
+    const calm = dials('bass', { waterTempF: 55, date: OCTOBER });
+    const chilled = dials('bass', { waterTempF: 55, date: OCTOBER, trend: snap });
+    assert.ok(chilled.speed.value < calm.speed.value);
+    assert.equal(chilled.speed.firm, true);
+});
+
+test('murky water is a firm call for power, clear water under sun for finesse', () => {
+    const muddy = dials('bass', { waterTempF: 64, date: APRIL, turbidityFnu: 80 }).style;
+    assert.equal(muddy.firm, true);
+    assert.equal(muddy.label, 'power');
+    const clearSun = dials('bass', { waterTempF: 50, date: NOVEMBER, turbidityFnu: 3 }).style;
+    assert.equal(clearSun.firm, true);
+    assert.equal(clearSun.label, 'finesse');
+});
+
+test('without a clarity reading the style is only a range', () => {
+    const { style } = dials('bass', { waterTempF: 72, date: JULY });
+    assert.equal(style.firm, false);
+    assert.ok(style.low < style.value && style.value < style.high);
+});
+
+test('no dials for bait on the bottom, or when the advice is not to fish', () => {
+    assert.equal(dials('catfish', { waterTempF: 75, date: JULY }), null);
+    assert.equal(dials('panfish', { phase: 'night', date: JULY }), null);
 });

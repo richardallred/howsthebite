@@ -578,6 +578,17 @@ difference to catch rate, which the colour line under the suggestions says plain
 advice rather than tackle: rest trout in water that is too warm, leave cold-stunned snook alone,
 and wait for daylight for pike and sunfish, which feed by sight.
 
+**How to fish it.** Two gauges above the suggestions show retrieve speed (slow to fast) and
+style (finesse to power) for the leading fish (`presentation` in `lures.js`). They lean the way
+that fish's top three rules lean, through the same `slow`, `finesse` and `reaction` tags, and
+are anchored to the conditions with the most evidence behind them. Speed follows the water
+temperature for that fish: fish are cold-blooded, and a cold fish will not chase far, so cold
+or cool water and a cold snap are firm calls to slow down. Style follows water clarity: fish
+see a lure from much closer in turbid water, so stained or muddy water is a firm call for
+power, and clear water under a bright sky one for finesse. Anything else is angler practice,
+so the gauge shows a shaded range instead of a dot. There are no gauges when the picks are
+mostly bait soaked on the bottom (catfish), or when the advice is not to fish.
+
 ### Why these weights
 
 They come from a review of measured evidence on angler catch rates. That evidence is thinner than
