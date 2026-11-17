@@ -534,7 +534,22 @@ body.page { padding-bottom: 0; }
 }
 .chip:hover { border-color: var(--line-strong); color: var(--ink); background: var(--surface); }
 #nearbyWater { order: 3; flex-basis: 100%; } /* its own row under the place name, after Recent */
+.nearby-group { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-right: 8px; } /* a kind and its places wrap together */
+.nearby-kind { font: 400 0.6875rem/1 var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
 .chip-water { gap: 6px; }
+@media (max-width: 619px) {
+    /* One line to swipe along, not three that push the page down when they arrive */
+    #nearbyWater {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+        margin-inline: -16px;
+        padding-inline: 16px;
+        scroll-padding-inline: 16px;
+    }
+    #nearbyWater::-webkit-scrollbar { display: none; }
+    #nearbyWater > *, .nearby-group, .chip-water { flex: none; flex-wrap: nowrap; white-space: nowrap; }
+}
 .chip-meta { font: 400 0.75rem/1 var(--font-mono); color: var(--muted); }
 
 /* ---------- Notice ---------- */

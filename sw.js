@@ -73,6 +73,7 @@ const SHELL = [
     'js/config.js',
     'js/storage.js',
     'data/coops-stations.json',
+    'data/lakes.json',
     'js/api/coast-api.js',
     'js/api/http.js',
     'js/api/lake-api.js',

@@ -1,97 +1,74 @@
-// "Nearby water": the best-known lakes and rivers around a town, offered so a tap gives the
-// score and gauges for that water rather than the town.
+// "Nearby water": the lakes, rivers and salt water around a town, offered so a tap gives the
+// score and gauges for that water rather than the town. Each kind has its own places in the
+// row, so a run of small creeks can never push out the lakes, or the lakes the bay.
 //
-// Lakes come from the USGS National Hydrography Dataset (the named lakes and reservoirs in a
-// box around the town, biggest first, outlines simplified to a few hundred metres). Each is
-// placed at its shore nearest the town, which is also where its outline is found again for
-// "Where to look". Rivers come from the USGS gauges the page has already found: a gauged
-// river is the one whose level and flow the score can use.
+// - Lakes and reservoirs come from a bundled list of the US lakes that have a Wikipedia
+//   article (data/lakes.json, from Wikidata): the best-known, weighed against distance.
+// - Rivers come from the USGS gauges the page has already found: the biggest by the flow
+//   they carry, each placed at its nearest gauge, whose level and flow the score then uses.
+// - Salt water comes from the bundled NOAA tide-station list: the bays, sounds, harbors and
+//   inlets the stations are named for, each opened in inshore mode at its nearest station.
 
-import { NHD } from './lake-shape.js';
-import { boundingBox, distanceMiles } from './util.js';
+import { distanceMiles } from './util.js';
 
 export const NEARBY_RADIUS_MI = 25;
-const LAKE_MIN_KM2 = 0.1; // about 25 acres: leaves out the subdivision and farm ponds
-const NHD_LAKE_TYPES = { 390: 'Lake', 436: 'Reservoir' };
-const PER_KIND = 3;
+export const PER_CATEGORY = 2;
 
-/** The NHD query for the named lakes and reservoirs around a point, biggest first. */
-export function nearbyLakesUrl(lat, lon) {
-    const params = new URLSearchParams({
-        where: `gnis_name IS NOT NULL AND ftype IN (390,436) AND areasqkm >= ${LAKE_MIN_KM2}`,
-        geometry: boundingBox(lat, lon, NEARBY_RADIUS_MI).map((v) => v.toFixed(3)).join(','),
-        geometryType: 'esriGeometryEnvelope',
-        inSR: '4326',
-        spatialRel: 'esriSpatialRelIntersects',
-        outFields: 'gnis_name,ftype,areasqkm',
-        orderByFields: 'areasqkm DESC',
-        resultRecordCount: '25',
-        returnGeometry: 'true',
-        outSR: '4326',
-        maxAllowableOffset: '0.003',
-        geometryPrecision: '4',
-        f: 'json',
-    });
-    return `${NHD}?${params}`;
-}
+const KM_PER_MI = 1.609344;
 
-const field = (attributes, name) => attributes?.[name] ?? attributes?.[name.toUpperCase()];
+// ----- Lakes ---------------------------------------------------------------------------------
 
 /**
- * The lakes worth offering from an NHD answer: one per name, at the shore nearest the point,
- * the biggest (weighed against how far away they are) first. Each is
- * { name, detail, lat, lon, kind: 'lake', miles }; `name` is the bare name.
+ * The lakes worth offering around a point, from data/lakes.json rows
+ * [name, lat, lon, sitelinks, km²]: the best-known first, weighed against distance.
+ * A lake with a known area is measured to its edge (as a circle of that area), and a big one
+ * is placed on the town's side of it rather than at its middle.
+ * Each is { name, lat, lon, kind: 'lake', miles, detail }.
  */
-export function lakesFromNhd(answer, lat, lon, { radiusMi = NEARBY_RADIUS_MI } = {}) {
-    const byName = new Map();
-    for (const feature of answer?.features ?? []) {
-        const name = String(field(feature.attributes, 'gnis_name') ?? '').trim();
-        const type = NHD_LAKE_TYPES[Number(field(feature.attributes, 'ftype'))];
-        const km2 = Number(field(feature.attributes, 'areasqkm')) || 0;
-        if (!name || /^noname$/i.test(name) || !type) continue;
-
-        let shore = null;
-        for (const ring of feature.geometry?.rings ?? []) {
-            for (const [x, y] of ring) {
-                const miles = distanceMiles(lat, lon, y, x);
-                if (!shore || miles < shore.miles) shore = { lat: y, lon: x, miles };
-            }
+export function lakesNear(rows, lat, lon, { radiusMi = NEARBY_RADIUS_MI, count = PER_CATEGORY } = {}) {
+    const found = [];
+    for (const [name, la, lo, links, km2] of rows ?? []) {
+        if (Math.abs(la - lat) > 3 || Math.abs(lo - lon) > 4) continue; // quick reject: nothing that far reaches the town
+        const centre = distanceMiles(lat, lon, la, lo);
+        const reach = km2 > 0 ? Math.sqrt(km2 / Math.PI) / KM_PER_MI : 0;
+        const miles = Math.max(0, centre - reach);
+        if (miles > radiusMi) continue;
+        let at = { lat: la, lon: lo };
+        if (reach > 1 && centre > reach) { // well inside the near shore, on the town's side
+            const f = (reach * 0.8) / centre;
+            at = { lat: la + (lat - la) * f, lon: lo + (lon - lo) * f };
         }
-        if (!shore || shore.miles > radiusMi) continue;
-
-        const known = byName.get(name.toLowerCase());
-        if (known && known.km2 >= km2) continue;
-        byName.set(name.toLowerCase(), { name, type, km2, ...shore });
+        found.push({ name, ...at, kind: 'lake', miles, links, detail: km2 > 0 ? `${Math.round(km2 * 247.1).toLocaleString('en-US')} acres` : '' });
     }
-    // A big lake a few miles further off is still the one people mean.
-    const weight = (lake) => Math.sqrt(lake.km2) / (1 + lake.miles / 10);
-    return [...byName.values()]
+    // More Wikipedias writing about a lake means more people know it; a few miles' drive is
+    // worth it for the lake everyone means.
+    const weight = (lake) => (1 + Math.log2(lake.links)) / (1 + lake.miles / 10);
+    return found
         .sort((a, b) => weight(b) - weight(a))
-        .slice(0, PER_KIND)
-        .map(({ name, type, km2, lat: la, lon: lo, miles }) => ({
-            name,
-            detail: `${type} · ${Math.round(km2 * 247.1).toLocaleString('en-US')} acres`,
-            lat: la,
-            lon: lo,
-            kind: 'lake',
-            miles,
-        }));
+        .slice(0, count)
+        .map(({ links, ...lake }) => lake);
 }
 
+// ----- Rivers --------------------------------------------------------------------------------
+
+const PLACE_WORDS = /\s+(?:at|near|nr|below|blw|above|abv|in|upstream|downstream|@|off)\s+.*$/i;
+
 /**
- * "French Broad River at Asheville, NC" -> "French Broad River", "Pigeon R near Canton" ->
- * "Pigeon River"; null for creeks, canals and lakes.
+ * The river a gauge is on, from its name: "French Broad River at Asheville, NC" ->
+ * "French Broad River", "Pigeon R near Canton" -> "Pigeon River"; null for creeks, lakes
+ * and canals, and for "Waller Creek at Red River", which is on the creek.
  */
 export function riverName(stationName) {
-    const match = /^(.+?)\s+(?:River|R\.?)(?=\s|$)/.exec(String(stationName ?? '').replace(/,.*$/, ''));
+    const water = String(stationName ?? '').replace(/,.*$/, '').replace(PLACE_WORDS, '').trim();
+    const match = /^(.+?)\s+(?:River|R\.?)$/.exec(water);
     return match ? `${match[1].trim()} River` : null;
 }
 
 /**
- * The rivers with a gauge near a point, nearest first: each at its nearest gauge, so
- * picking it uses that gauge's level and flow.
+ * The rivers with a gauge near a point, biggest first: by the most flow measured on any of
+ * their gauges here, then by how many gauges they have. Each is placed at its nearest gauge.
  */
-export function riversFromStations(stations, lat, lon, { radiusMi = NEARBY_RADIUS_MI } = {}) {
+export function riversFromStations(stations, lat, lon, { radiusMi = NEARBY_RADIUS_MI, count = PER_CATEGORY } = {}) {
     const byName = new Map();
     for (const station of stations ?? []) {
         if (station.kind !== 'river') continue;
@@ -99,23 +76,87 @@ export function riversFromStations(stations, lat, lon, { radiusMi = NEARBY_RADIU
         if (!name) continue;
         const miles = distanceMiles(lat, lon, station.lat, station.lon);
         if (miles > radiusMi) continue;
-        const known = byName.get(name.toLowerCase());
-        if (known && known.miles <= miles) continue;
-        byName.set(name.toLowerCase(), { name, detail: `River · gauge ${station.name}`, lat: station.lat, lon: station.lon, kind: 'river', miles });
+        const key = name.toLowerCase();
+        const river = byName.get(key) ?? { name, kind: 'river', cfs: 0, gauges: 0, miles: Infinity, detail: '' };
+        river.gauges += 1;
+        river.cfs = Math.max(river.cfs, station.flow?.cfs ?? 0);
+        if (miles < river.miles) Object.assign(river, { lat: station.lat, lon: station.lon, miles, detail: `gauge: ${station.name}` });
+        byName.set(key, river);
     }
-    return [...byName.values()].sort((a, b) => a.miles - b.miles).slice(0, PER_KIND);
+    return [...byName.values()]
+        .sort((a, b) => b.cfs - a.cfs || b.gauges - a.gauges || a.miles - b.miles)
+        .slice(0, count)
+        .map(({ cfs, gauges, ...river }) => river);
+}
+
+// ----- Salt water ----------------------------------------------------------------------------
+
+const SALT_BODY = /([A-Z][\w'.-]*(?:\s+[A-Z][\w'.-]*)*\s+(?:Bay|Sound|Harbor|Harbour|Inlet|Lagoon))\b/;
+
+/**
+ * The bay, sound, harbor or inlet a tide station is named for: "Gandy Bridge, Old Tampa Bay"
+ * -> "Old Tampa Bay", "McKay Bay Entrance" -> "McKay Bay"; null for "Fort Sumter".
+ * The water is usually named after the comma, so the last part that names one wins.
+ */
+export function saltWaterName(stationName) {
+    const parts = String(stationName ?? '').split(',').reverse();
+    for (const part of parts) {
+        const match = SALT_BODY.exec(part.trim());
+        if (match) return match[1];
+    }
+    return null;
 }
 
 /**
- * The chips for a town: lakes then rivers, each nearest first, named with the town's state
- * ("Lake Julian, North Carolina") the way a search for them would be. Distances are whole miles.
+ * The salt water around a point, from the tide stations ([id, name, lat, lon, flags] rows,
+ * flag 1 = tide predictions): the bays and sounds with the most stations first (the big
+ * water), each placed at its nearest station and opened in inshore mode.
  */
-export function nearbyWater({ lakes = [], rivers = [], state = '' }) {
-    const byDistance = (a, b) => a.miles - b.miles;
-    return [...[...lakes].sort(byDistance), ...rivers].map((place) => ({
-        ...place,
-        label: place.name,
-        name: state ? `${place.name}, ${state}` : place.name,
-        miles: Math.max(1, Math.round(place.miles)),
-    }));
+export function saltWaterNear(rows, lat, lon, { radiusMi = NEARBY_RADIUS_MI, count = PER_CATEGORY } = {}) {
+    const byName = new Map();
+    for (const [, station, la, lo, flags] of rows ?? []) {
+        if (!(flags & 1) || Math.abs(la - lat) > 1 || Math.abs(lo - lon) > 1.5) continue;
+        const name = saltWaterName(station);
+        if (!name) continue;
+        const miles = distanceMiles(lat, lon, la, lo);
+        if (miles > radiusMi) continue;
+        const key = name.toLowerCase();
+        const water = byName.get(key) ?? { name, kind: 'salt', mode: 'inshore', stations: 0, miles: Infinity, detail: '' };
+        water.stations += 1;
+        if (miles < water.miles) Object.assign(water, { lat: la, lon: lo, miles, detail: `tide station: ${station}` });
+        byName.set(key, water);
+    }
+    return [...byName.values()]
+        .sort((a, b) => b.stations - a.stations || a.miles - b.miles)
+        .slice(0, count)
+        .map(({ stations, ...water }) => water);
+}
+
+// ----- The row -------------------------------------------------------------------------------
+
+export const CATEGORIES = [
+    { id: 'lake', label: 'Lakes' },
+    { id: 'river', label: 'Rivers' },
+    { id: 'salt', label: 'Salt water' },
+];
+
+/**
+ * The groups for a town, in the order lakes, rivers, salt water, leaving out any kind there
+ * is none of; each place nearest first, named with the town's state ("Lake Julian, North
+ * Carolina") the way a search for it would be, with distances in whole miles.
+ */
+export function nearbyWater({ lakes = [], rivers = [], salt = [], state = '' }) {
+    const lists = { lake: lakes, river: rivers, salt };
+    return CATEGORIES
+        .map(({ id, label }) => ({
+            id,
+            label,
+            places: [...lists[id]].sort((a, b) => a.miles - b.miles).map((place) => ({
+                ...place,
+                label: place.name,
+                name: state ? `${place.name}, ${state}` : place.name,
+                miles: Math.max(1, Math.round(place.miles)),
+            })),
+        }))
+        .filter((group) => group.places.length);
 }

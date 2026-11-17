@@ -15,7 +15,6 @@ import {
     stationsResponse, tempNormalsResponse, waveGridResponse,
 } from './api-mocks.js';
 import { findLake } from '../../js/core/lake-shape.js';
-import { lakesFromNhd, nearbyLakesUrl } from '../../js/core/nearby-water.js';
 
 export { DEFAULT_POINTS, DEFAULT_SCORE, NOW, expect };
 
@@ -42,6 +41,10 @@ export const test = base.extend({
             alerts: [], // NWS alerts in effect: { event, onsetHours, endsHours } relative to NOW
             species: DEFAULT_SPECIES, // fish recorded in the region: { name: recordCount }, names from FISH in api-mocks.js
             coast: {}, // overrides merged into DEFAULT_COAST (tides, sea temperature, beach and wave forecasts)
+            // The bundled lake list (data/lakes.json) as [name, lat, lon, sitelinks, km²]: two
+            // lakes near the default place and one too far away, so the tests don't move when
+            // the real list is rebuilt.
+            lakes: [['Test Reservoir', 41.95, -87.7, 12, 20], ['Little Lake', 41.89, -87.64, 1, 0], ['Far Lake', 43.5, -87.6, 50, 0]],
             // false: the site is plain static hosting, so /api/usgs and /api/nws are a 404 and the app goes direct.
             // true:  the Cloudflare Pages Functions are deployed and answer them.
             proxy: false,
@@ -142,16 +145,10 @@ export const test = base.extend({
             return json(route, await findLake(Number(url.searchParams.get('lat')), Number(url.searchParams.get('lon')), { get, post }));
         });
 
-        // The nearby-lakes proxy: deployed, or not, together with the USGS one. Behind it, the
-        // same NHD mock the browser reaches when it is not deployed.
-        await context.route((url) => url.pathname.endsWith('/api/nearby-lakes'), (route) => {
-            api.calls.push({ service: 'nearby-lakes', url: route.request().url() });
-            if (!api.proxy) return respond(route, 404, { error: 'Not found' });
-            if (failed(route, 'nhd')) return undefined;
-            const url = new URL(route.request().url());
-            const lat = Number(url.searchParams.get('lat'));
-            const lon = Number(url.searchParams.get('lon'));
-            return json(route, { lakes: lakesFromNhd(nhdResponse(new URL(nearbyLakesUrl(lat, lon))), lat, lon) });
+        await context.route((url) => url.pathname.endsWith('/data/lakes.json'), (route) => {
+            api.calls.push({ service: 'lakes', url: route.request().url() });
+            if (failed(route, 'lakes')) return undefined;
+            return json(route, api.lakes);
         });
 
         await context.route((url) => url.hostname !== 'localhost', (route) => {

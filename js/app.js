@@ -8,7 +8,7 @@
 
 import {
     fetchBeachForecast, fetchCoastWaterTemp, fetchCoastWaterTempHistory, fetchSeaSurfaceTemp, fetchTides, fetchWaveForecast,
-    nearestCoastStations, waveHeightAt,
+    loadStationList, nearestCoastStations, waveHeightAt,
 } from './api/coast-api.js';
 import { fetchSpeciesCounts, speciesRegionKey } from './api/species-api.js';
 import {
@@ -20,7 +20,7 @@ import { APP, US_STATES } from './config.js';
 import { hazardAt, summariseAlerts } from './core/alerts.js';
 import { colourAdvice, lureConditions, lurePatterns, recommendLures } from './core/lures.js';
 import { LISTED_WATER } from './core/listed-places.js';
-import { nearbyWater, riversFromStations } from './core/nearby-water.js';
+import { lakesNear, nearbyWater, riversFromStations, saltWaterNear } from './core/nearby-water.js';
 import { majorPeriods, moonInfo } from './core/moon.js';
 import { coordinateName, placeHref, placeMeta, placePath, readPlaceUrl, slugify } from './core/place-url.js';
 import { SPECIES_GROUPS, bandFor, bitePhrase, estimateWaterTemp, scoreConditions } from './core/scoring.js';
@@ -33,7 +33,7 @@ import { dailyMeans, describeWaterTrend, summariseWaterTrend } from './core/wate
 import { HOUR_MS, debounce, distanceMiles, isNum, roundCoord, timeAgo } from './core/util.js';
 import { compassPoint } from './core/sky.js';
 import { locateZones, targetPlan } from './core/target-zones.js';
-import { fetchLake, fetchNearbyLakes } from './api/lake-api.js';
+import { fetchLake, loadLakeList } from './api/lake-api.js';
 import { locationKey, storage } from './storage.js';
 import { createLineChart } from './ui/charts.js';
 import { $, el, glyph, icon, setText, svg } from './ui/dom.js';
@@ -56,7 +56,8 @@ const state = {
     saltGroup: storage.getSaltGroup(), // the saved salt-water fish
     coast: null, // tides, coastal water temperature and surf for the current location; null inland or not yet known
     alerts: [],
-    nearbyLakes: [], // named lakes around a town, offered (with its gauged rivers) for a more specific score
+    nearbyLakes: [], // the best-known lakes around a town, offered for a more specific score
+    nearbySalt: [], // and its bays and sounds; its rivers come from the gauges
     flowNormals: null, // { stationId, monthDay, percentiles } for the river gauge in use
     waterTrend: null, // { key, source, daily, normal, at, failed }: the last few weeks of water temperature behind the lure picks
     loading: false,
@@ -1610,30 +1611,44 @@ function stateOf(location) {
     return Object.values(US_STATES).includes(last) ? last : '';
 }
 
+/** Show one of the nearby waters, fishing it the way its kind is fished. */
+function chooseNearbyWater(place) {
+    const mode = place.mode ?? 'fresh';
+    if (state.mode !== mode) {
+        state.mode = mode;
+        storage.setMode(mode);
+    }
+    setLocation(place);
+}
+
 function renderNearbyWater() {
     const container = $('nearbyWater');
     const location = state.location;
-    const water = !location || location.kind ? [] : nearbyWater({
+    const groups = !location || location.kind ? [] : nearbyWater({
         lakes: state.nearbyLakes,
         rivers: riversFromStations(state.stations, location.lat, location.lon),
+        salt: state.nearbySalt,
         state: stateOf(location),
     });
-    container.hidden = water.length === 0;
-    const key = water.map((place) => `${place.name}|${place.miles}`).join(';');
+    container.hidden = groups.length === 0;
+    const key = groups.flatMap((group) => group.places.map((place) => `${place.name}|${place.miles}`)).join(';');
     if (container.dataset.key === key) return;
     container.dataset.key = key;
     container.replaceChildren(
         el('span', { class: 'chips-label' }, 'Nearby water'),
-        ...water.map((place) => el('a', {
-            class: 'chip chip-water',
-            href: hrefFor(place),
-            title: `${place.detail}, ${place.miles} mi away. Score this ${place.kind} instead of the town`,
-            onClick: (event) => {
-                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-                event.preventDefault();
-                setLocation(place);
-            },
-        }, el('span', null, place.label), el('span', { class: 'chip-meta' }, `${place.miles} mi`))),
+        // Each kind keeps its own places, so small creeks never crowd out the lakes or the bay.
+        ...groups.map((group) => el('span', { class: 'nearby-group', role: 'group', 'aria-label': group.label },
+            el('span', { class: 'nearby-kind', 'aria-hidden': 'true' }, group.label),
+            ...group.places.map((place) => el('a', {
+                class: 'chip chip-water',
+                href: placeHref(addressPlace(place), place.mode ? { mode: place.mode } : {}),
+                title: [place.detail, `${place.miles} mi away`].filter(Boolean).join(' · '),
+                onClick: (event) => {
+                    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                    event.preventDefault();
+                    chooseNearbyWater(place);
+                },
+            }, el('span', null, place.label), el('span', { class: 'chip-meta' }, `${place.miles} mi`))))),
     );
 }
 
@@ -2107,20 +2122,17 @@ async function loadWaves() {
  * known. Optional: on failure the choices fall back to a latitude-based assumption.
  */
 /**
- * A town (or "my location") is a general area: offer the named lakes around it (its gauged
- * rivers come from the stations), so a tap gives the score and gauges for that water.
- * Never holds up the page.
+ * A town (or "my location") is a general area: offer the lakes and salt water around it
+ * (its rivers come from the gauges), so a tap gives the score and gauges for that water.
+ * Both lists are bundled with the site; either can be missing without harm.
  */
-async function loadNearbyLakes(location) {
+async function loadNearbyWater(location) {
     if (location.kind) return;
-    try {
-        const lakes = await fetchNearbyLakes(location.lat, location.lon);
-        if (state.location !== location) return; // a lookup that outlived its place is still kept for next time
-        state.nearbyLakes = lakes;
-        renderNearbyWater();
-    } catch {
-        // offered only when they can be found
-    }
+    const [lakes, tides] = await Promise.allSettled([loadLakeList(), loadStationList()]);
+    if (state.location !== location) return;
+    if (lakes.status === 'fulfilled') state.nearbyLakes = lakesNear(lakes.value, location.lat, location.lon);
+    if (tides.status === 'fulfilled') state.nearbySalt = saltWaterNear(tides.value, location.lat, location.lon);
+    renderNearbyWater();
 }
 
 async function loadSpeciesCounts(location, signal) {
@@ -2143,7 +2155,7 @@ async function load() {
 
     state.loading = true;
     renderUpdatedAt();
-    loadNearbyLakes(location); // can take half a minute the first time: never waited for
+    loadNearbyWater(location); // from bundled lists, but never waited for
 
     const [weatherResult, waterResult, alertsResult] = await Promise.allSettled([
         fetchWeather(location.lat, location.lon, { signal }),
@@ -2267,6 +2279,7 @@ function setLocation(place, { address = true } = {}) {
     state.waterTrend = null;
     state.alerts = [];
     state.nearbyLakes = [];
+    state.nearbySalt = [];
     state.coast = null;
     state.loadFailed = false;
     if (!location.fallback) {

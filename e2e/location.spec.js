@@ -254,29 +254,44 @@ test.describe('species on offer follow the region', () => {
 });
 
 test.describe('nearby water', () => {
-    for (const proxy of [false, true]) {
-        test(`a town offers its lakes and gauged rivers, and one tap scores that water (proxy ${proxy ? 'deployed' : 'not deployed'})`, async ({ page, api, app }) => {
-            api.proxy = proxy;
-            await app.open();
-            await app.loaded();
-
-            const nearby = page.locator('#nearbyWater');
-            // Lakes, then rivers at their gauges (the creek and the lake gauge are not offered).
-            await expect(nearby.getByRole('link')).toHaveText([/^Test Lake\s*1 mi$/, /^Des Plaines River\s*1 mi$/, /^Fox River\s*2 mi$/]);
-            await expect(nearby.getByRole('link', { name: /Des Plaines/ })).toHaveAttribute('href', /des-plaines-river-illinois\?.*water=river/);
-
-            await nearby.getByRole('link', { name: /Des Plaines/ }).click();
-            await app.loaded();
-            await expect(page.getByRole('heading', { level: 1 })).toHaveText('Des Plaines River, Illinois');
-            await expect(nearby).toBeHidden(); // already on the water
-        });
-    }
-
-    test('without the lake service the gauged rivers are still offered', async ({ page, api, app }) => {
-        api.fail('nhd', 503);
+    test('a town offers its lakes and its rivers, each kind with its own places', async ({ page, app }) => {
         await app.open();
         await app.loaded();
-        await expect(page.locator('#nearbyWater').getByRole('link')).toHaveText([/Des Plaines River/, /Fox River/]);
-        await expect(page.locator('#notice')).not.toContainText('unavailable');
+
+        const nearby = page.locator('#nearbyWater');
+        await expect(nearby.getByRole('group', { name: 'Lakes' }).getByRole('link')).toHaveText([/^Little Lake\s*1 mi$/, /^Test Reservoir\s*\d+ mi$/]);
+        await expect(nearby.getByRole('group', { name: 'Rivers' }).getByRole('link')).toHaveText([/^Des Plaines River\s*1 mi$/, /^Fox River\s*2 mi$/]);
+        await expect(nearby.getByRole('group', { name: 'Salt water' })).toHaveCount(0); // inland
+        await expect(nearby.getByRole('link', { name: /Test Reservoir/ })).toHaveAttribute('href', /test-reservoir-illinois\?.*water=lake/);
+
+        await nearby.getByRole('link', { name: /Test Reservoir/ }).click();
+        await app.loaded();
+        await expect(page.getByRole('heading', { level: 1 })).toHaveText('Test Reservoir, Illinois');
+        await expect(nearby).toBeHidden(); // already on the water
+    });
+
+    test('on the coast, a bay opens in inshore mode', async ({ page, app }) => {
+        await app.open();
+        await page.getByRole('combobox', { name: 'Search for a place' }).fill('Galveston');
+        await page.getByRole('option').first().click();
+        await app.loaded();
+
+        const salt = page.locator('#nearbyWater').getByRole('group', { name: 'Salt water' });
+        await expect(salt.getByRole('link')).toHaveText([/^Galveston Bay\s*\d+ mi$/, /^West Bay\s*\d+ mi$/]);
+        await expect(salt.getByRole('link', { name: /Galveston Bay/ })).toHaveAttribute('href', /galveston-bay-texas\?.*mode=inshore/);
+
+        await salt.getByRole('link', { name: /Galveston Bay/ }).click();
+        await app.loaded();
+        await expect(page.getByRole('heading', { level: 1 })).toHaveText('Galveston Bay, Texas');
+        await expect(page).toHaveURL(/mode=inshore/);
+        await expect(page.locator('#nearbyWater')).toBeHidden();
+    });
+
+    test('without the lake list the rivers are still offered', async ({ page, api, app }) => {
+        api.fail('lakes', 500);
+        await app.open();
+        await app.loaded();
+        await expect(page.locator('#nearbyWater').getByRole('group', { name: 'Rivers' }).getByRole('link')).toHaveCount(2);
+        await expect(page.locator('#nearbyWater').getByRole('group', { name: 'Lakes' })).toHaveCount(0);
     });
 });
