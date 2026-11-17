@@ -531,6 +531,9 @@ body.page { padding-bottom: 0; }
     cursor: pointer;
 }
 .chip:hover { border-color: var(--line-strong); color: var(--ink); background: var(--surface); }
+#nearbyWater { order: 3; flex-basis: 100%; } /* its own row under the place name, after Recent */
+.chip-water { gap: 6px; }
+.chip-meta { font: 400 0.75rem/1 var(--font-mono); color: var(--muted); }
 
 /* ---------- Notice ---------- */
 

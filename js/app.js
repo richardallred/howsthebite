@@ -16,10 +16,11 @@ import {
 } from './api/usgs-api.js';
 import { HttpError, isAbort } from './api/http.js';
 import { OutsideCoverageError, fetchAlerts, fetchWeather, reverseGeocode, searchPlaces } from './api/weather-api.js';
-import { APP } from './config.js';
+import { APP, US_STATES } from './config.js';
 import { hazardAt, summariseAlerts } from './core/alerts.js';
 import { colourAdvice, lureConditions, lurePatterns, recommendLures } from './core/lures.js';
 import { LISTED_WATER } from './core/listed-places.js';
+import { nearbyWater, riversFromStations } from './core/nearby-water.js';
 import { majorPeriods, moonInfo } from './core/moon.js';
 import { coordinateName, placeHref, placeMeta, placePath, readPlaceUrl, slugify } from './core/place-url.js';
 import { SPECIES_GROUPS, bandFor, bitePhrase, estimateWaterTemp, scoreConditions } from './core/scoring.js';
@@ -32,7 +33,7 @@ import { dailyMeans, describeWaterTrend, summariseWaterTrend } from './core/wate
 import { HOUR_MS, debounce, distanceMiles, isNum, roundCoord, timeAgo } from './core/util.js';
 import { compassPoint } from './core/sky.js';
 import { locateZones, targetPlan } from './core/target-zones.js';
-import { fetchLake } from './api/lake-api.js';
+import { fetchLake, fetchNearbyLakes } from './api/lake-api.js';
 import { locationKey, storage } from './storage.js';
 import { createLineChart } from './ui/charts.js';
 import { $, el, glyph, icon, setText, svg } from './ui/dom.js';
@@ -55,6 +56,7 @@ const state = {
     saltGroup: storage.getSaltGroup(), // the saved salt-water fish
     coast: null, // tides, coastal water temperature and surf for the current location; null inland or not yet known
     alerts: [],
+    nearbyLakes: [], // named lakes around a town, offered (with its gauged rivers) for a more specific score
     flowNormals: null, // { stationId, monthDay, percentiles } for the river gauge in use
     waterTrend: null, // { key, source, daily, normal, at, failed }: the last few weeks of water temperature behind the lure picks
     loading: false,
@@ -1597,7 +1599,42 @@ function renderLocation() {
     if (state.location && !state.location.fallback) document.title = placeMeta(state.location.name).title;
     setCanonical(state.location && !state.location.fallback ? placePath(addressPlace(state.location)) : '/');
     renderUpdatedAt();
+    renderNearbyWater();
     renderRecents();
+}
+
+/** The state a town is in, from its name ("Asheville, North Carolina"), for naming its water. */
+function stateOf(location) {
+    const last = location.name?.split(',').pop().trim() ?? '';
+    if (US_STATES[last.toUpperCase()]) return US_STATES[last.toUpperCase()];
+    return Object.values(US_STATES).includes(last) ? last : '';
+}
+
+function renderNearbyWater() {
+    const container = $('nearbyWater');
+    const location = state.location;
+    const water = !location || location.kind ? [] : nearbyWater({
+        lakes: state.nearbyLakes,
+        rivers: riversFromStations(state.stations, location.lat, location.lon),
+        state: stateOf(location),
+    });
+    container.hidden = water.length === 0;
+    const key = water.map((place) => `${place.name}|${place.miles}`).join(';');
+    if (container.dataset.key === key) return;
+    container.dataset.key = key;
+    container.replaceChildren(
+        el('span', { class: 'chips-label' }, 'Nearby water'),
+        ...water.map((place) => el('a', {
+            class: 'chip chip-water',
+            href: hrefFor(place),
+            title: `${place.detail}, ${place.miles} mi away. Score this ${place.kind} instead of the town`,
+            onClick: (event) => {
+                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                event.preventDefault();
+                setLocation(place);
+            },
+        }, el('span', null, place.label), el('span', { class: 'chip-meta' }, `${place.miles} mi`))),
+    );
 }
 
 function renderUpdatedAt() {
@@ -2069,6 +2106,23 @@ async function loadWaves() {
  * Find out which sport fish are recorded around the location, unless that is already
  * known. Optional: on failure the choices fall back to a latitude-based assumption.
  */
+/**
+ * A town (or "my location") is a general area: offer the named lakes around it (its gauged
+ * rivers come from the stations), so a tap gives the score and gauges for that water.
+ * Never holds up the page.
+ */
+async function loadNearbyLakes(location) {
+    if (location.kind) return;
+    try {
+        const lakes = await fetchNearbyLakes(location.lat, location.lon);
+        if (state.location !== location) return; // a lookup that outlived its place is still kept for next time
+        state.nearbyLakes = lakes;
+        renderNearbyWater();
+    } catch {
+        // offered only when they can be found
+    }
+}
+
 async function loadSpeciesCounts(location, signal) {
     if (speciesCounts()) return;
     const key = speciesRegionKey(location.lat, location.lon);
@@ -2089,6 +2143,7 @@ async function load() {
 
     state.loading = true;
     renderUpdatedAt();
+    loadNearbyLakes(location); // can take half a minute the first time: never waited for
 
     const [weatherResult, waterResult, alertsResult] = await Promise.allSettled([
         fetchWeather(location.lat, location.lon, { signal }),
@@ -2211,6 +2266,7 @@ function setLocation(place, { address = true } = {}) {
     state.flowNormals = null;
     state.waterTrend = null;
     state.alerts = [];
+    state.nearbyLakes = [];
     state.coast = null;
     state.loadFailed = false;
     if (!location.fallback) {
