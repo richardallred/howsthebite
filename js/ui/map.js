@@ -100,3 +100,74 @@ export function createStationMap(container, { onSelect }) {
         },
     };
 }
+
+// The lake map behind "Where to look": the outline, and the stretches of shore to fish,
+// each coloured by kind (styles.css, .zone-*) and numbered to match the list beside it.
+export function createLakeMap(container) {
+    let map = null;
+    let layers = null;
+    let data = null;
+    let fittedKey = null;
+    let visible = false;
+
+    async function render() {
+        if (!visible || !data) return;
+        let L;
+        try {
+            L = await loadLeaflet();
+        } catch {
+            container.hidden = true;
+            return;
+        }
+        container.hidden = false;
+
+        if (!map) {
+            map = L.map(container, { scrollWheelZoom: false, zoomSnap: 0.5 });
+            map.attributionControl.setPrefix(false);
+            L.tileLayer(TILE_URL, { maxZoom: 17, attribution: TILE_ATTRIBUTION }).addTo(map);
+            layers = L.layerGroup().addTo(map);
+            new ResizeObserver(() => map.invalidateSize()).observe(container);
+        }
+
+        const { lake, zones, location } = data;
+        layers.clearLayers();
+        const outline = L.polygon(lake.rings.map((ring) => ring.coords), {
+            className: 'lake-outline', interactive: false,
+        }).addTo(layers);
+        zones.forEach((zone, index) => {
+            L.polyline(zone.line, { className: `lake-zone zone-${zone.kind}`, interactive: false }).addTo(layers);
+            L.marker(zone.at, {
+                icon: L.divIcon({ className: `zone-tag zone-${zone.kind}`, html: String(index + 1), iconSize: [22, 22], iconAnchor: [11, 11] }),
+                keyboard: false,
+                title: zone.title,
+            }).addTo(layers);
+        });
+        if (location) {
+            L.marker([location.lat, location.lon], {
+                icon: L.divIcon({ className: 'map-pin', iconSize: [14, 14], iconAnchor: [7, 7] }),
+                keyboard: false,
+                interactive: false,
+            }).addTo(layers);
+        }
+
+        if (lake.id !== fittedKey) {
+            fittedKey = lake.id;
+            map.fitBounds(outline.getBounds(), { padding: [16, 16] });
+        }
+    }
+
+    new IntersectionObserver((entries, observer) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+            visible = true;
+            observer.disconnect();
+            render();
+        }
+    }, { rootMargin: '300px' }).observe(container.parentElement ?? container);
+
+    return {
+        update(next) {
+            data = next;
+            render();
+        },
+    };
+}

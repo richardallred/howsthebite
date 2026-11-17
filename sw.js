@@ -75,12 +75,14 @@ const SHELL = [
     'data/coops-stations.json',
     'js/api/coast-api.js',
     'js/api/http.js',
+    'js/api/lake-api.js',
     'js/api/nws.js',
     'js/api/species-api.js',
     'js/api/usgs-api.js',
     'js/api/weather-api.js',
     'js/core/alerts.js',
     'js/core/day-score.js',
+    'js/core/lake-shape.js',
     'js/core/listed-places.js',
     'js/core/lures.js',
     'js/core/moon.js',
@@ -90,6 +92,7 @@ const SHELL = [
     'js/core/sky.js',
     'js/core/species.js',
     'js/core/sun.js',
+    'js/core/target-zones.js',
     'js/core/tides.js',
     'js/core/trend.js',
     'js/core/util.js',
@@ -124,7 +127,7 @@ self.addEventListener('fetch', (event) => {
     if (request.method !== 'GET') return;
     const url = new URL(request.url);
     if (url.origin !== self.location.origin) return; // APIs and map tiles go straight to the network
-    if (/\/api\/(usgs\/|nws\/|sst$)/.test(url.pathname)) return; // so do the same-origin data proxies: never cache live data here
+    if (/\/api\/(usgs\/|nws\/|sst$|lake$)/.test(url.pathname)) return; // so do the same-origin data proxies: never cache live data here
 
     event.respondWith((async () => {
         const cache = await caches.open(CACHE);

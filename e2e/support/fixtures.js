@@ -11,9 +11,10 @@ import { test as base, expect } from '@playwright/test';
 import {
     BLANK_TILE, DEFAULT_POINTS, DEFAULT_SCORE, DEFAULT_SPECIES, DEFAULT_STATIONS, NOW, alertsResponse, beachResponse,
     continuousResponse, coopsResponse, dailyResponse, flowNormalsResponse, forecastResponse, gbifResponse, hourlyForecastResponse, latestContinuousResponse,
-    marineZonesResponse, monitoringLocationsResponse, observationsResponse, photonResponse, pointResponse, sstResponse,
+    marineZonesResponse, monitoringLocationsResponse, nhdResponse, observationsResponse, overpassResponse, photonResponse, pointResponse, sstResponse,
     stationsResponse, tempNormalsResponse, waveGridResponse,
 } from './api-mocks.js';
+import { findLake } from '../../js/core/lake-shape.js';
 
 export { DEFAULT_POINTS, DEFAULT_SCORE, NOW, expect };
 
@@ -25,6 +26,8 @@ const SERVICES = {
     coops: 'api.tidesandcurrents.noaa.gov',
     beach: 'mapservices.weather.noaa.gov',
     tiles: 'tile.openstreetmap.org',
+    overpass: 'overpass-api.de',
+    nhd: 'hydro.nationalmap.gov',
 };
 
 const PROXY_PATH = /\/api\/usgs\/(?:([a-z-]+)\/items|statistics\/(observationNormals))$/;
@@ -126,6 +129,18 @@ export const test = base.extend({
             return json(route, sstResponse(api.coast, new URL(route.request().url())));
         });
 
+        // The lake-outline proxy: deployed, or not, together with the USGS one. Behind it, the
+        // same Overpass mock the browser reaches when it is not deployed.
+        const lakeMemory = {};
+        await context.route((url) => url.pathname.endsWith('/api/lake'), async (route) => {
+            api.calls.push({ service: 'lake', url: route.request().url() });
+            if (!api.proxy) return respond(route, 404, { error: 'Not found' });
+            const url = new URL(route.request().url());
+            const get = async (nhdUrl) => nhdResponse(new URL(nhdUrl));
+            const post = async (query) => overpassResponse(query, lakeMemory);
+            return json(route, await findLake(Number(url.searchParams.get('lat')), Number(url.searchParams.get('lon')), { get, post }));
+        });
+
         await context.route((url) => url.hostname !== 'localhost', (route) => {
             const url = new URL(route.request().url());
             const service = Object.keys(SERVICES).find((name) => SERVICES[name] === url.hostname);
@@ -142,6 +157,8 @@ export const test = base.extend({
                 case 'gbif': return json(route, gbifResponse(api.species));
                 case 'coops': return json(route, coopsResponse(url, api.coast));
                 case 'beach': return json(route, beachResponse(api.coast));
+                case 'nhd': return json(route, nhdResponse(url));
+                case 'overpass': return json(route, overpassResponse(new URLSearchParams(route.request().postData() ?? '').get('data') ?? '', lakeMemory));
                 case 'tiles': return route.fulfill({ status: 200, contentType: 'image/png', body: BLANK_TILE });
                 default: return usgs(route, url, /(?:collections\/([a-z-]+)\/items|statistics\/v0\/(observationNormals))$/.exec(url.pathname)?.slice(1).find(Boolean));
             }

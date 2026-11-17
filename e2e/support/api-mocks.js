@@ -546,3 +546,42 @@ export const BLANK_TILE = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
     'base64',
 );
+
+// ----- Lake outlines (USGS NHD, Overpass, and the site's /api/lake proxy in front of them) --
+//
+// Every place sits in a 2 km square lake with one long cove off its south shore, so "Where to
+// look" always has a shape to mark. NHD is asked once, for the waterbodies in a small box
+// around the point. Overpass, the fallback, is asked twice: which water is at a point (is_in),
+// then the outline of the one it picks.
+
+const LAKE_HALF = 0.01;
+
+function lakeNodes(lat, lon) {
+    const s = lat - LAKE_HALF;
+    const n = lat + LAKE_HALF;
+    const w = lon - LAKE_HALF;
+    const e = lon + LAKE_HALF;
+    return [[s, w], [s, lon - 0.002], [s - 0.008, lon - 0.001], [s - 0.008, lon + 0.001], [s, lon + 0.002], [s, e], [n, e], [n, w], [s, w]]
+        .map(([la, lo]) => ({ lat: Number(la.toFixed(6)), lon: Number(lo.toFixed(6)) }));
+}
+
+const lakeTags = { natural: 'water', water: 'lake', name: 'Test Lake' };
+
+/** Overpass answers: the lookup carries the point, and the outline is drawn around the last one asked about. */
+export function overpassResponse(query, memory) {
+    const at = /is_in\(([-\d.]+),([-\d.]+)\)/.exec(query);
+    if (at) {
+        memory.lakeAt = [Number(at[1]), Number(at[2])];
+        const [lat, lon] = memory.lakeAt;
+        return { elements: [{ type: 'way', id: 5, tags: lakeTags, bounds: { minlat: lat - 0.02, minlon: lon - LAKE_HALF, maxlat: lat + LAKE_HALF, maxlon: lon + LAKE_HALF } }] };
+    }
+    const [lat, lon] = memory.lakeAt ?? [35, -80];
+    return { elements: [{ type: 'way', id: 5, tags: lakeTags, geometry: lakeNodes(lat, lon) }] };
+}
+
+/** NHD's answer: the lake around the centre of the box asked about, as an Esri polygon. */
+export function nhdResponse(url) {
+    const [w, south, e, north] = (url.searchParams.get('geometry') ?? '-80,35,-80,35').split(',').map(Number);
+    const ring = lakeNodes((south + north) / 2, (w + e) / 2).map(({ lat, lon }) => [lon, lat]).reverse(); // clockwise
+    return { features: [{ attributes: { OBJECTID: 5, GNIS_NAME: 'Test Lake', FTYPE: 390, AREASQKM: 4.5 }, geometry: { rings: [ring] } }] };
+}

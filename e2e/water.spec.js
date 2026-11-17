@@ -58,7 +58,7 @@ test.describe('water temperature stations', () => {
         await page.locator('#water').scrollIntoViewIfNeeded();
         await expect(page.locator('.leaflet-container .map-station')).toHaveCount(3);
         await expect(page.locator('.map-station.is-selected')).toHaveCount(1);
-        await expect(page.locator('.leaflet-control-attribution')).toContainText('OpenStreetMap');
+        await expect(page.locator('#stationMap .leaflet-control-attribution')).toContainText('OpenStreetMap');
     });
 });
 
