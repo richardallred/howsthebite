@@ -1190,6 +1190,37 @@ function trendPanel(lures, derived) {
         el('p', { class: 'lure-trend-source' }, text));
 }
 
+const percent = (x) => `${Math.round(x * 1000) / 10}%`;
+
+/**
+ * One dial: a ruled track from one end to the other. A firm call is a dot; a loose one is only
+ * a shaded range, because a dot would claim more than the evidence does.
+ */
+function dial(name, ends, reading) {
+    const track = el('div', { class: 'pace-track', 'aria-hidden': 'true' },
+        reading.firm
+            ? el('span', { class: 'pace-dot', style: `--at: ${percent(reading.value)}` })
+            : el('span', { class: 'pace-band', style: `--from: ${percent(reading.low)}; --to: ${percent(reading.high)}` }));
+    return el('div', { class: `pace${reading.firm ? '' : ' is-loose'}` },
+        el('p', { class: 'pace-head' }, `${name}: `, el('strong', null, reading.label)),
+        track,
+        el('p', { class: 'pace-ends', 'aria-hidden': 'true' }, el('span', null, ends[0]), el('span', null, ends[1])),
+        el('p', { class: 'pace-why' }, `${reading.why}.`));
+}
+
+/** How to fish it: retrieve speed, and finesse or power. */
+function presentationDials({ speed, style }) {
+    return el('div', { class: 'paces' },
+        dial('Retrieve', ['slow', 'fast'], speed),
+        dial('Style', ['finesse', 'power'], style),
+        el('p', { class: 'paces-note' },
+            'A dot is a firm call; a shaded range means it could go either way. ',
+            tip('Where these come from', el('span', null,
+                'Speed follows the water temperature, which is the best-measured part of this: fish are cold-blooded, and a cold fish will not chase far. '
+                + 'Finesse or power follows water clarity, since fish see a lure from much closer in murky water. Past that it is angler practice, not measured. '
+                + 'Both lean the way the suggestions below lean.'))));
+}
+
 // Woodcut drawings of the fish (drawings/fish/, traced from art/): the name lures.js gives a fish,
 // and its drawing (panfish are drawn as a crappie, muskie as a pike, fluke as a flounder,
 // sauger as its cousin the walleye). styles.css maps each to its file; a fish
@@ -1227,6 +1258,7 @@ function renderLurePattern(derived) {
             el('p', { class: 'lure-kicker' }, `${capitalise(lead.target)} · `, el('strong', null, lead.season.label)),
             el('p', { class: 'lure-pattern-text' }, `${lead.season.pattern}.`),
             lead.situations.map((text) => el('p', { class: 'lure-situation' }, `${text}.`)),
+            lead.presentation && presentationDials(lead.presentation),
             others.length > 0 && el('p', { class: 'lure-also' },
                 others.map((entry) => `${capitalise(entry.target)}: ${entry.season.label.toLowerCase()}`).join(' · '))),
         trendPanel(derived.lures, derived),

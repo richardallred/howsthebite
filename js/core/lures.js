@@ -750,13 +750,120 @@ export function recommendLures(targets, conditions, { limit = 3 } = {}) {
 
 /**
  * Where each fish is in its year and what has changed lately, for the summary above the suggestions.
- * @returns {Array<{ target: string, season: import('./season.js').SeasonalPhase|null, situations: string[] }>}
+ * @returns {Array<{ target: string, season: import('./season.js').SeasonalPhase|null, situations: string[], presentation: Presentation|null }>}
  */
 export function lurePatterns(targets, conditions) {
     return targets.filter(knownTarget).map((target) => {
-        const c = forFish(target, conditions);
-        return { target: labelOf(target), season: c.season, situations: c.situations.map((situation) => situation.pattern) };
+        const { c, rules } = matching(target, conditions);
+        return {
+            target: labelOf(target),
+            season: c.season,
+            situations: c.situations.map((situation) => situation.pattern),
+            presentation: presentation(c, rules),
+        };
     });
+}
+
+// ----- How to fish it: speed, and finesse or power ---------------------------------------
+//
+// Two dials above the suggestions. They are not separate advice: they lean the way today's top
+// picks lean (their tags, after the season and the recent changes have ranked them), anchored
+// to the conditions with the best evidence behind them.
+//
+// Speed rests on physiology: fish are cold-blooded, and their metabolism, swimming speed and
+// appetite fall steeply in cold water, so a cold fish will not chase far. That is solid ground
+// for "slow down"; it says less about how fast to go in warm water, where fish can be caught
+// many ways. Finesse or power rests on water clarity: in turbid water fish see a lure from much
+// closer, which favours bigger, louder, vibrating baits. Beyond that it is angler practice.
+// Where the evidence is thin, the dial shows a range instead of a point.
+
+/**
+ * @typedef {object} Dial
+ * @property {number} value   0 to 1 (slow to fast; finesse to power)
+ * @property {number} low     the range shown when the call is not firm
+ * @property {number} high
+ * @property {boolean} firm   show a point; otherwise only the range
+ * @property {string} label
+ * @property {string} why
+ * @typedef {{ speed: Dial, style: Dial }} Presentation
+ */
+
+/** Where water temperature alone puts the retrieve, from -1 (slow) to 1 (fast). */
+const ZONE_SPEED = { cold: -0.9, cool: -0.45, prime: 0.3, warm: 0.35, hot: 0 };
+const PRESENTATION_PICKS = 3;
+/** Half the width of the range shown for a call that is not firm. */
+const SPREAD = 0.15;
+
+const clamp = (x, lo = -1, hi = 1) => Math.min(hi, Math.max(lo, x));
+const mean = (values) => values.reduce((sum, v) => sum + v, 0) / (values.length || 1);
+const toDial = (lean) => 0.5 + clamp(lean) / 2;
+const range = (value) => ({ low: clamp(value - SPREAD, 0, 1), high: clamp(value + SPREAD, 0, 1) });
+
+const SPEED_WORDS = [[0.2, 'dead slow'], [0.4, 'slow'], [0.6, 'steady'], [0.8, 'brisk'], [1, 'fast']];
+const STYLE_WORDS = [[0.35, 'finesse'], [0.65, 'either'], [1, 'power']];
+const word = (words, value) => words.find(([top]) => value <= top)[1];
+/** A point names its word; a range names the two words it spans, or the middle one when it spans more. */
+function dialLabel(words, value, low, high, firm) {
+    if (firm) return word(words, value);
+    const index = (v) => words.findIndex(([top]) => v <= top);
+    const from = index(low + 0.01); // a range that only touches a boundary stays inside it
+    const to = index(high - 0.01);
+    if (from === to) return words[from][1];
+    if (to - from === 1) return `${words[from][1]} to ${words[to][1]}`;
+    return words[index(value)][1];
+}
+
+/**
+ * @returns {Presentation|null}  null when the advice is not to fish (wait for daylight, leave snook
+ *   alone), or when the picks are mostly bait soaked on the bottom, where retrieve speed means nothing.
+ */
+function presentation(c, rules) {
+    if (!rules.length || rules[0].exclusive) return null;
+    const top = rules.slice(0, PRESENTATION_PICKS);
+    const has = (entry, tag) => entry.tags.includes(tag);
+    if (top.filter((entry) => has(entry, 'bait') && !has(entry, 'reaction')).length * 2 > top.length) return null;
+    const picksSpeed = mean(top.map((entry) => (has(entry, 'reaction') ? 1 : 0) - (has(entry, 'slow') ? 1 : 0)));
+    const picksStyle = mean(top.map((entry) => (has(entry, 'reaction') ? 1 : 0) - (has(entry, 'finesse') ? 1 : 0)));
+    const snap = c.trend?.swing === 'cold-snap';
+
+    // Speed: the water temperature for this fish, with the picks' lean on top.
+    const zoneSpeed = (ZONE_SPEED[c.zone] ?? 0) - (snap ? 0.3 : 0);
+    const speedValue = toDial(0.6 * zoneSpeed + 0.4 * picksSpeed);
+    // Firm when the water says slow down, or when it is in the fish's good range and the picks agree.
+    const speedFirm = snap || c.zone === 'cold' || c.zone === 'cool' || ((c.zone === 'prime' || c.zone === 'warm') && picksSpeed >= 0);
+    let speedWhy = 'Water in their comfortable range: fish will chase, so cover water';
+    if (c.zone === 'cold' || snap) speedWhy = snap ? 'The water has dropped fast, and chilled fish will not chase far' : 'Cold water slows a fish down: it will not chase far';
+    else if (c.zone === 'cool') speedWhy = 'Cool water: fish are sluggish and will not chase far';
+    else if (c.zone === 'hot') speedWhy = 'Very warm water: fish feed early and late and go quiet in the heat';
+    else if (!speedFirm) speedWhy = 'Warm enough to chase, but the season favours slower baits';
+
+    // Finesse or power: water clarity first, then the picks' lean.
+    let clarityStyle = 0;
+    let styleFirm = false;
+    let styleWhy = 'No strong steer either way: let the picks below decide';
+    if (c.clarity === 'muddy' || c.clarity === 'stained') {
+        clarityStyle = c.clarity === 'muddy' ? 0.9 : 0.6;
+        styleFirm = true;
+        styleWhy = 'Off-colour water: fish find a bait by vibration and size more than by sight';
+    } else if (c.clarity === 'clear' && c.light === 'bright') {
+        clarityStyle = -0.6;
+        styleFirm = true;
+        styleWhy = 'Clear water under a bright sky: fish get a good look, so go smaller and subtler';
+    } else if (c.light === 'dark') {
+        clarityStyle = 0.4;
+        styleWhy = 'After dark fish hunt by silhouette and vibration, so a bulkier bait often helps';
+    } else if (c.clarity === 'clear') {
+        clarityStyle = -0.3;
+        styleWhy = 'Clear water, but low light evens it out';
+    }
+    const styleValue = toDial(styleFirm ? 0.7 * clarityStyle + 0.3 * picksStyle : 0.55 * clarityStyle + 0.45 * picksStyle);
+
+    const speedRange = range(speedValue);
+    const styleRange = range(styleValue);
+    return {
+        speed: { value: speedValue, ...speedRange, firm: speedFirm, label: dialLabel(SPEED_WORDS, speedValue, speedRange.low, speedRange.high, speedFirm), why: speedWhy },
+        style: { value: styleValue, ...styleRange, firm: styleFirm, label: dialLabel(STYLE_WORDS, styleValue, styleRange.low, styleRange.high, styleFirm), why: styleWhy },
+    };
 }
 
 /**
