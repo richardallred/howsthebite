@@ -143,6 +143,17 @@ async function fetchObservations(station, start, signal) {
 }
 
 /**
+ * A longer stretch of one station's reports for the history charts:
+ * { temp, pressure }, each [{ t, v }] oldest first. NWS keeps roughly the last seven days and answers at most
+ * 500 reports, so a station that reports every few minutes reaches back less far.
+ */
+export async function fetchObservationHistory(stationId, hours, { signal } = {}) {
+    const start = `${new Date(Date.now() - hours * HOUR_MS).toISOString().slice(0, 19)}Z`;
+    const observations = await fetchObservations({ id: stationId }, start, signal);
+    return { temp: seriesOf(observations, 'tempF'), pressure: seriesOf(observations, 'pressureInHg') };
+}
+
+/**
  * Pick the stations to read from.
  *
  * Temperature and wind are local, so they come from the nearest station that

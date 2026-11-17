@@ -66,14 +66,16 @@ export function stationsResponse(overrides) {
     };
 }
 
-/** Hourly reports for 72 hours, newest first, in the units NWS uses (°C, Pa, km/h). */
+/** Hourly reports since `start` (72 hours by default, a week at most, as NWS keeps), newest first, in NWS units (°C, Pa, km/h). */
 export function observationsResponse(url, overrides) {
     const w = weatherOf(overrides);
     const id = url.pathname.split('/')[2];
     const station = w.stations.find((entry) => entry.id === id) ?? w.stations[0];
     const quantity = (value, unitCode) => ({ unitCode, value, qualityControl: value === null ? 'Z' : 'V' });
     const features = [];
-    for (let t = w.now; t >= w.now - 72 * HOUR; t -= HOUR) {
+    const start = Date.parse(url.searchParams.get('start') ?? '');
+    const hours = Number.isNaN(start) ? 72 : Math.min(7 * 24, Math.ceil((w.now - start) / HOUR));
+    for (let t = w.now; t >= w.now - hours * HOUR; t -= HOUR) {
         const hoursFromNow = (t - w.now) / HOUR;
         // 24-hour cycle, so "same time yesterday" equals now and the air trend is steady.
         const tempF = w.tempF + 8 * Math.sin((2 * Math.PI * hoursFromNow) / 24);
@@ -287,7 +289,8 @@ export function flowNormalsResponse(url, stations) {
 const isoDay = (t) => new Date(t).toISOString().slice(0, 10);
 
 /**
- * USGS daily mean water temperature: 30 days ending yesterday. By default the month is flat at the
+ * USGS daily mean water temperature: 30 days ending yesterday (a year when `time` asks for more,
+ * flat before the month). No daily record for level, so the charts' fallback is exercised. By default the month is flat at the
  * station's latest reading; `dailyFromC` sets where the month started, and `dailyLastThreeC` drops
  * (or raises) the last three days to that value, for a cold snap. `daily: false` = no daily record.
  */
@@ -298,8 +301,9 @@ export function dailyResponse(url, stations) {
     if (latest !== undefined && station.daily !== false && url.searchParams.get('parameter_code') === '00010') {
         const from = station.dailyFromC ?? latest;
         const to = station.dailyLastThreeC === undefined ? latest : from; // a snap: steady, then the sudden change
-        for (let i = 30; i >= 1; i--) {
-            let value = from + ((to - from) * (30 - i)) / 29;
+        const days = Math.min(365, Number(/^P(\d+)D$/.exec(url.searchParams.get('time') ?? '')?.[1] ?? 30));
+        for (let i = days; i >= 1; i--) {
+            let value = i > 30 ? from : from + ((to - from) * (30 - i)) / 29;
             if (i <= 3 && station.dailyLastThreeC !== undefined) value = station.dailyLastThreeC;
             features.push({
                 type: 'Feature',
@@ -353,14 +357,15 @@ export function monitoringLocationsResponse(url, stations) {
     return { type: 'FeatureCollection', features, numberReturned: features.length, links: [] };
 }
 
-/** 48 hours at 30-minute steps. River level rises 0.30 ft over the window; everything else is flat. */
+/** 30-minute steps over `time` (48 hours by default). River level rises 0.30 ft per 48 hours; everything else is flat. */
 export function continuousResponse(url, stations) {
     const station = stations.find((s) => s.id === url.searchParams.get('monitoring_location_id'));
     const parameter = url.searchParams.get('parameter_code');
     const latest = station?.readings[parameter];
     const features = [];
     if (latest !== undefined) {
-        for (let t = NOW - 48 * HOUR; t <= NOW - 15 * 60_000; t += HOUR / 2) {
+        const hours = Number(/^PT(\d+)H$/.exec(url.searchParams.get('time') ?? '')?.[1] ?? 48);
+        for (let t = NOW - hours * HOUR; t <= NOW - 15 * 60_000; t += HOUR / 2) {
             const hoursAgo = (NOW - t) / HOUR;
             const value = parameter === '00065' ? latest - (0.3 * hoursAgo) / 48 : latest;
             features.push({

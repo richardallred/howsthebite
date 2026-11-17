@@ -56,7 +56,17 @@ export const APP = {
     STATION_MAX_READING_AGE_H: 24,
 
     // History / trends
-    HISTORY_HOURS: 48,
+    HISTORY_HOURS: 48, // what the score's trends use, and the charts' default window
+    // How far back the history charts can look. Weather comes from the stations' own reports,
+    // which the Weather Service keeps for about a week; water data from USGS goes back years
+    // (as daily means beyond a week, which is all a month or a year chart can show anyway).
+    HISTORY_RANGES: {
+        '48h': { title: 'Last 48 hours', hours: 48 },
+        '7d': { title: 'Last 7 days', hours: 7 * 24 },
+        '30d': { title: 'Last 30 days', hours: 30 * 24, daily: true },
+        '1y': { title: 'Past year', hours: 365 * 24, daily: true },
+    },
+    WEATHER_HISTORY_MAX_HOURS: 7 * 24,
     WATER_TREND_DAYS: 30, // daily water temperatures behind the seasonal lure picks
     PRESSURE_TREND_HOURS: 3,
     TEMP_TREND_HOURS: 24,

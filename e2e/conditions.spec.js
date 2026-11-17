@@ -283,6 +283,63 @@ test.describe('history charts', () => {
     });
 });
 
+test.describe('history range', () => {
+    test('looks back a week, and the choice is remembered', async ({ page, app }) => {
+        await app.open();
+        const range = page.getByRole('group', { name: 'How far back the charts look' });
+        await expect(range.getByRole('button', { name: '48 hours' })).toHaveAttribute('aria-pressed', 'true');
+
+        await range.getByRole('button', { name: '7 days' }).click();
+        await expect(page.getByRole('heading', { name: 'Last 7 days' })).toBeVisible();
+        await expect(range.getByRole('button', { name: '7 days' })).toHaveAttribute('aria-pressed', 'true');
+        for (const id of ['pressureChart', 'airChart', 'waterChart', 'levelChart']) {
+            await expect(page.locator(`#${id} .chart-plot`)).toHaveAttribute('aria-label', /over the last 7 days/);
+            await expect(page.locator(`#${id} .chart-note`)).toBeHidden(); // every source covers the week
+        }
+        await expect(page.locator('#historyNote')).toBeHidden();
+
+        // Rows twice a day over a week, dated.
+        await page.locator('#airChart summary').click();
+        const rows = page.locator('#airChart tbody tr');
+        expect(await rows.count()).toBeGreaterThanOrEqual(14);
+        expect(await rows.count()).toBeLessThanOrEqual(16);
+        await expect(rows.first()).toContainText(/[A-Z][a-z]{2} \d{1,2}/);
+
+        await page.reload();
+        await expect(page.getByRole('heading', { name: 'Last 7 days' })).toBeVisible();
+        await expect(page.locator('#pressureChart .chart-plot')).toHaveAttribute('aria-label', /over the last 7 days/);
+    });
+
+    test('a year of daily means for the water; the weather stops at a week and says so', async ({ page, app }) => {
+        await app.open();
+        await page.getByRole('button', { name: '1 year' }).click();
+        await expect(page.getByRole('heading', { name: 'Past year' })).toBeVisible();
+        await expect(page.locator('#historyNote')).toContainText('about a week');
+
+        await expect(page.locator('#waterChart .chart-plot')).toHaveAttribute('aria-label', /daily means, over the last year/);
+        await expect(page.locator('#waterChart .chart-note')).toBeHidden();
+        await expect(page.locator('#pressureChart .chart-plot')).toHaveAttribute('aria-label', /over the last 7 days/);
+        // No daily record for the level gauge, and a year of raw readings is too many to ask for.
+        await expect(page.locator('#levelChart .chart-empty')).toHaveText('This gauge has no record for the past year.');
+
+        const plot = page.locator('#waterChart .chart-plot');
+        await plot.focus();
+        await page.keyboard.press('End');
+        await expect(page.locator('#waterChart .chart-tooltip')).toContainText('daily mean');
+    });
+
+    test('a month falls back to the gauge\'s own readings when it has no daily record', async ({ page, app }) => {
+        await app.open();
+        await page.getByRole('button', { name: '30 days' }).click();
+        await expect(page.locator('#levelChart .chart-plot')).toHaveAttribute('aria-label', /River level|Water level/);
+        await expect(page.locator('#levelChart .chart-plot')).toHaveAttribute('aria-label', /over the last 30 days/);
+        await expect(page.locator('#waterChart .chart-plot')).toHaveAttribute('aria-label', /daily means/);
+        // Back to 48 hours: the series that feed the score, as before.
+        await page.getByRole('button', { name: '48 hours' }).click();
+        await expect(page.locator('#pressureChart .chart-plot')).toHaveAttribute('aria-label', /over the last 48 hours/);
+    });
+});
+
 test.describe('theme', () => {
     test('toggle switches theme and the choice survives a reload', async ({ page, app }) => {
         await page.emulateMedia({ colorScheme: 'light' });
