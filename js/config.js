@@ -26,6 +26,9 @@ export const API = {
     // share cached answers. Where the proxy is not deployed (plain static hosting,
     // local `npm start`) the app notices and talks to USGS directly instead.
     USGS_PROXY: '/api/usgs',
+    // Same-origin caching proxy for lake outlines from OpenStreetMap (functions/api/lake.js).
+    // Where it is not deployed the app asks the Overpass API directly (js/api/lake-api.js).
+    LAKE_PROXY: '/api/lake',
 };
 
 export const APP = {

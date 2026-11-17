@@ -31,10 +31,12 @@ import { changeOver, classifyTrend, frontState, lastHours } from './core/trend.j
 import { dailyMeans, describeWaterTrend, summariseWaterTrend } from './core/water-trend.js';
 import { HOUR_MS, debounce, distanceMiles, isNum, roundCoord, timeAgo } from './core/util.js';
 import { compassPoint } from './core/sky.js';
+import { locateZones, targetPlan } from './core/target-zones.js';
+import { fetchLake } from './api/lake-api.js';
 import { locationKey, storage } from './storage.js';
 import { createLineChart } from './ui/charts.js';
 import { $, el, glyph, icon, setText, svg } from './ui/dom.js';
-import { createStationMap } from './ui/map.js';
+import { createLakeMap, createStationMap } from './ui/map.js';
 import { initTheme } from './ui/theme.js';
 import { initTips, tip } from './ui/tips.js';
 
@@ -59,6 +61,7 @@ const state = {
     loadFailed: false,
     scoreDay: 0, // the score card's day: 0 is today, then each day ahead in the outlook
     scoreFocus: null, // part of that day on the card: { kind: 'part', id } or { kind: 'hour', t }; null for the whole day
+    lake: null, // { key, status: 'loading'|'ready'|'none'|'too-big'|'failed', lake }: the outline behind "Where to look"
 };
 
 let loadController = null;
@@ -66,6 +69,7 @@ let historyController = null;
 let trendController = null;
 let charts = null;
 let stationMap = null;
+let lakeMap = null;
 
 // ---------------------------------------------------------------------------
 // Derived data
@@ -1332,6 +1336,90 @@ function renderLures(derived) {
     setText('lureColour', colour);
 }
 
+// ----- Where to look --------------------------------------------------------------------
+
+const lakeKey = (location) => `${location.lat.toFixed(3)},${location.lon.toFixed(3)}`;
+const lakeWanted = () => Boolean(state.location) && modeChoice().mode === 'fresh' && state.location.kind !== 'river';
+const zonesCache = { key: null, zones: [] }; // finding the zones walks the whole shore: once per lake, phase and wind
+
+function whereZones(lake, plan, windFrom) {
+    const key = `${lake.id}|${plan.kinds.map((k) => k.kind).join()}|${Math.round((windFrom ?? 0) / 22.5)}`;
+    if (zonesCache.key !== key) {
+        zonesCache.key = key;
+        zonesCache.zones = locateZones(lake, plan, { windFrom });
+    }
+    return zonesCache.zones;
+}
+
+function renderWhere(derived) {
+    const section = $('where');
+    const lead = derived?.lures.patterns.find((entry) => entry.season);
+    if (!derived || derived.salt || !lead) {
+        section.hidden = true;
+        return;
+    }
+    section.hidden = false;
+    const { current } = state.weather;
+    const windFrom = isNum(current.windDirection) ? current.windDirection : null;
+    const plan = targetPlan({ phaseId: lead.season.id, windMph: current.windMph, windFrom, waterTempF: derived.waterTempF });
+
+    const known = state.lake?.key === lakeKey(state.location) ? state.lake : null;
+    // Whatever drew the card (a fresh load, conditions kept from a moment ago, a change of
+    // mode), the lake for this place is fetched if it isn't here or on its way.
+    if (!known && lakeWanted()) queueMicrotask(loadLake);
+    const lake = known?.status === 'ready' ? known.lake : null;
+    const zones = lake ? whereZones(lake, plan, windFrom) : [];
+    const numbered = zones.map((zone) => ({ ...zone, title: plan.kinds.find((k) => k.kind === zone.kind)?.title }));
+
+    let status;
+    if (state.location.kind === 'river') status = 'Rivers aren\'t mapped yet; these are what to look for along the banks.';
+    else if (!known || known.status === 'loading') status = 'Finding the lake\'s outline… a big lake can take a minute the first time.';
+    else if (lake) status = `${lake.name ?? 'This lake'}, for ${lead.target} in the ${lead.season.label.toLowerCase()}.`;
+    else if (known.status === 'too-big') status = 'This water is too big to mark spot by spot; these are what to look for along its shores.';
+    else if (known.status === 'failed') status = 'The lake outline couldn\'t be loaded; these are what to look for.';
+    else status = 'No lake mapped right here. Search for a lake by name to see these marked on it.';
+    $('whereLake').replaceChildren(status, known?.status === 'failed'
+        ? el('button', { type: 'button', class: 'where-retry', onClick: () => loadLake() }, 'Try again')
+        : '');
+
+    $('whereList').replaceChildren(...plan.kinds.map((entry) => {
+        const numbers = numbered.map((zone, index) => (zone.kind === entry.kind ? index + 1 : null)).filter(Boolean);
+        return el('li', { class: `where-item zone-${entry.kind}` },
+            el('span', { class: 'where-swatch', 'aria-hidden': 'true' }),
+            el('div', { class: 'where-text' },
+                el('h3', { class: 'where-title' }, entry.title,
+                    numbers.length > 0 && el('span', { class: 'where-numbers' }, ` · on the map: ${numbers.join(', ')}`),
+                    lake && numbers.length === 0 && el('span', { class: 'where-numbers' }, ' · none stand out on this lake')),
+                el('p', { class: 'where-why' }, `${entry.why}.`)));
+    }));
+
+    const notes = [plan.calmNote, plan.depthNote].filter(Boolean);
+    $('whereNote').hidden = notes.length === 0;
+    setText('whereNote', notes.join(' '));
+
+    $('whereMapFrame').hidden = !lake;
+    if (lake) lakeMap.update({ lake, zones: numbered, location: state.location });
+}
+
+async function loadLake() {
+    if (!lakeWanted()) return;
+    const location = state.location;
+    const key = lakeKey(location);
+    if (state.lake?.key === key && state.lake.status !== 'failed') return;
+    state.lake = { key, status: 'loading', lake: null };
+    if (lastDerived) renderWhere(lastDerived);
+    let next;
+    try {
+        const { lake, reason } = await fetchLake(location.lat, location.lon);
+        next = { key, status: lake ? 'ready' : reason ?? 'none', lake };
+    } catch {
+        next = { key, status: 'failed', lake: null };
+    }
+    if (state.location !== location && lakeKey(state.location) !== key) return;
+    state.lake = next;
+    renderWhere(derive());
+}
+
 function renderForecast() {
     const list = $('forecastList');
     const { weather } = state;
@@ -1563,6 +1651,7 @@ function render() {
     renderModeGroup();
     renderSpeciesGroup();
     renderLures(derived);
+    renderWhere(derived);
     renderForecast();
     renderStations(derived);
     renderLevel(derived);
@@ -2057,6 +2146,7 @@ async function load() {
     saveSnapshot();
     loadWaves();
     loadWaterTrend();
+    loadLake();
 }
 
 function saveSnapshot() {
@@ -2178,6 +2268,7 @@ function setMode(mode) {
     render();
     loadWaves();
     loadWaterTrend();
+    loadLake();
 }
 
 function setWaterFilter(filter) {
@@ -2539,6 +2630,7 @@ function init() {
         }),
     };
     stationMap = createStationMap($('stationMap'), { onSelect: (id) => selectStation(id) });
+    lakeMap = createLakeMap($('whereMap'));
 
     $('locateBtn').addEventListener('click', useMyLocation);
     $('refreshBtn').addEventListener('click', () => load());

@@ -49,7 +49,7 @@ test('every file the app loads is in the service worker shell list', async ({ pa
     });
     await app.open();
     await page.locator('#water').scrollIntoViewIfNeeded(); // loads the map library
-    await expect(page.locator('.leaflet-container')).toBeVisible();
+    await expect(page.locator('#stationMap.leaflet-container')).toBeVisible();
 
     const source = await (await page.request.get('/sw.js')).text();
     const shell = [...source.match(/const SHELL = \[([\s\S]*?)\];/)[1].matchAll(/'([^']+)'/g)]

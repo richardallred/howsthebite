@@ -261,6 +261,29 @@
             <p class="lure-disclosure" id="affiliateDisclosure">As an Amazon Associate I earn from qualifying purchases.</p>
         </section>
 
+        <section class="section panel" id="where" aria-labelledby="whereTitle" hidden>
+            <div class="panel-head">
+                <div class="title-row">
+                    <h2 class="panel-title" id="whereTitle">Where to look</h2>
+                    <span class="tip">
+                        <button type="button" class="tip-btn" aria-label="How these spots are picked" aria-describedby="whereTip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button>
+                        <span class="tip-text" role="tooltip" id="whereTip">
+                            <span class="tip-para">Picked from where the fish are in their year and the wind right now, then found on the lake's outline from OpenStreetMap: points that reach into the lake, coves and creek arms, the north shore that warms first, and the bank the wind blows into.</span>
+                            <span class="tip-para">Rules of thumb, not a fish finder: the outline has no depths, so drop-offs, humps and weed lines can't be shown.</span>
+                        </span>
+                    </span>
+                </div>
+                <p class="where-lake" id="whereLake"></p>
+            </div>
+            <div class="where-grid">
+                <ol class="where-list" id="whereList"></ol>
+                <div class="map-frame where-map-frame" id="whereMapFrame" hidden>
+                    <div class="map" id="whereMap" role="region" aria-label="Map of the lake with the spots in the list marked and numbered. The list has the same information."></div>
+                </div>
+            </div>
+            <p class="where-note" id="whereNote" hidden></p>
+        </section>
+
         <section class="section panel" id="forecast" aria-labelledby="forecastTitle">
             <div class="panel-head">
                 <h2 class="panel-title" id="forecastTitle">5-day weather</h2>
