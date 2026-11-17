@@ -5,7 +5,8 @@
 //   1. latest-continuous    — every sensor in a bounding box that has reported
 //                             recently, with its latest reading
 //   2. monitoring-locations — names and site types for the nearest of those
-// A further request per series (continuous) loads the last 48 hours for a chart, and
+// A further request per series (continuous) loads the last 48 hours for a chart (or a week;
+// a month or a year comes from the daily means instead), and
 // one to the Statistics API says what a river gauge normally reads on today's date.
 
 import { API, APP } from '../config.js';
@@ -194,6 +195,13 @@ export async function findStations(lat, lon, { signal, radiusMi = APP.STATION_RA
     return stations;
 }
 
+/** Keep at most ~`max` evenly spaced points, always including the last. */
+function thin(points, max = 300) {
+    const step = Math.ceil(points.length / max);
+    if (step <= 1) return points;
+    return points.filter((_, index) => index % step === 0 || index === points.length - 1);
+}
+
 /**
  * One continuous series for a station over the last `hours`, oldest first.
  * Values are returned as reported, except temperature which is converted to °F.
@@ -222,10 +230,8 @@ async function fetchSeries(stationId, parameterCode, timeSeriesId, { signal, hou
         .filter((point) => isNum(point.t) && isNum(point.v) && point.t >= cutoff)
         .sort((a, b) => a.t - b.t);
 
-    // Some gauges report every minute; ~300 points is plenty for a 48-hour chart.
-    const step = Math.ceil(points.length / 300);
-    if (step <= 1) return points;
-    return points.filter((_, index) => index % step === 0 || index === points.length - 1);
+    // Some gauges report every minute; a few hundred points is plenty for a chart.
+    return thin(points, hours > APP.HISTORY_HOURS ? 400 : 300);
 }
 
 /** Water temperature (°F) history for a station. */
@@ -272,35 +278,62 @@ export async function fetchFlowNormals(stationId, monthDay, { signal } = {}) {
 const DAILY_MEAN = '00003';
 
 /**
- * Daily mean water temperature (°F) at a station over the last `days`, oldest first:
- * [{ day: 'YYYY-MM-DD', v }]. USGS computes these from the station's own sensor, usually
- * through yesterday. A station with sensors at more than one depth has more than one daily
- * series; the one with the most days is used.
+ * Daily means of one parameter at a station over the last `days`, oldest first:
+ * [{ day: 'YYYY-MM-DD', v }], temperature in °F. USGS computes these from the station's
+ * own record, usually through yesterday. A station with sensors at more than one depth
+ * has more than one daily series; the one with the most days is used.
  */
-export async function fetchDailyWaterTemps(station, { signal, days = APP.WATER_TREND_DAYS } = {}) {
+async function fetchDailyMeans(stationId, parameterCode, days, { signal } = {}) {
     const data = await usgsJson('daily', {
-        monitoring_location_id: station.id,
-        parameter_code: '00010',
+        monitoring_location_id: stationId,
+        parameter_code: parameterCode,
         statistic_id: DAILY_MEAN,
         time: `P${days}D`,
         properties: 'time_series_id,time,value,unit_of_measure',
         skipGeometry: true,
-        limit: 500,
+        limit: days > 60 ? 2000 : 500,
     }, { signal });
 
+    const measure = PARAMETERS[parameterCode]?.measure;
     const bySeries = new Map();
     for (const feature of data.features ?? []) {
         const props = feature.properties ?? {};
         const value = Number.parseFloat(props.value);
         const day = String(props.time ?? '').slice(0, 10);
-        if (!plausible('temp', value) || !/^\d{4}-\d{2}-\d{2}$/.test(day)) continue;
+        if (!plausible(measure, value) || !/^\d{4}-\d{2}-\d{2}$/.test(day)) continue;
         const key = props.time_series_id ?? '';
         if (!bySeries.has(key)) bySeries.set(key, new Map());
-        bySeries.get(key).set(day, toFahrenheit(value, props.unit_of_measure));
+        bySeries.get(key).set(day, measure === 'temp' ? toFahrenheit(value, props.unit_of_measure) : value);
     }
     const longest = [...bySeries.values()].sort((a, b) => b.size - a.size)[0];
     return longest ? [...longest].map(([day, v]) => ({ day, v })).sort((a, b) => (a.day < b.day ? -1 : 1)) : [];
 }
+
+/** Daily mean water temperature (°F) at a station over the last `days`, oldest first: [{ day, v }]. */
+export const fetchDailyWaterTemps = (station, { signal, days = APP.WATER_TREND_DAYS } = {}) => (
+    fetchDailyMeans(station.id, '00010', days, { signal })
+);
+
+/**
+ * A series for the history charts reaching back `hours`: [{ t, v }] oldest first.
+ * Up to a week it is the gauge's own readings; beyond that, one daily mean per day
+ * (plotted at noon UTC, which is daytime across the US). A gauge with no daily record
+ * yet falls back to its readings for a month; a year of those would be too many.
+ */
+async function fetchHistorySeries(stationId, parameterCode, timeSeriesId, { signal, hours, daily }) {
+    if (!daily) return fetchSeries(stationId, parameterCode, timeSeriesId, { signal, hours });
+    const days = await fetchDailyMeans(stationId, parameterCode, Math.round(hours / 24), { signal });
+    if (days.length >= 2) return days.map(({ day, v }) => ({ t: Date.parse(`${day}T12:00:00Z`), v, daily: true }));
+    return hours <= 31 * 24 ? fetchSeries(stationId, parameterCode, timeSeriesId, { signal, hours }) : [];
+}
+
+/** Water temperature (°F) over a chart range (see APP.HISTORY_RANGES). */
+export const fetchWaterHistoryRange = (station, options) => fetchHistorySeries(station.id, '00010', station.timeSeriesId, options);
+
+/** Gage height or lake elevation (ft) over a chart range. */
+export const fetchLevelHistoryRange = (station, options) => (
+    fetchHistorySeries(station.id, station.level.parameterCode, station.level.timeSeriesId, options)
+);
 
 const MIN_YEARS_OF_TEMPERATURE = 5; // temperature records are much younger than flow records
 

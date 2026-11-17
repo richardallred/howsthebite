@@ -99,6 +99,15 @@ export const storage = {
         write('waterFilter', filter);
     },
 
+    /** How far back the history charts look: a key of APP.HISTORY_RANGES. */
+    getHistoryRange() {
+        const range = read('historyRange');
+        return Object.hasOwn(APP.HISTORY_RANGES, range ?? '') ? range : '48h';
+    },
+    setHistoryRange(range) {
+        write('historyRange', range);
+    },
+
     /** Which fish the score is tuned for: 'any', 'warm', 'catfish', 'cool' or 'cold' (see SPECIES_GROUPS in scoring.js). */
     getSpeciesGroup() {
         const group = read('species');

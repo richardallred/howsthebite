@@ -42,8 +42,11 @@ No framework and nothing to compile: plain HTML, CSS and ES modules. The app its
 - **Current conditions** observed at the nearest weather station: air temperature, pressure with
   its 3-hour trend, wind and gusts, sky
 - **5-day forecast** with highs/lows, precipitation chance and wind
-- **48-hour charts** for pressure, air temperature, water temperature and water level, with
-  hover/touch/keyboard read-outs and a data table for each
+- **History charts** for pressure, air temperature, water temperature and water level, over the
+  last 48 hours, 7 days, 30 days or the past year (the choice is remembered), with
+  hover/touch/keyboard read-outs and a data table for each. Beyond a week the water charts use
+  USGS daily means; pressure and air temperature stop at about a week, which is as long as the
+  Weather Service keeps station reports
 - **Place search** for towns ("Asheville, NC") and for lakes, reservoirs and rivers by name
   ("Lake Norman", "French Broad River"), recent places, and optional "use my location"
 - **A link for every place**: each place has its own address

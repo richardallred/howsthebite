@@ -12,10 +12,13 @@ import {
 } from './api/coast-api.js';
 import { fetchSpeciesCounts, speciesRegionKey } from './api/species-api.js';
 import {
-    fetchDailyWaterTemps, fetchFlowNormals, fetchLevelHistory, fetchTempNormals, fetchWaterHistory, findStations,
+    fetchDailyWaterTemps, fetchFlowNormals, fetchLevelHistory, fetchLevelHistoryRange, fetchTempNormals, fetchWaterHistory,
+    fetchWaterHistoryRange, findStations,
 } from './api/usgs-api.js';
 import { HttpError, isAbort } from './api/http.js';
-import { OutsideCoverageError, fetchAlerts, fetchWeather, reverseGeocode, searchPlaces } from './api/weather-api.js';
+import {
+    OutsideCoverageError, fetchAlerts, fetchObservationHistory, fetchWeather, reverseGeocode, searchPlaces,
+} from './api/weather-api.js';
 import { APP } from './config.js';
 import { hazardAt, summariseAlerts } from './core/alerts.js';
 import { colourAdvice, lureConditions, lurePatterns, recommendLures } from './core/lures.js';
@@ -61,12 +64,15 @@ const state = {
     loadFailed: false,
     scoreDay: 0, // the score card's day: 0 is today, then each day ahead in the outlook
     scoreFocus: null, // part of that day on the card: { kind: 'part', id } or { kind: 'hour', t }; null for the whole day
+    historyRange: storage.getHistoryRange(), // how far back the charts look: a key of APP.HISTORY_RANGES
+    rangeHistory: null, // { key, status: 'loading'|'ready', pressure, air, water, level }: the charts beyond 48 hours
     lake: null, // { key, status: 'loading'|'ready'|'none'|'too-big'|'failed', lake }: the outline behind "Where to look"
 };
 
 let loadController = null;
 let historyController = null;
 let trendController = null;
+let rangeController = null;
 let charts = null;
 let stationMap = null;
 let lakeMap = null;
@@ -1560,26 +1566,135 @@ function renderLevel(derived) {
         `USGS gauge: ${station.name}, ${station.distanceMi.toFixed(1)} mi away, read ${timeAgo(station.level.time)}. ${explain}`);
 }
 
-function renderCharts(derived) {
-    const timezone = state.weather?.timezone;
-    charts.pressure.update(derived?.pressure ?? [], {
-        timezone,
-        emptyText: derived ? 'No barometer is reporting near here.' : 'Pressure history will appear here.',
-    });
-    charts.air.update(derived?.air ?? [], { timezone, emptyText: 'Temperature history will appear here.' });
-    charts.water.update(derived?.station ? state.waterHistory : [], {
-        timezone,
-        emptyText: derived && !derived.station
-            ? 'No sensor selected, so there is no measured history to chart.'
-            : 'Water temperature history will appear here.',
-    });
+/** The sources the longer chart range is drawn from; a change of any of them means loading it again. */
+function rangeSources(derived) {
+    const weather = state.weather;
+    if (!weather || !derived) return null;
+    const station = derived.station ?? null;
+    const gauge = derived.level?.station ?? null;
+    const barometer = weather.pressureStation ?? (isNum(weather.current?.pressureInHg) ? weather.station : null);
+    const parts = [state.historyRange, weather.fetchedAt, weather.station?.id, barometer?.id, station?.id, gauge?.id];
+    return { key: parts.join('|'), station, gauge, airStation: weather.station ?? null, barometer };
+}
 
+function renderHistoryRange() {
+    const range = APP.HISTORY_RANGES[state.historyRange];
+    setText('historyTitle', range.title);
+    for (const button of $('historyRange').querySelectorAll('button')) {
+        button.setAttribute('aria-pressed', String(button.dataset.range === state.historyRange));
+    }
+    const note = $('historyNote');
+    note.hidden = !range.daily;
+    if (range.daily) {
+        note.textContent = 'Water temperature and level are daily means. The Weather Service keeps only about a week '
+            + 'of station readings, so pressure and air temperature go back 7 days at most.';
+    }
+}
+
+function renderCharts(derived) {
+    renderHistoryRange();
+    const timezone = state.weather?.timezone;
+    const range = APP.HISTORY_RANGES[state.historyRange];
     const gauge = derived?.level?.station ?? null;
     setText('levelChartTitle', gauge?.kind === 'lake' ? 'Lake level' : 'River level');
-    charts.level.update(gauge ? state.levelHistory : [], {
+
+    if (state.historyRange === '48h') {
+        charts.pressure.update(derived?.pressure ?? [], {
+            timezone,
+            emptyText: derived ? 'No barometer is reporting near here.' : 'Pressure history will appear here.',
+        });
+        charts.air.update(derived?.air ?? [], { timezone, emptyText: 'Temperature history will appear here.' });
+        charts.water.update(derived?.station ? state.waterHistory : [], {
+            timezone,
+            emptyText: derived && !derived.station
+                ? 'No sensor selected, so there is no measured history to chart.'
+                : 'Water temperature history will appear here.',
+        });
+        charts.level.update(gauge ? state.levelHistory : [], {
+            timezone,
+            emptyText: derived && !gauge ? 'No level gauge nearby.' : 'Water level history will appear here.',
+        });
+        return;
+    }
+
+    const sources = rangeSources(derived);
+    const loaded = sources && state.rangeHistory?.key === sources.key && state.rangeHistory.status === 'ready'
+        ? state.rangeHistory : null;
+    const span = range.title.toLowerCase(); // 'last 7 days', 'past year'
+    const waiting = `Loading the ${span}…`;
+    const weatherHours = Math.min(range.hours, APP.WEATHER_HISTORY_MAX_HOURS);
+    const weatherCapped = range.hours > APP.WEATHER_HISTORY_MAX_HOURS;
+    const options = (series, missing, hours) => [loaded ? series : [], {
         timezone,
-        emptyText: derived && !gauge ? 'No level gauge nearby.' : 'Water level history will appear here.',
-    });
+        expectedHours: hours,
+        emptyText: !derived ? 'History will appear here.' : (loaded ? missing : waiting),
+    }];
+
+    charts.pressure.update(...options(loaded?.pressure, sources?.barometer
+        ? `No pressure readings for the ${APP.HISTORY_RANGES[weatherCapped ? '7d' : state.historyRange].title.toLowerCase()}.`
+        : 'No barometer is reporting near here.', weatherHours));
+    charts.air.update(...options(loaded?.air, 'No temperature readings for this stretch.', weatherHours));
+    charts.water.update(...options(loaded?.water, derived?.station
+        ? `This sensor has no record for the ${span}.`
+        : 'No sensor selected, so there is no measured history to chart.', range.hours));
+    charts.level.update(...options(loaded?.level, gauge
+        ? `This gauge has no record for the ${span}.`
+        : 'No level gauge nearby.', range.hours));
+}
+
+/** Load the charts' series for a range longer than 48 hours (the 48-hour ones are loaded with the conditions). */
+async function loadRangeHistory() {
+    if (state.historyRange === '48h' || !lastDerived) return;
+    const sources = rangeSources(lastDerived);
+    if (!sources || state.rangeHistory?.key === sources.key) return;
+
+    rangeController?.abort();
+    const controller = new AbortController();
+    rangeController = controller;
+    const { signal } = controller;
+    state.rangeHistory = { key: sources.key, status: 'loading' };
+
+    const range = APP.HISTORY_RANGES[state.historyRange];
+    const weatherHours = Math.min(range.hours, APP.WEATHER_HISTORY_MAX_HOURS);
+    const options = { signal, hours: range.hours, daily: Boolean(range.daily) };
+    const orEmpty = (error) => {
+        if (isAbort(error)) throw error;
+        return [];
+    };
+    const noReports = { temp: [], pressure: [] };
+    const reports = (station) => (station
+        ? fetchObservationHistory(station.id, weatherHours, { signal }).catch((error) => {
+            if (isAbort(error)) throw error;
+            return noReports;
+        })
+        : Promise.resolve(noReports));
+    try {
+        const airReports = reports(sources.airStation);
+        // Usually one station reports both, and is asked once.
+        const pressureReports = sources.barometer?.id === sources.airStation?.id ? airReports : reports(sources.barometer);
+        const [air, pressure, water, level] = await Promise.all([
+            airReports.then((r) => r.temp),
+            pressureReports.then((r) => (sources.barometer ? r.pressure : [])),
+            sources.station ? fetchWaterHistoryRange(sources.station, options).catch(orEmpty) : [],
+            sources.gauge ? fetchLevelHistoryRange(sources.gauge, options).catch(orEmpty) : [],
+        ]);
+        if (signal.aborted) return;
+        state.rangeHistory = { key: sources.key, status: 'ready', air, pressure, water, level };
+    } catch {
+        return; // superseded
+    }
+    if (rangeController === controller) rangeController = null;
+    renderCharts(lastDerived);
+}
+
+function setHistoryRange(range) {
+    if (!Object.hasOwn(APP.HISTORY_RANGES, range) || range === state.historyRange) return;
+    state.historyRange = range;
+    storage.setHistoryRange(range);
+    rangeController?.abort();
+    if (state.rangeHistory?.status === 'loading') state.rangeHistory = null;
+    renderCharts(lastDerived);
+    loadRangeHistory();
 }
 
 /** "35.58° N · 80.92° W", printed over the place like the corner of a survey sheet. */
@@ -1658,6 +1773,7 @@ function render() {
     renderTides(derived);
     renderCharts(derived);
     syncAddress();
+    loadRangeHistory(); // charts beyond 48 hours: nothing to do unless that range is chosen and its sources changed
 }
 
 // ---------------------------------------------------------------------------
@@ -2639,6 +2755,10 @@ function init() {
     $('waterFilter').addEventListener('click', (event) => {
         const filter = event.target.closest('button')?.dataset.filter;
         if (filter) setWaterFilter(filter);
+    });
+    $('historyRange').addEventListener('click', (event) => {
+        const range = event.target.closest('button')?.dataset.range;
+        if (range) setHistoryRange(range);
     });
     $('modeGroup').addEventListener('click', (event) => {
         const mode = event.target.closest('button')?.dataset.mode;

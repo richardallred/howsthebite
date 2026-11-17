@@ -1448,6 +1448,8 @@ body.page { padding-bottom: 0; }
     text-align: center;
 }
 
+.chart-note { margin: 2px 6px 0; font-size: 0.75rem; color: var(--muted); }
+.history-note { margin: -2px 2px 12px; font-size: 0.8125rem; color: var(--muted); }
 .chart-data { margin: 4px 6px 0; font-size: 0.75rem; }
 .chart-data summary { display: inline-block; padding: 6px 0; color: var(--muted); cursor: pointer; }
 .chart-data summary:hover { color: var(--ink); }

@@ -7,6 +7,8 @@
 // properties, so the chart follows the light/dark theme without re-rendering.
 
 import { HOUR_MS, niceTicks } from '../core/util.js';
+
+const DAY_MS = 24 * HOUR_MS;
 import { el, svg } from './dom.js';
 
 const HEIGHT = 176; // keep in step with .chart-plot in styles.css
@@ -29,18 +31,65 @@ export function formatter(timezone, options) {
 
 const hourIn = (t, timezone) => Number(formatter(timezone, { hour: 'numeric', hourCycle: 'h23' }).format(t));
 const weekday = (t, timezone) => formatter(timezone, { weekday: 'short' }).format(t);
-const dateTime = (t, timezone) => formatter(timezone, { weekday: 'short', hour: 'numeric', minute: '2-digit' }).format(t);
+const dayOfMonth = (t, timezone) => Number(formatter(timezone, { day: 'numeric' }).format(t));
+const monthDay = (t, timezone) => formatter(timezone, { month: 'short', day: 'numeric' }).format(t);
+const monthName = (t, timezone) => formatter(timezone, { month: 'short' }).format(t);
 
-/** Tick marks at local midnight and noon. */
-function timeTicks(start, end, timezone) {
-    const ticks = [];
-    for (let t = Math.ceil(start / HOUR_MS) * HOUR_MS; t <= end; t += HOUR_MS) {
-        const hour = hourIn(t, timezone);
-        if (hour === 0) ticks.push({ t, label: weekday(t, timezone), major: true });
-        else if (hour === 12) ticks.push({ t, label: 'noon', major: false });
-    }
-    return ticks;
+/** A point's time as the read-out shows it: finer for a short window, the date alone for daily means. */
+export function pointTime(t, timezone, { span = 0, daily = false } = {}) {
+    if (daily) return formatter('UTC', { weekday: 'short', month: 'short', day: 'numeric' }).format(t);
+    if (span > 3.5 * DAY_MS) return formatter(timezone, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(t);
+    return formatter(timezone, { weekday: 'short', hour: 'numeric', minute: '2-digit' }).format(t);
 }
+
+/** Local midnights from `start` to `end`. Found hour by hour, then a day apart (a DST hour off is invisible at this scale). */
+function midnights(start, end, timezone) {
+    let t = Math.ceil(start / HOUR_MS) * HOUR_MS;
+    for (let i = 0; i < 24 && hourIn(t, timezone) !== 0; i++) t += HOUR_MS;
+    const out = [];
+    for (; t <= end; t += DAY_MS) out.push(t);
+    return out;
+}
+
+/**
+ * Tick marks for the time axis, scaled to the window: midnight and noon over two days,
+ * each day over a week, about weekly dates over a month, months over a year.
+ */
+export function timeTicks(start, end, timezone) {
+    const span = end - start;
+    if (span <= 3.5 * DAY_MS) {
+        const ticks = [];
+        for (let t = Math.ceil(start / HOUR_MS) * HOUR_MS; t <= end; t += HOUR_MS) {
+            const hour = hourIn(t, timezone);
+            if (hour === 0) ticks.push({ t, label: weekday(t, timezone), major: true });
+            else if (hour === 12) ticks.push({ t, label: 'noon', major: false });
+        }
+        return ticks;
+    }
+    const days = midnights(start, end, timezone);
+    if (span <= 10 * DAY_MS) return days.map((t) => ({ t, label: weekday(t, timezone), major: true }));
+    if (span <= 60 * DAY_MS) {
+        return days.filter((t) => [1, 8, 15, 22].includes(dayOfMonth(t, timezone)))
+            .map((t) => ({ t, label: monthDay(t, timezone), major: true }));
+    }
+    return days.filter((t) => dayOfMonth(t, timezone) === 1).map((t) => ({ t, label: monthName(t, timezone), major: true }));
+}
+
+/** "48 hours", "7 days", "year": how long a window is, in words. */
+export function spanWords(ms) {
+    const hours = Math.round(ms / HOUR_MS);
+    if (hours <= 72) return `${hours} hours`;
+    const days = Math.round(ms / DAY_MS);
+    return days >= 300 ? 'year' : `${days} days`;
+}
+
+/** Hours between rows of the data table, so a window gives a readable number of rows. */
+const tableStep = (span) => {
+    if (span <= 3.5 * DAY_MS) return 3 * HOUR_MS;
+    if (span <= 10 * DAY_MS) return 12 * HOUR_MS;
+    if (span <= 60 * DAY_MS) return DAY_MS;
+    return 7 * DAY_MS;
+};
 
 export function nearestIndex(series, t) {
     let lo = 0;
@@ -65,19 +114,24 @@ export function createLineChart(container, { label, format, formatTick, minRange
     let series = [];
     let timezone = 'UTC';
     let emptyText = 'No data yet';
+    let expectedSpan = 0;
     let geometry = null;
     let activeIndex = null;
 
     const plot = el('div', { class: 'chart-plot', tabindex: '0', role: 'img' });
     const tooltip = el('div', { class: 'chart-tooltip', hidden: true });
     const empty = el('p', { class: 'chart-empty', hidden: true });
+    const shortNote = el('p', { class: 'chart-note', hidden: true });
     const tableBody = el('tbody');
     const details = el('details', { class: 'chart-data' },
         el('summary', null, 'View data'),
         el('table', null,
             el('thead', null, el('tr', null, el('th', { scope: 'col' }, 'Time'), el('th', { scope: 'col' }, label))),
             tableBody));
-    container.replaceChildren(el('div', { class: 'chart-frame' }, plot, tooltip), empty, details);
+    container.replaceChildren(el('div', { class: 'chart-frame' }, plot, tooltip), shortNote, empty, details);
+    const isDaily = () => Boolean(series[0]?.daily);
+    const span = () => (series.length >= 2 ? series[series.length - 1].t - series[0].t : 0);
+    const timeOf = (t) => pointTime(t, timezone, { span: span(), daily: isDaily() });
 
     function draw() {
         const hasData = series.length >= 2;
@@ -118,10 +172,14 @@ export function createLineChart(container, { label, format, formatTick, minRange
                 svg('text', { class: 'chart-tick', x: MARGIN.left - 8, y: y(tick), 'text-anchor': 'end', 'dominant-baseline': 'middle' }, formatTick(tick)),
             );
         }
-        for (const tick of timeTicks(t0, t1, timezone)) {
+        const timeTickList = timeTicks(t0, t1, timezone);
+        // Label every tick when they fit, otherwise every second or third (a year of months on a phone).
+        const labelWidth = Math.max(0, ...timeTickList.map((tick) => tick.label.length)) * 7 + 10;
+        const labelEvery = Math.max(1, Math.ceil((timeTickList.length * labelWidth) / innerW));
+        for (const [index, tick] of timeTickList.entries()) {
             const tx = x(tick.t);
             if (tick.major) root.append(svg('line', { class: 'chart-grid', x1: tx, x2: tx, y1: MARGIN.top, y2: baseline }));
-            if (tx > MARGIN.left + 12 && tx < MARGIN.left + innerW - 12) {
+            if (index % labelEvery === 0 && tx > MARGIN.left + 12 && tx < MARGIN.left + innerW - 12) {
                 root.append(svg('text', { class: 'chart-tick', x: tx, y: HEIGHT - 8, 'text-anchor': 'middle' }, tick.label));
             }
         }
@@ -161,7 +219,7 @@ export function createLineChart(container, { label, format, formatTick, minRange
 
         tooltip.replaceChildren(
             el('strong', null, format(point.v)),
-            el('span', null, dateTime(point.t, timezone)),
+            el('span', null, isDaily() ? `${timeOf(point.t)} · daily mean` : timeOf(point.t)),
         );
         tooltip.hidden = false;
         const flip = px > geometry.width * 0.6;
@@ -209,25 +267,33 @@ export function createLineChart(container, { label, format, formatTick, minRange
     });
 
     function describe() {
+        shortNote.hidden = true;
         if (series.length < 2) {
             plot.setAttribute('aria-label', `${label}: ${emptyText}`);
             tableBody.replaceChildren();
             return;
         }
         const values = series.map((p) => p.v);
-        const hours = Math.round((series[series.length - 1].t - series[0].t) / HOUR_MS);
+        const latest = isDaily() ? 'Latest daily mean' : 'Now';
         plot.setAttribute('aria-label',
-            `${label} over the last ${hours} hours. Now ${format(values[values.length - 1])}, `
+            `${label}${isDaily() ? ', daily means,' : ''} over the last ${spanWords(span())}. ${latest} ${format(values[values.length - 1])}, `
             + `low ${format(Math.min(...values))}, high ${format(Math.max(...values))}. `
             + 'Use the left and right arrow keys to read values.');
 
-        // One row about every three hours, newest first.
+        // A station with a shorter record than the window asked for: say where it starts.
+        if (expectedSpan && span() < expectedSpan * 0.8) {
+            shortNote.textContent = `Readings here only go back to ${pointTime(series[0].t, timezone, { span: expectedSpan, daily: isDaily() })}.`;
+            shortNote.hidden = false;
+        }
+
+        // Rows spaced to suit the window (every 3 hours over two days … weekly over a year), newest first.
+        const step = tableStep(span());
         const rows = [];
         let nextTime = Infinity;
         for (let i = series.length - 1; i >= 0; i--) {
             if (series[i].t <= nextTime) {
-                rows.push(el('tr', null, el('td', null, dateTime(series[i].t, timezone)), el('td', null, format(series[i].v))));
-                nextTime = series[i].t - 3 * HOUR_MS + 60_000;
+                rows.push(el('tr', null, el('td', null, timeOf(series[i].t)), el('td', null, format(series[i].v))));
+                nextTime = series[i].t - step + 60_000;
             }
         }
         tableBody.replaceChildren(...rows);
@@ -237,10 +303,12 @@ export function createLineChart(container, { label, format, formatTick, minRange
     observer.observe(plot);
 
     return {
-        update(nextSeries, { timezone: tz, emptyText: text } = {}) {
+        /** `expectedHours`: the window asked for, so a shorter record can be pointed out. */
+        update(nextSeries, { timezone: tz, emptyText: text, expectedHours = 0 } = {}) {
             series = nextSeries ?? [];
             if (tz) timezone = tz;
             if (text) emptyText = text;
+            expectedSpan = expectedHours * HOUR_MS;
             describe();
             draw();
         },
