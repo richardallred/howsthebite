@@ -112,13 +112,13 @@ test('the service worker recognises fingerprinted names by the same pattern as t
     assert.ok(sw.includes(`const FINGERPRINTED = ${FINGERPRINTED};`));
 });
 
-test('the page names its author', async () => {
+test('the page names its authors', async () => {
     const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
-    assert.match(html, /<meta name="author" content="Richard Allred">/);
+    assert.match(html, /<meta name="author" content="Richard Allred, Zach Gutterman">/);
     assert.match(html, /<footer class="app-footer">[\s\S]*Made by <a href="https:\/\/github.com\/richardallred"[^>]*>Richard Allred<\/a> and <a href="https:\/\/github.com\/zgutterm"[^>]*>Zach Gutterman<\/a>\.[\s\S]*<\/footer>/);
     const graph = JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1])['@graph'];
-    const author = graph.find((node) => node['@type'] === 'Person');
-    assert.equal(author.name, 'Richard Allred');
-    assert.equal(graph.find((node) => node['@type'] === 'WebSite').publisher['@id'], author['@id']);
-    assert.equal(graph.find((node) => node['@type'] === 'WebApplication').author['@id'], author['@id']);
+    const people = graph.filter((node) => node['@type'] === 'Person');
+    assert.deepEqual(people.map((person) => person.name), ['Richard Allred', 'Zach Gutterman']);
+    assert.equal(graph.find((node) => node['@type'] === 'WebSite').publisher['@id'], people[0]['@id']);
+    assert.deepEqual(graph.find((node) => node['@type'] === 'WebApplication').author.map((ref) => ref['@id']), people.map((person) => person['@id']));
 });
