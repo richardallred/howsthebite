@@ -83,6 +83,7 @@ const SHELL = [
     'js/core/alerts.js',
     'js/core/day-score.js',
     'js/core/lake-shape.js',
+    'js/core/nearby-water.js',
     'js/core/listed-places.js',
     'js/core/lures.js',
     'js/core/moon.js',

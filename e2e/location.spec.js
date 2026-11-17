@@ -252,3 +252,31 @@ test.describe('species on offer follow the region', () => {
         await expect(choices(page)).toHaveText(['All species', 'Bass & panfish', 'Catfish', 'Walleye & pike', 'Trout']);
     });
 });
+
+test.describe('nearby water', () => {
+    for (const proxy of [false, true]) {
+        test(`a town offers its lakes and gauged rivers, and one tap scores that water (proxy ${proxy ? 'deployed' : 'not deployed'})`, async ({ page, api, app }) => {
+            api.proxy = proxy;
+            await app.open();
+            await app.loaded();
+
+            const nearby = page.locator('#nearbyWater');
+            // Lakes, then rivers at their gauges (the creek and the lake gauge are not offered).
+            await expect(nearby.getByRole('link')).toHaveText([/^Test Lake\s*1 mi$/, /^Des Plaines River\s*1 mi$/, /^Fox River\s*2 mi$/]);
+            await expect(nearby.getByRole('link', { name: /Des Plaines/ })).toHaveAttribute('href', /des-plaines-river-illinois\?.*water=river/);
+
+            await nearby.getByRole('link', { name: /Des Plaines/ }).click();
+            await app.loaded();
+            await expect(page.getByRole('heading', { level: 1 })).toHaveText('Des Plaines River, Illinois');
+            await expect(nearby).toBeHidden(); // already on the water
+        });
+    }
+
+    test('without the lake service the gauged rivers are still offered', async ({ page, api, app }) => {
+        api.fail('nhd', 503);
+        await app.open();
+        await app.loaded();
+        await expect(page.locator('#nearbyWater').getByRole('link')).toHaveText([/Des Plaines River/, /Fox River/]);
+        await expect(page.locator('#notice')).not.toContainText('unavailable');
+    });
+});

@@ -20,7 +20,7 @@ test.describe('where to look', () => {
 
         // No proxy on a static host: the browser asked NHD itself, and had no need of Overpass.
         expect(api.count('lake')).toBe(1);
-        expect(api.count('nhd')).toBe(1);
+        expect(api.count('nhd', 'outFields=objectid')).toBe(1); // the outline (not the lakes around a town)
         expect(api.count('overpass')).toBe(0);
     });
 
@@ -37,14 +37,14 @@ test.describe('where to look', () => {
         await page.reload();
         await app.loaded();
         await expect(page.locator('#whereLake')).toContainText('Test Lake');
-        expect(api.count('nhd')).toBe(1);
+        expect(api.count('nhd', 'outFields=objectid')).toBe(1);
     });
 
     test('goes through the site\'s proxy where it is deployed', async ({ page, api, app }) => {
         api.proxy = true;
         await app.open();
         await expect(page.locator('#whereLake')).toContainText('Test Lake');
-        expect(api.count('nhd')).toBe(0);
+        expect(api.count('nhd')).toBe(0); // the lakes around the town come through the proxy too
     });
 
     test('says what to look for even when the lake outline cannot be loaded', async ({ page, api, app }) => {
