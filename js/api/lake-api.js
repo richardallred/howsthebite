@@ -7,7 +7,6 @@
 import { API } from '../config.js';
 import { HttpError, buildUrl, fetchJson, isAbort } from './http.js';
 import { OVERPASS, findLake } from '../core/lake-shape.js';
-import { lakesFromNhd, nearbyLakesUrl } from '../core/nearby-water.js';
 
 const PROXY_TIMEOUT_MS = 90_000; // a first visit to a big reservoir waits on the sources
 const DIRECT_TIMEOUT_MS = 75_000;
@@ -103,67 +102,22 @@ export function fetchLake(lat, lon, { signal } = {}) {
     return answers.get(key);
 }
 
-// ----- The lakes around a town ---------------------------------------------------------------
+// ----- The best-known lakes (for "Nearby water") ---------------------------------------------
 
-const NEARBY_KEY = 'htb-nearby-lakes';
-const NEARBY_KEEP_MAX = 20;
-const nearby = new Map(); // point -> promise of the lakes, for this visit
-let nearbyProxyAvailable = null; // its own function, so known apart from the outline proxy
-
-function keptNearby(key) {
-    try {
-        const entry = JSON.parse(localStorage.getItem(NEARBY_KEY))?.[key];
-        if (entry && Date.now() - entry.at < KEPT_DAYS * 24 * 60 * 60 * 1000) return entry.lakes;
-    } catch {
-        // storage unavailable or damaged: ask again
-    }
-    return null;
-}
-
-function keepNearby(key, lakes) {
-    try {
-        const all = JSON.parse(localStorage.getItem(NEARBY_KEY)) ?? {};
-        all[key] = { at: Date.now(), lakes };
-        const newest = Object.entries(all).sort((a, b) => b[1].at - a[1].at).slice(0, NEARBY_KEEP_MAX);
-        localStorage.setItem(NEARBY_KEY, JSON.stringify(Object.fromEntries(newest)));
-    } catch {
-        // full or blocked: they still show this visit
-    }
-}
-
-async function loadNearby(lat, lon) {
-    if (nearbyProxyAvailable !== false) {
-        try {
-            const data = await fetchJson(buildUrl(new URL(API.NEARBY_LAKES_PROXY, document.baseURI), { lat, lon }), { timeoutMs: PROXY_TIMEOUT_MS });
-            nearbyProxyAvailable = true;
-            return data.lakes ?? [];
-        } catch (error) {
-            const notDeployed = error instanceof HttpError && error.status === 404;
-            if (!notDeployed) throw error;
-            nearbyProxyAvailable = false;
-        }
-    }
-    const answer = await fetchJson(nearbyLakesUrl(lat, lon), { timeoutMs: DIRECT_TIMEOUT_MS });
-    if (answer?.error) throw new Error(answer.error.message ?? 'NHD error');
-    return lakesFromNhd(answer, lat, lon);
-}
+let lakeList = null;
 
 /**
- * The named lakes and reservoirs around a town (see core/nearby-water.js). Lakes stay put, so
- * the answer is kept in this browser for months: a town opened again shows them at once.
- * The lookup is shared by everyone who asks and is not cancelled when one of them gives up
- * (the page often starts a load and then restarts it): it is kept for next time either way.
+ * The bundled list of US lakes and reservoirs that have a Wikipedia article:
+ * [[name, lat, lon, sitelinks, km²], …] (data/lakes.json, rebuilt by scripts/update-lakes.mjs).
+ * Loaded once, the first time a town needs it.
  */
-export function fetchNearbyLakes(lat, lon) {
-    const key = `${lat.toFixed(2)},${lon.toFixed(2)}`;
-    if (!nearby.has(key)) {
-        const known = keptNearby(key);
-        const promise = known ? Promise.resolve(known) : loadNearby(lat, lon).then((lakes) => {
-            keepNearby(key, lakes);
-            return lakes;
-        });
-        nearby.set(key, promise);
-        promise.catch(() => nearby.delete(key));
+export function loadLakeList() {
+    if (!lakeList) {
+        lakeList = fetchJson(new URL('/data/lakes.json', document.baseURI), { timeoutMs: 20000 })
+            .catch((error) => {
+                lakeList = null; // try again next time
+                throw error;
+            });
     }
-    return nearby.get(key);
+    return lakeList;
 }

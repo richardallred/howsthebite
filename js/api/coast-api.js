@@ -24,7 +24,7 @@ const HAS_WATER_TEMP = 2;
 let stationList = null;
 
 /** The bundled CO-OPS station list: [[id, name, lat, lon, flags], …]. Loaded once. */
-function loadStationList(signal) {
+export function loadStationList(signal) {
     if (!stationList) {
         stationList = fetchJson(new URL('/data/coops-stations.json', document.baseURI), { signal, timeoutMs: TIMEOUT_MS })
             .catch((error) => {

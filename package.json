@@ -22,6 +22,9 @@
     "fishing-conditions"
   ],
   "author": "Richard Allred",
+  "contributors": [
+    "Zach Gutterman"
+  ],
   "license": "MIT",
   "engines": {
     "node": ">=20"

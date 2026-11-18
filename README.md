@@ -46,9 +46,11 @@ No framework and nothing to compile: plain HTML, CSS and ES modules. The app its
   hover/touch/keyboard read-outs and a data table for each
 - **Place search** for towns ("Asheville, NC") and for lakes, reservoirs and rivers by name
   ("Lake Norman", "French Broad River"), recent places, and optional "use my location". A town
-  offers its biggest lakes and reservoirs (from the USGS National Hydrography Dataset) and its
-  gauged rivers within about 25 miles as **Nearby water**: one tap gives the score and gauges for
-  that water instead of the town
+  offers the water around it as **Nearby water**, in three kinds that each keep their own
+  places: the best-known lakes and reservoirs (a bundled list from Wikidata, rebuilt with
+  `node scripts/update-lakes.mjs`), the biggest gauged rivers, and on the coast the bays and
+  sounds named by NOAA tide stations. One tap gives the score and gauges for that water
+  instead of the town, in inshore mode for salt water
 - **A link for every place**: each place has its own address
   (`/fishing/35.6,-82.55/asheville-north-carolina`) that can be bookmarked, reloaded or shared,
   with the kind of water and the fish carried along so a friend sees the same score. **Share**
