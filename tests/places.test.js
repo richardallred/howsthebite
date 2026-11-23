@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
 import { inCoverage, nameFromSlug, parsePlacePath } from '../js/core/place-url.js';
-import { LISTED_WATER } from '../js/core/listed-places.js';
+import { LISTED_WATER, OWN_SENSOR } from '../js/core/listed-places.js';
 import { placeLinks, sitemapXml } from '../scripts/sitemap.mjs';
 
 const home = await readFile(new URL('../index.html', import.meta.url), 'utf8');
@@ -43,6 +43,26 @@ test('the kind of water is lake, river or left out', () => {
 test('the app knows the kind of water at every listed place, and only those', () => {
     const listed = Object.fromEntries(links.filter((link) => link.water).map((link) => [link.href, link.water]));
     assert.deepEqual(LISTED_WATER, listed, 'js/core/listed-places.js is out of step with spots/index.html');
+});
+
+test('every place said to have a sensor of its own is a listed place', () => {
+    const listed = new Set(links.map((link) => link.href));
+    assert.ok(OWN_SENSOR.size > 0);
+    for (const href of OWN_SENSOR) assert.ok(listed.has(href), `${href} is in OWN_SENSOR but not on the spots page`);
+});
+
+test('the places are grouped by state, each under its own', () => {
+    const groups = [...html.matchAll(/<summary>([^<]+)<\/summary>([\s\S]*?)<\/details>/g)];
+    assert.ok(groups.length >= 30, `only ${groups.length} states`);
+    assert.deepEqual(groups.map(([, state]) => state), groups.map(([, state]) => state).sort(), 'the states are not in alphabetical order');
+    let grouped = 0;
+    for (const [, state, body] of groups) {
+        const names = [...body.matchAll(/>([^<]+)<\/a>/g)].map((match) => match[1]);
+        assert.ok(names.length > 0, `${state} has no places`);
+        for (const name of names) assert.ok(name.endsWith(`, ${state}`), `${name} is listed under ${state}`);
+        grouped += names.length;
+    }
+    assert.equal(grouped, links.length, 'a place is outside the state groups');
 });
 
 test('the home page links to the spots and questions pages', () => {

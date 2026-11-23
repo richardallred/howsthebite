@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>Fishing Forecast and Best Times to Fish Today — How's the Bite?</title>
-    <meta name="description" content="Free fishing forecast for any US lake, river, bay or beach: a 0–100 score with the best times to fish today and the next two days, from live water temperature, tides, wind, river flow and weather, plus lure suggestions.">
+    <title>Are the Fish Biting Today? Fishing Forecast — How's the Bite?</title>
+    <meta name="description" content="Are the fish biting today? A free 0–100 fishing score for any US lake, river, bay or beach, with the best times to fish today and the next two days, from live water temperature, tides, wind, river flow and weather, plus lure suggestions.">
     <link rel="canonical" href="https://howsthebite.io/">
 
     <!-- How links to the site look when shared. Absolute URLs: update them if the site moves to its own domain. -->
@@ -153,6 +153,8 @@
             <div class="location-title">
                 <p class="location-coords" id="locationCoords">&nbsp;</p>
                 <h1 id="locationName">Fishing forecast</h1>
+                <!-- The conditions in a sentence (js/core/summary.js). The room for it is held in styles.css. -->
+                <p class="location-lede" id="locationLede">&nbsp;</p>
                 <div class="location-meta">
                     <p id="updatedAt" aria-live="polite">&nbsp;</p>
                     <button class="btn btn-quiet btn-icon btn-small" id="refreshBtn" type="button" aria-label="Refresh conditions" title="Refresh conditions">

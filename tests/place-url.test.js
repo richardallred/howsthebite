@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
 import {
-    coordinateName, formatCoord, inCoverage, nameFromSlug, parsePlacePath, placeHref, placeMeta, placeName, readPlaceUrl, slugify,
+    coordinateName, formatCoord, inCoverage, nameFromSlug, parsePlacePath, placeHref, placeMeta, placeName, readPlaceUrl, sectionHeadings, slugify,
 } from '../js/core/place-url.js';
 import { placePage } from '../functions/fishing/[[path]].js';
 import { redirectTarget } from '../functions/_middleware.js';
@@ -120,9 +120,29 @@ test('the server redirects near-misses (keeping shared choices), 404s nonsense a
 
 test('page titles and descriptions name the place', () => {
     const meta = placeMeta('Lake Norman, North Carolina');
-    assert.equal(meta.title, "Lake Norman, North Carolina Fishing Forecast — How's the Bite?");
-    assert.match(meta.description, /^Fishing forecast for Lake Norman, North Carolina: /);
+    assert.equal(meta.title, "Lake Norman, North Carolina Fishing Forecast Today — How's the Bite?");
+    assert.match(meta.description, /^Lake Norman, North Carolina fishing forecast today: /);
+    assert.doesNotMatch(meta.description, /water temperature/i); // its reading is the nearest sensor's, not the lake's
     assert.ok(meta.description.length <= 200, meta.description);
+
+    // A place with a sensor of its own can promise its water temperature.
+    const own = placeMeta('Lake Champlain, Vermont', { ownSensor: true });
+    assert.equal(own.title, "Lake Champlain, Vermont Fishing Forecast & Water Temperature Today — How's the Bite?");
+    assert.match(own.description, /^Lake Champlain, Vermont fishing forecast and water temperature today: /);
+    assert.ok(own.description.length <= 200, own.description);
+});
+
+test('section headings carry the place without its state, and stay plain with no place', () => {
+    assert.deepEqual(sectionHeadings('Lake Champlain, Vermont', { ownSensor: true }), {
+        weather: 'Lake Champlain 5-day weather',
+        water: 'Lake Champlain water temperature, level and flow',
+        tides: 'Lake Champlain tides and water temperature',
+    });
+    // Without a sensor of its own the readings are from nearby, and the heading says so.
+    assert.equal(sectionHeadings('Lake Norman, North Carolina').water, 'Water temperature, level and flow near Lake Norman');
+    assert.equal(sectionHeadings('Lake Erie at Port Clinton, Ohio').weather, 'Lake Erie at Port Clinton 5-day weather');
+    assert.deepEqual(sectionHeadings(), { weather: '5-day weather', water: 'Water temperature, level and flow', tides: 'Tides and water temperature' });
+    assert.deepEqual(sectionHeadings(''), sectionHeadings(null));
 });
 
 test('index.html still has every element the place pages rewrite', async () => {
@@ -133,6 +153,7 @@ test('index.html still has every element the place pages rewrite', async () => {
         /<title>[^<]+<\/title>/, /<meta name="description" content="[^"]+">/, /<link rel="canonical" href="https:\/\/[^"]+\/">/,
         /<meta property="og:url" content="https:\/\/[^"]+\/">/, /<meta property="og:title" content="[^"]+">/,
         /<meta property="og:description" content="[^"]+">/, /<h1 id="locationName">/,
+        /<h2 class="panel-title" id="forecastTitle">/, /<h2 class="panel-title" id="waterTitle">/,
     ]) {
         assert.match(html, pattern);
     }

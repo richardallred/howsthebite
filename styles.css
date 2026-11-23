@@ -514,6 +514,9 @@ body.page { padding-bottom: 0; }
     overflow-wrap: anywhere;
     text-wrap: balance;
 }
+/* The conditions in a sentence. One line on a wide screen, two on a phone: the room is held so the page does not move when it arrives. */
+.location-lede { max-width: 62ch; min-height: 1.4em; margin-top: 8px; font-size: 0.9375rem; line-height: 1.4; color: var(--ink-2); text-wrap: pretty; }
+@media (max-width: 640px) { .location-lede { min-height: 2.8em; } }
 .location-meta { display: flex; align-items: center; gap: 4px; margin-top: 6px; }
 .location-meta p { display: flex; align-items: center; gap: 2px; min-height: 24px; font: 400 0.75rem/1.4 var(--font-mono); color: var(--muted); } /* as tall as the tip it gains */
 

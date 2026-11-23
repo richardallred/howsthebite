@@ -6,7 +6,11 @@ test.describe('first visit', () => {
 
         await expect(page.getByRole('heading', { level: 1 })).toHaveText('Chicago, Illinois');
         // The default city is a stand-in, so the page keeps the title search engines should index.
-        await expect(page).toHaveTitle("Fishing Forecast and Best Times to Fish Today — How's the Bite?");
+        await expect(page).toHaveTitle("Are the Fish Biting Today? Fishing Forecast — How's the Bite?");
+        await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /^Are the fish biting today\? A free 0–100 fishing score for any US lake/);
+        await expect(page.locator('#forecastTitle')).toHaveText('5-day weather');
+        await expect(page.locator('#waterTitle')).toHaveText('Water temperature, level and flow');
+        await expect(page.locator('#locationLede')).toHaveText(/^Exceptional fishing today, best [78]–(9|10) PM\. Water \d+\.\d°F/);
 
         // The card opens on today's score: its best two hours, around sunset (8:28 PM in Chicago on 15 June).
         await expect(page.locator('#scoreDays .score-day').first()).toHaveAttribute('aria-selected', 'true');

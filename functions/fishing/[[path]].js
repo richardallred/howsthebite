@@ -16,7 +16,8 @@
 // - A place with a link-preview card of its own (og/<slug>.jpg, made for the popular spots by
 //   art/share/render.mjs) gets it as its Open Graph image; any other keeps the site's card.
 
-import { parsePlacePath, placeMeta, placeName, inCoverage } from '../../js/core/place-url.js';
+import { OWN_SENSOR } from '../../js/core/listed-places.js';
+import { parsePlacePath, placeMeta, placeName, inCoverage, sectionHeadings } from '../../js/core/place-url.js';
 
 /**
  * What to do with a request for a place address.
@@ -47,7 +48,10 @@ const absolute = (path) => ({
 
 /** The elements of index.html that are rewritten; tests/place-url.test.js checks they exist. */
 export function rewriter(page) {
-    const meta = placeMeta(page.name);
+    const about = { ownSensor: OWN_SENSOR.has(page.path) };
+    const meta = placeMeta(page.name, about);
+    // An address with no name shows its coordinates, which make no heading.
+    const headings = sectionHeadings(/^\/fishing\/[^/]+\/[^/]/.test(page.path) ? page.name : null, about);
     const html = new HTMLRewriter();
     if (page.card) {
         html.on('meta[property="og:image"]', absolute(page.card))
@@ -60,7 +64,9 @@ export function rewriter(page) {
         .on('meta[property="og:url"]', absolute(page.path))
         .on('meta[property="og:title"]', setAttribute('content', meta.ogTitle))
         .on('meta[property="og:description"]', setAttribute('content', meta.ogDescription))
-        .on('h1#locationName', setText(page.name));
+        .on('h1#locationName', setText(page.name))
+        .on('h2#forecastTitle', setText(headings.weather))
+        .on('h2#waterTitle', setText(headings.water));
 }
 
 export async function onRequest({ request, env, next }) {
