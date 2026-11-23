@@ -1143,6 +1143,21 @@ body.page { padding-bottom: 0; }
 .lure-drawing[data-lure="bobber-rig"] { --drawing: url("drawings/lures/bobber-rig.svg"); }
 .lure-drawing[data-lure="popping-cork"] { --drawing: url("drawings/lures/popping-cork.svg"); }
 .lure-drawing[data-lure="bottom-rig"] { --drawing: url("drawings/lures/bottom-rig.svg"); }
+.lure-drawing[data-lure="jig-minnow"] { --drawing: url("drawings/lures/jig-minnow.svg"); }
+.lure-drawing[data-lure="walking-topwater"] { --drawing: url("drawings/lures/walking-topwater.svg"); }
+.lure-drawing[data-lure="live-bait"] { --drawing: url("drawings/lures/live-bait.svg"); }
+.lure-drawing[data-lure="drop-shot"] { --drawing: url("drawings/lures/drop-shot.svg"); }
+.lure-drawing[data-lure="fly"] { --drawing: url("drawings/lures/fly.svg"); }
+.lure-drawing[data-lure="egg"] { --drawing: url("drawings/lures/egg.svg"); }
+.lure-drawing[data-lure="blade-bait"] { --drawing: url("drawings/lures/blade-bait.svg"); }
+.lure-drawing[data-lure="soft-shrimp"] { --drawing: url("drawings/lures/soft-shrimp.svg"); }
+.lure-drawing[data-lure="live-worm"] { --drawing: url("drawings/lures/live-worm.svg"); }
+.lure-drawing[data-lure="frog"] { --drawing: url("drawings/lures/frog.svg"); }
+.lure-drawing[data-lure="bladed-jig"] { --drawing: url("drawings/lures/bladed-jig.svg"); }
+.lure-drawing[data-lure="tube"] { --drawing: url("drawings/lures/tube.svg"); }
+.lure-drawing[data-lure="metal-jig"] { --drawing: url("drawings/lures/metal-jig.svg"); }
+.lure-drawing[data-lure="bucktail"] { --drawing: url("drawings/lures/bucktail.svg"); }
+.lure-drawing[data-lure="lipless"] { --drawing: url("drawings/lures/lipless.svg"); }
 @media (max-width: 479px) {
     .lure.has-drawing { grid-template-columns: minmax(0, 1fr) 84px; }
     .lure-drawing { width: 84px; height: 56px; }
