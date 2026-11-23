@@ -108,6 +108,10 @@ test.describe('recent places and persistence', () => {
     test('a reload restores the place instantly without calling any API', async ({ page, api, app }) => {
         await app.open();
         await app.search('Asheville', 'Asheville, North Carolina');
+        // A lake's depth contours are asked for once its outline is in, after the page counts
+        // as loaded. Wait until both places' answers are kept, so the count is of a visit that
+        // has settled.
+        await expect.poll(() => page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith('htb-depth:')).length)).toBe(2);
         const callsBefore = api.calls.length;
 
         await page.reload();

@@ -75,6 +75,7 @@ const SHELL = [
     'data/coops-stations.json',
     'data/lakes.json',
     'js/api/coast-api.js',
+    'js/api/depth-api.js',
     'js/api/http.js',
     'js/api/lake-api.js',
     'js/api/nws.js',
@@ -83,6 +84,7 @@ const SHELL = [
     'js/api/weather-api.js',
     'js/core/alerts.js',
     'js/core/day-score.js',
+    'js/core/depth.js',
     'js/core/fronts.js',
     'js/core/lake-shape.js',
     'js/core/nearby-water.js',
@@ -131,7 +133,7 @@ self.addEventListener('fetch', (event) => {
     if (request.method !== 'GET') return;
     const url = new URL(request.url);
     if (url.origin !== self.location.origin) return; // APIs and map tiles go straight to the network
-    if (/\/api\/(usgs\/|nws\/|sst$|lake$)/.test(url.pathname)) return; // so do the same-origin data proxies: never cache live data here
+    if (/\/api\/(usgs\/|nws\/|sst$|lake$|depth$)/.test(url.pathname)) return; // so do the same-origin data proxies: never cache live data here
 
     event.respondWith((async () => {
         const cache = await caches.open(CACHE);

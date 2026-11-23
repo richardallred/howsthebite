@@ -279,7 +279,8 @@
                         <button type="button" class="tip-btn" aria-label="How these spots are picked" aria-describedby="whereTip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button>
                         <span class="tip-text" role="tooltip" id="whereTip">
                             <span class="tip-para">Picked from where the fish are in their year and the wind right now, then found on the lake's outline from OpenStreetMap: points that reach into the lake, coves and creek arms, the north shore that warms first, and the bank the wind blows into.</span>
-                            <span class="tip-para">Rules of thumb, not a fish finder: the outline has no depths, so drop-offs, humps and weed lines can't be shown.</span>
+                            <span class="tip-para">Rules of thumb, not a fish finder. Where a public survey has mapped the lake's depth, its contour lines are drawn too, in feet: from state fishery agencies, or from NOAA's charts. Most lakes have no such survey, and then drop-offs, humps and weed lines can't be shown.</span>
+                            <span class="tip-para">Depth lines are for finding fish, not for navigation: many were drawn from old surveys, and the water level changes.</span>
                         </span>
                     </span>
                 </div>
@@ -288,10 +289,33 @@
             <div class="where-grid">
                 <ol class="where-list" id="whereList"></ol>
                 <div class="map-frame where-map-frame" id="whereMapFrame" hidden>
-                    <div class="map" id="whereMap" role="region" aria-label="Map of the lake with the spots in the list marked and numbered. The list has the same information."></div>
+                    <div class="map" id="whereMap" role="region" aria-label="Map of the lake with the spots in the list marked and numbered, and its depth contours where a survey has them. The list has the same information about the spots."></div>
                 </div>
             </div>
             <p class="where-note" id="whereNote" hidden></p>
+        </section>
+
+        <!-- Salt water, inshore: the depth chart of the water around the place (js/app.js, renderChart). -->
+        <section class="section panel" id="chart" aria-labelledby="chartTitle" hidden>
+            <div class="panel-head">
+                <div class="title-row">
+                    <h2 class="panel-title" id="chartTitle">Depth chart</h2>
+                    <span class="tip">
+                        <button type="button" class="tip-btn" aria-label="Where the depth chart comes from" aria-describedby="chartTip" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg></button>
+                        <span class="tip-text" role="tooltip" id="chartTip">
+                            <span class="tip-para">The depth lines of NOAA's electronic navigational charts for the water around this place, redrawn in feet. They show the channels, flats, bars and holes that the map underneath leaves blank.</span>
+                            <span class="tip-para">For finding fish, not for navigation: only the depth lines are drawn, none of a chart's hazards or marks, some of the surveys are decades old, and sand moves.</span>
+                        </span>
+                    </span>
+                </div>
+                <p class="where-lake" id="chartStatus"></p>
+            </div>
+            <div class="where-grid">
+                <ul class="where-list" id="chartNotes"></ul>
+                <div class="map-frame where-map-frame" id="chartMapFrame">
+                    <div class="map" id="chartMap" role="region" aria-label="Chart of the water around this place, with depth contours in feet."></div>
+                </div>
+            </div>
         </section>
 
         <section class="section panel" id="forecast" aria-labelledby="forecastTitle">

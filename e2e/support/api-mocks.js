@@ -596,3 +596,48 @@ export function nhdResponse(url) {
     const ring = lakeNodes((south + north) / 2, (w + e) / 2).map(({ lat, lon }) => [lon, lat]).reverse(); // clockwise
     return { features: [{ attributes: { OBJECTID: 5, GNIS_NAME: 'Test Lake', FTYPE: 390, AREASQKM: 4.5 }, geometry: { rings: [ring] } }] };
 }
+
+// ----- Depth contours (a state survey, NOAA's charts, and the site's /api/depth proxy) --------
+//
+// The test lake has two contours, 10 ft just inside its square shore and 20 ft further out,
+// around `centre` ([lat, lon]: the place the lake was last drawn around). `which` says who
+// has surveyed it: 'state' (the Michigan DNR layer, which covers the default place), 'noaa'
+// or 'none'.
+
+export function depthResponse(url, which = 'state', centre = null, chart = true) {
+    const noaa = url.hostname === 'encdirect.noaa.gov';
+    if (noaa && isChartBox(url)) return chart ? chartResponse(url) : { type: 'FeatureCollection', features: [] };
+    if (which !== (noaa ? 'noaa' : 'state')) return { type: 'FeatureCollection', features: [] };
+    const [w, s, e, n] = (url.searchParams.get('geometry') ?? '-80,35,-80,35').split(',').map(Number);
+    const [lat, lon] = centre ?? [n - LAKE_HALF, (w + e) / 2]; // the middle of the square, north of the cove
+    const side = (from, to) => Array.from({ length: 10 }, (_, i) => [from[0] + ((to[0] - from[0]) * i) / 10, from[1] + ((to[1] - from[1]) * i) / 10]);
+    const ring = (half) => {
+        const corners = [[lon - half, lat - half], [lon + half, lat - half], [lon + half, lat + half], [lon - half, lat + half]];
+        return [...corners.flatMap((corner, i) => side(corner, corners[(i + 1) % 4])), corners[0]].map((point) => point.map((value) => Number(value.toFixed(5))));
+    };
+    const field = url.searchParams.get('outFields');
+    // NOAA's depths are in metres: 3.05 m and 6.1 m are the same 10 and 20 ft.
+    const feature = (feet, half) => ({ type: 'Feature', properties: { [field]: noaa ? Number((feet / 3.28084).toFixed(2)) : feet }, geometry: { type: 'LineString', coordinates: ring(half) } });
+    return { type: 'FeatureCollection', features: [feature(10, 0.0088), feature(20, 0.005)] };
+}
+
+// Salt water: the app asks NOAA about a box of water around the place (chartBox in
+// js/core/depth.js), which is much bigger than the test lake, and that is how the mock tells
+// the two questions apart. The chart has three lines running east to west across the box:
+// the low-water line (0), 6 ft and 12 ft. NOAA's depths are in metres.
+
+const isChartBox = (url) => {
+    const [, s, , n] = (url.searchParams.get('geometry') ?? '0,0,0,0').split(',').map(Number);
+    return n - s > 0.06;
+};
+
+function chartResponse(url) {
+    const [w, s, e, n] = url.searchParams.get('geometry').split(',').map(Number);
+    const field = url.searchParams.get('outFields');
+    const across = (metres, share) => ({
+        type: 'Feature',
+        properties: { [field]: metres },
+        geometry: { type: 'LineString', coordinates: Array.from({ length: 9 }, (_, i) => [Number((w + ((e - w) * i) / 8).toFixed(5)), Number((s + (n - s) * share).toFixed(5))]) },
+    });
+    return { type: 'FeatureCollection', features: [across(0, 0.75), across(1.8, 0.5), across(3.6, 0.25)] };
+}
