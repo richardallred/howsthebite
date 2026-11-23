@@ -1395,15 +1395,18 @@ body.page { padding-bottom: 0; }
 .where-map-frame[hidden] { display: none; }
 .lake-outline { stroke: var(--water); stroke-width: 1.5; fill: var(--water); fill-opacity: 0.08; }
 .lake-zone { stroke: var(--zone); stroke-width: 7; stroke-opacity: 0.85; stroke-linecap: round; stroke-linejoin: round; fill: none; }
-.zone-tag {
+/* Leaflet's stylesheet loads after this one (js/ui/map.js) and sets its marker icons to
+   display: block, so the tag is named twice to keep the grid that centres its number. The
+   number takes the ink that reads on the zone colours in each theme. */
+.zone-tag.leaflet-marker-icon {
     display: grid;
     place-items: center;
     border-radius: 50%;
     background: var(--zone);
     border: 2px solid #fff;
-    color: #fff;
-    font: 600 0.75rem/1 var(--font-mono);
-    box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+    color: var(--on-accent);
+    font: 700 0.8125rem/1 var(--font-mono);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.45);
 }
 
 /* ---------- Charts ---------- */

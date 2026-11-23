@@ -137,7 +137,7 @@ export function createLakeMap(container) {
         zones.forEach((zone, index) => {
             L.polyline(zone.line, { className: `lake-zone zone-${zone.kind}`, interactive: false }).addTo(layers);
             L.marker(zone.at, {
-                icon: L.divIcon({ className: `zone-tag zone-${zone.kind}`, html: String(index + 1), iconSize: [22, 22], iconAnchor: [11, 11] }),
+                icon: L.divIcon({ className: `zone-tag zone-${zone.kind}`, html: String(index + 1), iconSize: [24, 24], iconAnchor: [12, 12] }),
                 keyboard: false,
                 title: zone.title,
             }).addTo(layers);
