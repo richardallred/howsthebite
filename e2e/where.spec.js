@@ -15,6 +15,8 @@ test.describe('where to look', () => {
         await expect(page.locator('#whereMap .lake-outline')).toHaveCount(1);
         const tags = page.locator('#whereMap .zone-tag');
         await expect(tags.first()).toHaveText('1');
+        // Leaflet's own stylesheet must not undo the grid that centres the number in its tag.
+        await expect(tags.first()).toHaveCSS('display', 'grid');
         expect(await page.locator('#whereMap .lake-zone').count()).toBe(await tags.count());
         await expect(page.locator('#whereList')).toContainText('on the map: 1');
 
