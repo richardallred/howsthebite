@@ -7,6 +7,12 @@ N = int(next((a.split('=')[1] for a in sys.argv if a.startswith('--size=')), 800
 # N is the width of the tracing grid; the height keeps the image's proportions. The blur that
 # smooths the ink edges is scaled to the source, so thin lines in a small image survive it.
 source = Image.open(src).convert('L')
+if '--darken' in sys.argv:
+    # For grey engravings (most of the later lure art): lift the paper to white, darken the
+    # greys and thicken every line by a pixel, so the trace has the weight of the black-ink ones.
+    paper = np.percentile(np.asarray(source), 60)
+    a = np.clip(np.asarray(source, dtype=float) / paper, 0, 1) ** 2.2 * 255
+    source = Image.fromarray(a.astype('uint8')).filter(ImageFilter.MinFilter(3))
 W0, H0 = source.size
 blur = max(0.35, 1.2 * W0 / 2000)
 img = source.filter(ImageFilter.GaussianBlur(blur)).resize((N, round(N * H0 / W0)), Image.LANCZOS)
