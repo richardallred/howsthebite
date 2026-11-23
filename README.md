@@ -22,7 +22,8 @@ No framework and nothing to compile: plain HTML, CSS and ES modules. The app its
   piers) and Surf. Salt-water scores use NOAA tide predictions and coastal water temperature, and
   for surf the Weather Service's surf height and rip-current risk
 - **What to throw**: three or four lure and bait suggestions for the local fish, each with a link
-  to search for it on Amazon. They follow where the fish are in their year (pre-spawn, spawn, the
+  to search for it on Amazon, or a link for each piece of tackle when it is a rig built from
+  several (a jig and its trailer, bait on a hook and sinker). They follow where the fish are in their year (pre-spawn, spawn, the
   fall feed, the bull-red run…), judged from the date, the water temperature and the last month of
   readings; what has changed lately (a cold snap, a front, a lake rising into new cover); and the
   light, wind, clarity and tide right now
@@ -268,7 +269,9 @@ for the rest of the visit.
 
 ### Amazon links
 
-Lure suggestions link to Amazon search results, tagged with the Amazon Associates tracking ID in
+Lure suggestions link to Amazon search results: one link for a single lure, and a named link for
+each piece of tackle ("Amazon: Circle hooks + Slip sinkers") when the suggestion is a rig built
+from several. The links are tagged with the Amazon Associates tracking ID in
 `AMAZON_ASSOCIATE_TAG` in `js/config.js`. With that setting empty they are ordinary links, nothing
 is earned and no disclosure is shown. If you fork this project, replace the ID with your own or
 empty it: never ship someone else's tag, or a made-up one.
@@ -285,8 +288,10 @@ For the links to earn:
 What the app does to stay inside the programme's rules (Operating Agreement of October 2025 and
 Program Policies of April 2026):
 
-- Shows "As an Amazon Associate I earn from qualifying purchases." on the page and "(paid link)"
-  beside every tagged link, which is also what the FTC asks for.
+- Shows "As an Amazon Associate I earn from qualifying purchases." on the page and "paid link"
+  beside the tagged link on every card, which is also what the FTC asks for. A card with several
+  links says "paid links" once, at the end of their row, and each link's name for screen readers
+  ends "(paid link)".
 - Marks tagged links `rel="sponsored nofollow"`, as Google asks.
 - Uses plain, visible `amazon.com` addresses: no shortener and no redirect.
 - Shows no prices.

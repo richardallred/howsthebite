@@ -1108,6 +1108,10 @@ body.page { padding-bottom: 0; }
 .lure-why { grid-column: 1 / -1; font-size: 0.875rem; color: var(--ink-2); line-height: 1.4; }
 .lure-shop { grid-column: 2; grid-row: 2; align-self: baseline; font-size: 0.8125rem; font-weight: 500; white-space: nowrap; }
 .lure-paid { color: var(--muted); font-weight: 400; }
+/* A rig built from several pieces of tackle: a link for each piece, on a line that may wrap */
+.lure-kit { grid-column: 1 / -1; margin-top: 2px; font-size: 0.8125rem; line-height: 1.5; color: var(--muted); }
+.lure-part, .lure-kit .lure-paid { white-space: nowrap; }
+.lure-part { font-weight: 500; }
 
 .lure-season-tag { color: var(--water); }
 

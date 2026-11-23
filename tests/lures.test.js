@@ -138,7 +138,7 @@ test('advice that replaces the lures: warm trout, sight feeders after dark, cold
     const trout = recommendLures(['trout'], conditions({ waterTempF: 72, date: JULY }));
     assert.equal(trout.length, 1);
     assert.equal(trout[0].name, 'Give the trout a rest');
-    assert.equal(trout[0].query, null);
+    assert.deepEqual(trout[0].shop, []); // advice, with nothing to shop for
 
     assert.deepEqual(names(['pike'], { waterTempF: 60, phase: 'night', date: OCTOBER }), ['Wait for daylight']);
     assert.deepEqual(names(['panfish'], { phase: 'night' }), ['Wait for daylight']);
@@ -193,21 +193,53 @@ test('the first fish gets two picks, the rest one each, with no repeats and a li
     assert.equal(new Set(list.map((pick) => pick.name)).size, 4);
     assert.equal(picks(['bass', 'panfish', 'catfish'], { waterTempF: 76, date: JUNE }, { limit: 2 }).length, 2);
     for (const pick of list) {
-        assert.ok(pick.query && pick.how && pick.why);
+        assert.ok(pick.shop.length && pick.how && pick.why);
         assert.ok(!/[.!?]$/.test(pick.why), 'the page adds the full stop');
         assert.ok(pick.note === null || !/[.!?]$/.test(pick.note));
     }
 });
 
+test('a single lure has one search; a rig has a named search for each piece of tackle', () => {
+    // A lure on its own: one link, which needs no name beyond the card's.
+    const [lizard] = picks(['bass'], { waterTempF: 66, date: new Date('2026-05-01T17:00:00Z') });
+    assert.deepEqual(lizard.shop, [{ label: null, query: 'soft plastic lizard bass' }]);
+
+    // A jig and its trailer are two things to buy.
+    const jig = picks(['bass'], { waterTempF: 44, date: JANUARY }, { limit: 4 }).find((pick) => pick.name === 'Football jig with a low-action trailer');
+    assert.deepEqual(jig.shop.map((part) => part.label), ['Football jig', 'Chunk trailer']);
+
+    // Natural bait: the links are for the tackle, and say so.
+    const [cutShad] = picks(['catfish'], { waterTempF: 45, date: JANUARY });
+    assert.equal(cutShad.name, 'Cut shad on the bottom in deep holes');
+    assert.deepEqual(cutShad.shop, [
+        { label: 'Circle hooks', query: 'catfish circle hooks' },
+        { label: 'Slip sinkers', query: 'no roll sinkers catfish' },
+    ]);
+    const [liveBait] = picks(['snook'], { mode: 'inshore', waterTempF: 76, phase: 'night', tide: 'falling', date: JUNE });
+    assert.deepEqual(liveBait.shop, [{ label: 'Circle hooks', query: 'circle hook 4/0' }]);
+});
+
 test('every fish has a pick in every season, whatever the light', () => {
     const fresh = ['bass', 'panfish', 'catfish', 'walleye', 'pike', 'muskie', 'smallmouth', 'perch', 'sauger', 'trout', 'salmon'];
     const salt = ['seatrout', 'redfish', 'flounder', 'fluke', 'halibut', 'snook', 'striper', 'bluefish', 'pompano', 'whiting', 'surfperch', 'corbina', 'croaker'];
+    /** There is a pick, and its links make sense on the card: a few pieces at most, each one named when there are several. */
+    const checked = (list, where) => {
+        assert.ok(list.length > 0, where);
+        for (const { name, shop } of list) {
+            assert.ok(shop.length <= 3, `${name}: too many links`);
+            assert.ok(shop.every((part) => part.query), `${name}: a link with nothing to search for`);
+            if (shop.length > 1) assert.ok(shop.every((part) => part.label), `${name}: each piece needs a name`);
+            assert.equal(new Set(shop.map((part) => part.label)).size, shop.length, `${name}: two links with the same name`);
+        }
+    };
     for (const month of [1, 3, 5, 7, 9, 11]) {
         const date = new Date(Date.UTC(2026, month - 1, 15, 17));
         for (const waterTempF of [40, 55, 65, 75, 85]) {
             for (const phase of ['day', 'dusk', 'night']) {
-                for (const target of fresh) assert.ok(names([target], { waterTempF, phase, date }).length > 0, `${target} ${month} ${waterTempF} ${phase}`);
-                for (const target of salt) assert.ok(names([target], { mode: 'inshore', waterTempF, phase, date }).length > 0, `${target} ${month} ${waterTempF} ${phase}`);
+                for (const target of fresh) checked(picks([target], { waterTempF, phase, date }, { limit: 8 }), `${target} ${month} ${waterTempF} ${phase}`);
+                for (const target of salt) {
+                    for (const mode of ['inshore', 'surf']) checked(picks([target], { mode, waterTempF, phase, date }, { limit: 8 }), `${target} ${mode} ${month} ${waterTempF} ${phase}`);
+                }
             }
         }
     }
