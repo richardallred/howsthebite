@@ -200,9 +200,18 @@ test('the first fish gets two picks, the rest one each, with no repeats and a li
 });
 
 test('a single lure has one search; a rig has a named search for each piece of tackle', () => {
-    // A lure on its own: one link, which needs no name beyond the card's.
+    // A lure that comes ready to tie on: one link, which needs no name beyond the card's.
+    const [jerkbait] = picks(['bass'], { waterTempF: 44, date: JANUARY });
+    assert.deepEqual(jerkbait.shop, [{ label: null, query: 'suspending jerkbait' }]);
+
+    // A soft plastic is sold bare, so its hook and weight are listed beside it.
     const [lizard] = picks(['bass'], { waterTempF: 66, date: new Date('2026-05-01T17:00:00Z') });
-    assert.deepEqual(lizard.shop, [{ label: null, query: 'soft plastic lizard bass' }]);
+    assert.equal(lizard.name, 'Soft-plastic lizard or creature bait');
+    assert.deepEqual(lizard.shop, [
+        { label: 'Lizards', query: 'soft plastic lizard bass' },
+        { label: 'Worm hooks', query: 'offset worm hooks 3/0' },
+        { label: 'Bullet weights', query: 'bullet weights 1/4 oz' },
+    ]);
 
     // A jig and its trailer are two things to buy.
     const jig = picks(['bass'], { waterTempF: 44, date: JANUARY }, { limit: 4 }).find((pick) => pick.name === 'Football jig with a low-action trailer');
