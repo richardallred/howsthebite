@@ -19,7 +19,7 @@ import { OutsideCoverageError, fetchAlerts, fetchWeather, reverseGeocode, search
 import { APP, US_STATES } from './config.js';
 import { hazardAt, summariseAlerts } from './core/alerts.js';
 import { colourAdvice, lureConditions, lurePatterns, recommendLures } from './core/lures.js';
-import { LISTED_WATER, OWN_SENSOR } from './core/listed-places.js';
+import { LISTED_WATER, OWN_SENSOR, isOwnSensor } from './core/listed-places.js';
 import { lakesNear, nearbyWater, riversFromStations, saltWaterNear } from './core/nearby-water.js';
 import { majorPeriods, moonInfo } from './core/moon.js';
 import { coordinateName, placeHref, placeMeta, placePath, readPlaceUrl, sectionHeadings, slugify } from './core/place-url.js';
@@ -1619,8 +1619,9 @@ function renderSummary(derived) {
         flat: Boolean(today.best) && today.flat,
         waterTempF: derived.waterTempF,
         measured: Boolean(derived.station || derived.seaTemp),
-        // A sensor of the place's own is its water however far the dot on the map is; any other is said to be nearby.
-        sensorMiles: derived.station && !aboutPlace().ownSensor ? derived.station.distanceMi : null,
+        // The place's own sensor is its water however far the dot on the map is. Any other is said to
+        // be nearby: one chosen from the list, or the next nearest while the place's own is not reporting.
+        sensorMiles: derived.station && !isOwnSensor(placePath(addressPlace(location)), derived.station.id) ? derived.station.distanceMi : null,
         trend: describeWaterTrend(derived.lures.trend)[0] ?? null,
     });
     setText('locationLede', summary ? summary.lede : '\u00a0');

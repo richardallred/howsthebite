@@ -1,3 +1,4 @@
+import { KNOWN_PLACES } from './support/api-mocks.js';
 import { DEFAULT_SCORE, expect, test } from './support/fixtures.js';
 
 // Every place has its own address. The static test server serves index.html for them, as the
@@ -7,6 +8,7 @@ import { DEFAULT_SCORE, expect, test } from './support/fixtures.js';
 const ASHEVILLE = '/fishing/35.6,-82.55/asheville-north-carolina';
 const MADISON = '/fishing/43.07,-89.4/madison-wisconsin';
 const LAKE_CHAMPLAIN = '/fishing/44.32,-73.32/lake-champlain-vermont'; // has a sensor of its own (js/core/listed-places.js)
+KNOWN_PLACES.push([44.32, -73.32]); // so the mocked sensors can be placed around it
 const heading = (page) => page.getByRole('heading', { level: 1 });
 const path = (page) => new URL(page.url()).pathname;
 
@@ -87,16 +89,40 @@ test.describe('place addresses', () => {
         expect(path(page)).toBe('/');
     });
 
-    test('a place with a water sensor of its own says so in its title, heading and summary', async ({ page, app }) => {
+    test('a place with a water sensor of its own says so in its title and headings', async ({ page, app }) => {
         await app.open(LAKE_CHAMPLAIN);
         await expect(heading(page)).toHaveText('Lake Champlain, Vermont');
         await expect(page).toHaveTitle("Lake Champlain, Vermont Fishing Forecast & Water Temperature Today — How's the Bite?");
         await expect(page.locator('#waterTitle')).toHaveText('Lake Champlain water temperature, level and flow');
         await expect(page.locator('#forecastTitle')).toHaveText('Lake Champlain 5-day weather');
-        // Whatever the reading, it is never called "the nearest sensor's" here.
-        await expect(page.locator('#locationLede')).toHaveText(/ fishing today, best .+\. Water /);
-        await expect(page.locator('#locationLede')).not.toContainText('nearest water sensor');
-        await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /^Lake Champlain, Vermont fishing forecast for Monday, June 15: .+ Water temperature /);
+        await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /^Lake Champlain, Vermont fishing forecast for Monday, June 15: /);
+    });
+
+    test("only the reading from a place's own sensor is called its water", async ({ page, api, app }) => {
+        api.stations = [
+            { id: 'USGS-04294500', name: 'LAKE CHAMPLAIN AT BURLINGTON, VT', type: 'LK', milesNorth: 11, readings: { '00010': 9.0 } },
+            { id: 'USGS-04282500', name: 'OTTER CREEK AT MIDDLEBURY, VT', type: 'ST', milesNorth: -20, readings: { '00010': 7.0 } },
+        ];
+        await app.open(LAKE_CHAMPLAIN);
+        const lede = page.locator('#locationLede');
+        const description = page.locator('meta[name="description"]');
+
+        // Its own sensor, though the dot is 11 miles up the lake: the lake's water.
+        await expect(app.station('Lake Champlain')).toHaveAttribute('aria-pressed', 'true');
+        await expect(lede).toHaveText(/\. Water 48\.2°F/);
+        await expect(description).toHaveAttribute('content', /\. Water temperature 48\.2°F/);
+
+        // Another sensor chosen from the list is not the lake, and is not called it.
+        await app.station('Otter Creek').click();
+        await expect(lede).toHaveText(/\. The nearest water sensor, 20 miles away, reads 44\.6°F\.$/);
+        await expect(description).toHaveAttribute('content', /\. The nearest water sensor, 20 miles away, reads 44\.6°F\. /);
+
+        // Nor is the next nearest one while the lake's own is not reporting.
+        api.stations = api.stations.filter((station) => station.type !== 'LK');
+        await page.reload();
+        await app.loaded();
+        await expect(lede).toHaveText(/\. The nearest water sensor, 20 miles away, reads 44\.6°F\.$/);
+        await expect(page).toHaveTitle("Lake Champlain, Vermont Fishing Forecast & Water Temperature Today — How's the Bite?");
     });
 
     test('the place is written into the page as served, for search engines and link previews', async ({ page }) => {

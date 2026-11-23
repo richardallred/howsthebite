@@ -374,8 +374,10 @@ Amazon turns out to be a poor fit.
     (a sensor on that lake, or on that river at that town; about 125 of the listed places) get
     "& Water Temperature" in the title and a heading that calls the water theirs ("Lake Champlain
     water temperature, level and flow"). Everywhere else the heading reads "Water temperature,
-    level and flow near <place>". Sensors come and go (some are pulled for the winter), so check
-    the page before adding a place to the list.
+    level and flow near <place>". `OWN_SENSOR` names each place's sensor, and only that sensor's
+    reading is called the place's water: choose another from the list, or let the place's own
+    stop reporting (some are pulled for the winter), and the sentence below speaks of "the
+    nearest water sensor" again. Check the page before adding a place to the list.
   - **The conditions in a sentence** (`js/core/summary.js`) sit under the place's name:
     "Excellent fishing today, best 3–5 PM. Water 57.7°F, down 6.5°F in 14 days." Where the sensor
     is not the place's own and is 3 miles or more away it says so: "The nearest water sensor, 58
