@@ -254,6 +254,23 @@ With `&days=30` the answer also carries `series`, the same cell's daily values f
 days, which the lure suggestions use for the month's trend where no tide station has a
 thermometer. Any `days` gets the same 30, so those requests share one cache entry too.
 
+### The depth-contour proxy
+
+`functions/api/depth.js` answers `GET /api/depth?box=<west>,<south>,<east>,<north>` with the
+depth contours in that box, for the lake map under "Where to look", or with `{ "depth": null }`
+where no source has that water. The sources (see [Depth contours](#depth-contours)) allow
+browsers, but a lake's contours are megabytes as published and every source has its own fields
+and units. The function asks the source to simplify the lines, reads them into one form (depth
+in feet, grouped by depth), thins them to about 100 kB and caches the answer at the edge for a
+month; an outage serves the last answer for up to six months. The app asks for the box around
+a lake's whole outline, snapped to a 0.01° grid, so everyone on a lake shares one answer. On
+hosting without Functions the app asks the sources itself.
+
+With `&charts=1` the question is about salt water, for the inshore depth chart: only NOAA's
+charts are asked, and the low-water (0 ft) line is kept. The box is then about 12 km by 9 km
+around the place, its middle snapped to a 0.02° grid, and is cached apart from a lake's answer
+for the same box.
+
 ### The weather stand-in
 
 `functions/api/nws/[[path]].js` answers `GET /api/nws/<path>` by asking `api.weather.gov` for the
@@ -786,6 +803,7 @@ if you want to fit the weights rather than judge them.
 | Sea-surface temperature where no station is near | NASA JPL MUR analysis via [NOAA CoastWatch ERDDAP](https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.html), through `/api/sst` | Free to use and redistribute. About a day and a half old, and a degree or two warm inside bays; labelled a satellite estimate. |
 | Which sport fish live in the region | [GBIF occurrence search](https://techdocs.gbif.org/en/openapi/v1/occurrence) | No key. Counts only, restricted to CC0 and CC BY records. Free service with no uptime guarantee; the app falls back to a latitude rule without it. |
 | Sunrise, sunset, twilight, moon phase and position | Computed in the browser (`js/core/sun.js`, `js/core/moon.js`) | No request is made. The overhead and underfoot times shown agree with the US Naval Observatory's to within a minute. |
+| Depth contours on the lake map and the inshore depth chart | [Michigan DNR inland lake contours](https://www.arcgis.com/home/item.html?id=d49160d2e5af4123b15d48c2e9c70160) and [NOAA electronic navigational charts](https://nauticalcharts.noaa.gov/charts/noaa-enc.html) (ENC Direct), through `/api/depth` | No key. Only where a survey exists: see [Depth contours](#depth-contours). |
 | Map tiles | [OpenStreetMap](https://www.openstreetmap.org/copyright) via [Leaflet](https://leafletjs.com/) (vendored in `vendor/leaflet`) | Loaded only when the map scrolls into view |
 
 ### Where the weather readings come from
@@ -809,9 +827,71 @@ app shows, is the water *level*:
 
 Bathymetry (depth maps) exists only in scattered state and federal datasets, with no common API.
 
+### Depth contours
+
+Where one of those datasets covers a lake, its contour lines are drawn on the "Where to look"
+map, labelled in feet, with the source named on the map and in the line above it. Everywhere
+else the map is drawn as before, and nothing is said. `js/core/depth.js` holds the list of
+sources and everything they share.
+
+In salt water, **Inshore** has a **Depth chart** card instead: NOAA's depth lines for the water
+around the place, about 12 km by 9 km, with the place marked. It shows what the map underneath
+leaves blank: channels, flats, bars and holes.
+
+- Chart depths are measured at the average lowest tide, the same level NOAA's tide predictions
+  count from. So the card says how high the tide is now and what that makes of a 6 ft line.
+- The 0 line is kept here (on a lake it is the shore): it is the edge of what is bare at the
+  lowest tides.
+- Only NOAA's charts are asked, never a state's survey of a pond that happens to be in the box.
+- Where NOAA has no depth lines the card is left out. Surf has no card: off a beach the fish
+  are in the first trough, closer in than a chart resolves. The Great Lakes are charted too but
+  are fresh water, where the app does not draw a chart yet.
+
+| Source | Covers | Notes |
+|---|---|---|
+| Michigan DNR, Institute for Fisheries Research | About 2,200 inland lakes in Michigan | Digitised from the department's survey maps, many of them decades old. "No restrictions on the use, reproduction, or distribution". |
+| NOAA electronic navigational charts | Salt water for the inshore depth chart: the coast, bays and tidal rivers. A few inland lakes for the lake map (Tahoe, Okeechobee, part of Pend Oreille…) | Public domain. Depths are in metres below the chart's low-water datum; the app shows feet. Harbour-scale charts first, approach-scale where there are none. |
+
+A state's own survey is preferred to NOAA's charts. Three things keep the map honest:
+
+- **Only this lake's lines.** The box around a lake takes in its neighbours, and by the coast the
+  sea. A line is kept when most of it lies inside the lake's outline.
+- **Not a channel passed off as a lake.** NOAA charts only the canal channel at one end of Oneida
+  and Cayuga Lakes. Lines along less than about a third of the shore are dropped; up to three
+  quarters, the page says they cover part of the lake.
+- **A readable number of lines.** A survey with a line at every foot is thinned to a dozen
+  depths, keeping the shallows finer (2, 4, 6, 8, 10, 20, 30…).
+
+Depth lines are for finding fish, not for navigation, and the map says so: surveys are old,
+reservoirs silt up, and the water level moves.
+
+**Adding a source.** Most states with natural lakes publish contours the same way (an ArcGIS
+layer that answers a box with GeoJSON), so a source is an entry in `DEPTH_SOURCES`: where it
+applies, the layer's address, the field that holds the depth and how to turn it into feet. Check
+first, on a lake you know: the units (New Jersey's are metres), the sign (Minnesota, Ohio and
+North Dakota store depths as negatives), that the field is a depth and not a surface elevation,
+and the licence. Then add the service to the mocks in `e2e/support/fixtures.js`.
+
+Left out for now, on licence grounds, since the site carries affiliate links:
+
+- **Minnesota DNR** (about 2,000 lakes): commercial use needs a request approved by the
+  department ([how to ask](https://www.dnr.state.mn.us/aboutdnr/data-requests-commercial-use.html)).
+- **Florida FWC**: "general aquatic environmental management purposes only. Any other use is
+  prohibited".
+- **New Hampshire** ("distribution is discouraged") and the **University of South Florida**
+  lake atlas (permission needed to publish) want a question answered first.
+
+Looked at and not used: the Army Corps' inland charts (nearly every contour is the one 9-ft
+navigation-channel line), GLOBathy (modelled from a lake's outline, not surveyed, so it would
+draw structure that is not there) and Garmin's Navionics web API (an embedded viewer that
+forbids drawing on top of it).
+
 ### Licences, if the site ever earns money
 
 - **NWS**, **USGS** and **NOAA** data are public domain: no restriction on commercial use.
+- **Depth contours**: NOAA's charts are public domain, and Michigan publishes its lake contours
+  with no restrictions on use. Other states' terms differ, and some rule a commercial site out:
+  see [Depth contours](#depth-contours) before adding one.
 - **GBIF** is free to use and asks to be credited (the page footer does). The app requests only
   records published under CC0 or CC BY, leaving out those marked non-commercial, and uses the
   counts, not the records.
@@ -833,7 +913,7 @@ across, snapped to a 7-mile grid, and then about the individual gauges it found 
 recorded in a box about 140 miles across on a half-degree grid. Near the coast, NOAA is asked for
 the tides at the nearest station, and the Weather Service's beach-forecast service is sent the
 same rounded coordinates. Following an Amazon link takes you to Amazon, which then sees the
-search and, if an Associates tag is configured, that you came from this site. The text you type in the search
+search and, if an Associates tag is configured, that you came from this site. For the lake map, the box around the lake's outline goes to this site's proxy, or without it to the Michigan DNR's and NOAA's map services; for the inshore depth chart, a box about 12 km across on a 2 km grid, to the proxy or to NOAA. The text you type in the search
 box goes to Photon. Your
 location is requested only when you press "Use my location".
 
@@ -858,6 +938,7 @@ js/
     weather-api.js      NWS observations, forecast and alerts, Photon place search
     species-api.js      GBIF: how often each sport fish is recorded around a place
     coast-api.js        NOAA tides and water temperature, NWS beach and wave forecasts, sea temperature
+    depth-api.js        Depth contours for the lake map, through the proxy or straight from the sources
     usgs-api.js         USGS stations: water temperature, level, flow, their history and flow normals
   core/                 Pure logic with no DOM access (unit tested)
     scoring.js          The fishing score (fresh, inshore, surf), and scored series and best windows ahead
@@ -874,6 +955,7 @@ js/
     sky.js              NWS sky reports -> label, emoji, sky class
     util.js             Distance, formatting and other helpers
     day-score.js        A day's score (its best two hours) and the parts of the day
+    depth.js            Depth contours: the sources, reading and thinning them, which lines are a lake's own
     place-url.js        Place addresses (/fishing/<lat>,<lon>/<name>): build, read, page titles and headings
     listed-places.js    The listed spots: which are lakes or rivers, and which have a water sensor of their own
     summary.js          The conditions in a sentence, for under the place's name and for search results
@@ -889,6 +971,7 @@ functions/
   fishing/[[path]].js   Cloudflare Pages Function: place pages with the place in their title and meta tags
   api/usgs/[[path]].js  Cloudflare Pages Function: caching proxy for the USGS API
   api/sst.js            Cloudflare Pages Function: satellite sea-surface temperature
+  api/depth.js          Cloudflare Pages Function: depth contours for a lake, read, thinned and cached
   api/nws/[[path]].js   Cloudflare Pages Function: stand-in route to the Weather Service API
 scripts/build.mjs       Copies the publishable files to dist/, writes the sitemap, fingerprints file names
 scripts/fingerprint.mjs Names files after their content and rewrites the references to them

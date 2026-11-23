@@ -36,10 +36,12 @@ import { HOUR_MS, debounce, distanceMiles, isNum, roundCoord, timeAgo } from './
 import { compassPoint } from './core/sky.js';
 import { locateZones, targetPlan } from './core/target-zones.js';
 import { fetchLake, loadLakeList } from './api/lake-api.js';
+import { fetchDepth } from './api/depth-api.js';
+import { chartBox, depthBox, depthOnChart, depthOnLake, depthRange } from './core/depth.js';
 import { locationKey, storage } from './storage.js';
 import { createLineChart } from './ui/charts.js';
 import { $, el, glyph, icon, setText, svg } from './ui/dom.js';
-import { createLakeMap, createStationMap } from './ui/map.js';
+import { createChartMap, createLakeMap, createStationMap } from './ui/map.js';
 import { initTheme } from './ui/theme.js';
 import { initTips, tip } from './ui/tips.js';
 
@@ -67,6 +69,8 @@ const state = {
     scoreDay: 0, // the score card's day: 0 is today, then each day ahead in the outlook
     scoreFocus: null, // part of that day on the card: { kind: 'part', id } or { kind: 'hour', t }; null for the whole day
     lake: null, // { key, status: 'loading'|'ready'|'none'|'too-big'|'failed', lake }: the outline behind "Where to look"
+    depth: null, // { key, status: 'loading'|'ready'|'none'|'failed', depth }: that lake's depth contours, where a survey has them
+    chart: null, // { key: the box, status: 'loading'|'ready'|'none'|'failed', depth }: NOAA's depth contours around a salt-water place
 };
 
 let loadController = null;
@@ -75,6 +79,7 @@ let trendController = null;
 let charts = null;
 let stationMap = null;
 let lakeMap = null;
+let chartMap = null;
 
 // ---------------------------------------------------------------------------
 // Derived data
@@ -1451,20 +1456,26 @@ function renderWhere(derived) {
     section.hidden = false;
     const { current } = state.weather;
     const windFrom = isNum(current.windDirection) ? current.windDirection : null;
-    const plan = targetPlan({ phaseId: lead.season.id, windMph: current.windMph, windFrom, waterTempF: derived.waterTempF });
 
     const known = state.lake?.key === lakeKey(state.location) ? state.lake : null;
     // Whatever drew the card (a fresh load, conditions kept from a moment ago, a change of
     // mode), the lake for this place is fetched if it isn't here or on its way.
     if (!known && lakeWanted()) queueMicrotask(loadLake);
     const lake = known?.status === 'ready' ? known.lake : null;
+    // And once the lake is known, its depth contours, which most lakes do not have.
+    if (lake && state.depth?.key !== known.key) queueMicrotask(() => loadDepth(lake, known.key));
+    const depth = lake && state.depth?.key === known.key && state.depth.status === 'ready' ? state.depth.depth : null;
+    const plan = targetPlan({ phaseId: lead.season.id, windMph: current.windMph, windFrom, waterTempF: derived.waterTempF, hasDepth: Boolean(depth) });
     const zones = lake ? whereZones(lake, plan, windFrom) : [];
     const numbered = zones.map((zone) => ({ ...zone, title: plan.kinds.find((k) => k.kind === zone.kind)?.title }));
 
     let status;
     if (state.location.kind === 'river') status = 'Rivers aren\'t mapped yet; these are what to look for along the banks.';
     else if (!known || known.status === 'loading') status = 'Finding the lake\'s outline… a big lake can take a minute the first time.';
-    else if (lake) status = `${lake.name ?? 'This lake'}, for ${lead.target} in the ${lead.season.label.toLowerCase()}.`;
+    else if (lake) {
+        status = `${lake.name ?? 'This lake'}, for ${lead.target} in the ${lead.season.label.toLowerCase()}.`;
+        if (depth) status += ` Depth lines from ${depth.credit}${depth.partial ? ', for part of the lake' : ''}: ${depthRange(depth)}.`;
+    }
     else if (known.status === 'too-big') status = 'This water is too big to mark spot by spot; these are what to look for along its shores.';
     else if (known.status === 'failed') status = 'The lake outline couldn\'t be loaded; these are what to look for.';
     else status = 'No lake mapped right here. Search for a lake by name to see these marked on it.';
@@ -1488,7 +1499,31 @@ function renderWhere(derived) {
     setText('whereNote', notes.join(' '));
 
     $('whereMapFrame').hidden = !lake;
-    if (lake) lakeMap.update({ lake, zones: numbered, location: state.location });
+    if (lake) lakeMap.update({ lake, zones: numbered, location: state.location, depth });
+}
+
+/**
+ * The depth contours for the lake at a place (`key` is the place's, as for state.lake), once
+ * per place. Most lakes have none, and a source that is down is not worth a message on a card
+ * that works without it: either way the map is drawn as it was, and a lake that failed is
+ * asked about again the next time it is opened.
+ */
+async function loadDepth(lake, key) {
+    if (state.depth?.key === key) return;
+    const box = depthBox(lake);
+    state.depth = { key, status: box ? 'loading' : 'none', depth: null };
+    if (!box) return;
+    let next;
+    try {
+        const { depth } = await fetchDepth(box);
+        const onLake = depthOnLake(depth, lake);
+        next = { key, status: onLake ? 'ready' : 'none', depth: onLake };
+    } catch {
+        next = { key, status: 'failed', depth: null };
+    }
+    if (state.depth?.key !== key) return; // another place has been opened since
+    state.depth = next;
+    if (next.depth && lastDerived) renderWhere(derive());
 }
 
 async function loadLake() {
@@ -1508,6 +1543,71 @@ async function loadLake() {
     if (state.location !== location && lakeKey(state.location) !== key) return;
     state.lake = next;
     renderWhere(derive());
+}
+
+// ----- Depth chart (salt water) -----------------------------------------------------------
+
+// Inshore only: off a beach the fish are in the first trough, closer in than a chart resolves.
+const chartWanted = () => Boolean(state.location) && modeChoice().mode === 'inshore';
+const EXAMPLE_LINE_FT = 6; // the commonest line on a chart of shallow water
+
+/**
+ * The depth chart of the water around a salt-water place: NOAA's contours on the map, and
+ * beside it how to read them with the tide as it is now. Where NOAA has no depth lines the
+ * card is left out.
+ */
+function renderChart(derived) {
+    const section = $('chart');
+    const box = derived && chartWanted() ? chartBox(state.location.lat, state.location.lon) : null;
+    const known = box && state.chart?.key === box.join(',') ? state.chart : null;
+    if (box && !known) queueMicrotask(loadChart);
+    if (!box || known?.status === 'none') {
+        section.hidden = true;
+        return;
+    }
+    section.hidden = false;
+    const depth = known?.status === 'ready' ? known.depth : null;
+    const failed = known?.status === 'failed';
+
+    let status = 'Looking up NOAA\'s chart of this water…';
+    if (depth) status = `Depth lines from ${depth.credit}: ${depthRange(depth)}, measured at the average lowest tide.`;
+    else if (failed) status = 'The chart couldn\'t be loaded.';
+    $('chartStatus').replaceChildren(status, failed
+        ? el('button', { type: 'button', class: 'where-retry', onClick: () => loadChart() }, 'Try again')
+        : '');
+
+    const note = (title, text) => el('li', { class: 'chart-item' }, el('h3', { class: 'where-title' }, title), el('p', { class: 'where-why' }, text));
+    const { tide } = derived;
+    const height = tide ? Number(tide.heightFt.toFixed(1)) : null;
+    $('chartNotes').replaceChildren(
+        note('Reading the lines', 'Each line joins water of one depth, in feet, and heavier lines are deeper. Where lines crowd together the bottom drops away: the edge of a channel, or the side of a hole. The 0 line is the edge of the flats and bars that are bare at the lowest tides.'),
+        tide
+            ? note('With the tide now', `The tide is ${Math.abs(height).toFixed(1)} ft ${height < 0 ? 'below' : 'above'} the chart's level and ${tide.slack ? 'near slack' : tide.direction}, by NOAA's prediction for ${state.coast.tideStation.name}. So there is about ${Math.max(0, Math.round(EXAMPLE_LINE_FT + height))} ft of water over a ${EXAMPLE_LINE_FT} ft line.`)
+            : note('With the tide', 'The depths are what is left at the average lowest tide. Add the height of the tide to them for the water there now.'));
+
+    $('chartMapFrame').hidden = failed;
+    if (!failed) chartMap.update({ box, location: state.location, depth });
+}
+
+async function loadChart() {
+    if (!chartWanted()) return;
+    const box = chartBox(state.location.lat, state.location.lon);
+    if (!box) return;
+    const key = box.join(',');
+    if (state.chart?.key === key && state.chart.status !== 'failed') return;
+    state.chart = { key, status: 'loading', depth: null };
+    if (lastDerived) renderChart(lastDerived);
+    let next;
+    try {
+        const { depth } = await fetchDepth(box, { charts: true });
+        const drawn = depthOnChart(depth);
+        next = { key, status: drawn ? 'ready' : 'none', depth: drawn };
+    } catch {
+        next = { key, status: 'failed', depth: null };
+    }
+    if (state.chart?.key !== key) return; // another place has been opened since
+    state.chart = next;
+    if (lastDerived) renderChart(derive());
 }
 
 function renderForecast(derived) {
@@ -1836,6 +1936,7 @@ function render() {
     renderSpeciesGroup();
     renderLures(derived);
     renderWhere(derived);
+    renderChart(derived);
     renderForecast(derived);
     renderStations(derived);
     renderLevel(derived);
@@ -2832,6 +2933,7 @@ function init() {
     };
     stationMap = createStationMap($('stationMap'), { onSelect: (id) => selectStation(id) });
     lakeMap = createLakeMap($('whereMap'));
+    chartMap = createChartMap($('chartMap'));
 
     $('locateBtn').addEventListener('click', useMyLocation);
     $('refreshBtn').addEventListener('click', () => load());

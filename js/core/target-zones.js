@@ -14,7 +14,8 @@
 //
 // The phases come from core/season.js. What each phase looks for is a rule of thumb from
 // the same guides; it is not measured. And depth, which decides where fish sit in summer and
-// winter, is missing: for those phases the card says so rather than pretend.
+// winter, is known only where a public survey exists (core/depth.js draws its contours on the
+// map): for those phases the card points to the contours, or says there are none.
 
 import { projector, ringArea } from './lake-shape.js';
 
@@ -79,10 +80,11 @@ export const compassName = (degrees) => COMPASS[Math.round((((degrees % 360) + 3
 
 /**
  * What to look for today, before any lake is known: kinds, titles and reasons.
- * @param {{ phaseId: string|null, windMph?: number|null, windFrom?: number|null, waterTempF?: number|null }} c
+ * `hasDepth` says the lake's map carries depth contours (core/depth.js), which changes the note.
+ * @param {{ phaseId: string|null, windMph?: number|null, windFrom?: number|null, waterTempF?: number|null, hasDepth?: boolean }} c
  * @returns {{ kinds: { kind: string, title: string, why: string }[], depthNote: string|null }}
  */
-export function targetPlan({ phaseId, windMph = null, windFrom = null, waterTempF = null }) {
+export function targetPlan({ phaseId, windMph = null, windFrom = null, waterTempF = null, hasDepth = false }) {
     const kinds = [...(PLAN[phaseId] ?? DEFAULT_PLAN)];
     const windy = Number.isFinite(windMph) && windMph >= WIND_MIN_MPH && Number.isFinite(windFrom);
     const warmEnough = !Number.isFinite(waterTempF) || waterTempF >= WIND_MIN_WATER_F;
@@ -97,9 +99,9 @@ export function targetPlan({ phaseId, windMph = null, windFrom = null, waterTemp
             title: TITLES[kind](phaseId, downwind),
             why: WHY[kind][phaseId] ?? WHY[kind].default,
         })),
-        depthNote: DEEP_PHASES.has(phaseId)
-            ? 'Fish also hold on ledges, humps and deep edges this time of year. Those need a depth map, which this lake doesn\'t have here.'
-            : null,
+        depthNote: !DEEP_PHASES.has(phaseId) ? null
+            : hasDepth ? 'Fish also hold on ledges, humps and deep edges this time of year. On the map, those are where the depth lines bunch together, and the rings of deeper or shallower water out in the lake.'
+                : 'Fish also hold on ledges, humps and deep edges this time of year. Those need a depth map, which this lake doesn\'t have here.',
         calmNote: windy && !warmEnough ? 'The water is cold: fish the calm, sunny side out of the wind rather than the windy bank.' : null,
     };
 }

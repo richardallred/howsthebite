@@ -11,10 +11,11 @@ import { test as base, expect } from '@playwright/test';
 import {
     BLANK_TILE, DEFAULT_POINTS, DEFAULT_SCORE, DEFAULT_SPECIES, DEFAULT_STATIONS, NOW, alertsResponse, beachResponse,
     continuousResponse, coopsResponse, dailyResponse, flowNormalsResponse, forecastResponse, gbifResponse, hourlyForecastResponse, latestContinuousResponse,
-    marineZonesResponse, monitoringLocationsResponse, nhdResponse, observationsResponse, overpassResponse, photonResponse, pointResponse, sstResponse,
+    marineZonesResponse, monitoringLocationsResponse, nhdResponse, depthResponse, observationsResponse, overpassResponse, photonResponse, pointResponse, sstResponse,
     stationsResponse, tempNormalsResponse, waveGridResponse,
 } from './api-mocks.js';
 import { findLake } from '../../js/core/lake-shape.js';
+import { findDepth } from '../../js/core/depth.js';
 
 export { DEFAULT_POINTS, DEFAULT_SCORE, NOW, expect };
 
@@ -28,6 +29,8 @@ const SERVICES = {
     tiles: 'tile.openstreetmap.org',
     overpass: 'overpass-api.de',
     nhd: 'hydro.nationalmap.gov',
+    'depth-state': 'services3.arcgis.com',
+    'depth-noaa': 'encdirect.noaa.gov',
 };
 
 const PROXY_PATH = /\/api\/usgs\/(?:([a-z-]+)\/items|statistics\/(observationNormals))$/;
@@ -45,6 +48,8 @@ export const test = base.extend({
             // lakes near the default place and one too far away, so the tests don't move when
             // the real list is rebuilt.
             lakes: [['Test Reservoir', 41.95, -87.7, 12, 20], ['Little Lake', 41.89, -87.64, 1, 0], ['Far Lake', 43.5, -87.6, 50, 0]],
+            depth: 'state', // who has surveyed the test lake's depth: 'state' (the Michigan DNR layer), 'noaa' or 'none'
+            chart: true, // whether NOAA's charts have depth lines for salt water (0, 6 and 12 ft)
             // false: the site is plain static hosting, so /api/usgs and /api/nws are a 404 and the app goes direct.
             // true:  the Cloudflare Pages Functions are deployed and answer them.
             proxy: false,
@@ -142,7 +147,18 @@ export const test = base.extend({
             const url = new URL(route.request().url());
             const get = async (nhdUrl) => nhdResponse(new URL(nhdUrl));
             const post = async (query) => overpassResponse(query, lakeMemory);
-            return json(route, await findLake(Number(url.searchParams.get('lat')), Number(url.searchParams.get('lon')), { get, post }));
+            lakeMemory.centre = [Number(url.searchParams.get('lat')), Number(url.searchParams.get('lon'))];
+            return json(route, await findLake(...lakeMemory.centre, { get, post }));
+        });
+
+        // The depth-contour proxy, likewise: behind it, the same source mocks the browser reaches.
+        await context.route((url) => url.pathname.endsWith('/api/depth'), async (route) => {
+            api.calls.push({ service: 'depth', url: route.request().url() });
+            if (!api.proxy) return respond(route, 404, { error: 'Not found' });
+            const asked = new URL(route.request().url()).searchParams;
+            const box = asked.get('box').split(',').map(Number);
+            const get = async (sourceUrl) => depthResponse(new URL(sourceUrl), api.depth, lakeMemory.centre, api.chart);
+            return json(route, await findDepth(box, { get, charts: asked.get('charts') === '1' }));
         });
 
         await context.route((url) => url.pathname.endsWith('/data/lakes.json'), (route) => {
@@ -167,7 +183,14 @@ export const test = base.extend({
                 case 'gbif': return json(route, gbifResponse(api.species));
                 case 'coops': return json(route, coopsResponse(url, api.coast));
                 case 'beach': return json(route, beachResponse(api.coast));
-                case 'nhd': return json(route, nhdResponse(url));
+                case 'nhd': {
+                    // The lake is drawn around the middle of the box asked about; the depth mock draws its contours there too.
+                    const [w, s, e, n] = url.searchParams.get('geometry').split(',').map(Number);
+                    lakeMemory.centre = [(s + n) / 2, (w + e) / 2];
+                    return json(route, nhdResponse(url));
+                }
+                case 'depth-state':
+                case 'depth-noaa': return json(route, depthResponse(url, api.depth, lakeMemory.centre ?? lakeMemory.lakeAt, api.chart));
                 case 'overpass': return json(route, overpassResponse(new URLSearchParams(route.request().postData() ?? '').get('data') ?? '', lakeMemory));
                 case 'tiles': return route.fulfill({ status: 200, contentType: 'image/png', body: BLANK_TILE });
                 default: return usgs(route, url, /(?:collections\/([a-z-]+)\/items|statistics\/v0\/(observationNormals))$/.exec(url.pathname)?.slice(1).find(Boolean));

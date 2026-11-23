@@ -1399,6 +1399,8 @@ body.page { padding-bottom: 0; }
 .where-why { margin: 2px 0 0; font-size: 0.875rem; color: var(--ink-2); }
 .where-note { margin: 0; padding: 10px 20px 14px; border-top: 1px solid var(--line); font-size: 0.8125rem; color: var(--muted); }
 .where-map-frame[hidden] { display: none; }
+.chart-item { padding: 10px 0; }
+.chart-item + .chart-item { border-top: 1px solid var(--line); }
 .lake-outline { stroke: var(--water); stroke-width: 1.5; fill: var(--water); fill-opacity: 0.08; }
 .lake-zone { stroke: var(--zone); stroke-width: 7; stroke-opacity: 0.85; stroke-linecap: round; stroke-linejoin: round; fill: none; }
 /* Leaflet's stylesheet loads after this one (js/ui/map.js) and sets its marker icons to
@@ -1413,6 +1415,49 @@ body.page { padding-bottom: 0; }
     color: var(--on-accent);
     font: 700 0.8125rem/1 var(--font-mono);
     box-shadow: 0 1px 3px rgb(0 0 0 / 0.45);
+}
+
+/* Depth contours on the lake map (js/core/depth.js): one ink, heavier and more solid with
+   depth, so the lines read on the map tiles in both themes. The key in the map's corner
+   uses the same bands. */
+.depth-band-1 { --depth-opacity: 0.4; --depth-width: 0.9px; }
+.depth-band-2 { --depth-opacity: 0.52; --depth-width: 1.1px; }
+.depth-band-3 { --depth-opacity: 0.64; --depth-width: 1.3px; }
+.depth-band-4 { --depth-opacity: 0.76; --depth-width: 1.6px; }
+.depth-band-5 { --depth-opacity: 0.88; --depth-width: 1.9px; }
+.depth-band-6 { --depth-opacity: 1; --depth-width: 2.3px; }
+.depth-line {
+    stroke: #12395b;
+    stroke-opacity: var(--depth-opacity);
+    stroke-width: var(--depth-width);
+    stroke-linejoin: round;
+    fill: none;
+}
+.depth-label {
+    font: 600 0.625rem/14px var(--font-mono);
+    color: #12395b;
+    text-align: center;
+    text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff;
+    pointer-events: none;
+}
+.depth-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 9px;
+    max-width: 240px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgb(255 255 255 / 0.85);
+    color: #1f2a22;
+    font: 0.6875rem/1.5 var(--font-mono);
+}
+.depth-legend-title { font-weight: 600; }
+.depth-key { display: inline-flex; align-items: center; gap: 4px; }
+.depth-swatch {
+    width: 14px;
+    border-top: var(--depth-width) solid #12395b;
+    opacity: var(--depth-opacity);
 }
 
 /* ---------- Charts ---------- */

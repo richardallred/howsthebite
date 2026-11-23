@@ -29,6 +29,9 @@ export const API = {
     // Same-origin caching proxy for lake outlines from OpenStreetMap (functions/api/lake.js).
     // Where it is not deployed the app asks the Overpass API directly (js/api/lake-api.js).
     LAKE_PROXY: '/api/lake',
+    // Same-origin caching proxy for depth contours from state and federal map services
+    // (functions/api/depth.js). Where it is not deployed the app asks them directly (js/api/depth-api.js).
+    DEPTH_PROXY: '/api/depth',
 };
 
 export const APP = {
