@@ -64,23 +64,23 @@ test('the same water temperature means different lures in spring and fall', () =
 
 test('bass through the year', () => {
     assert.equal(names(['bass'], { waterTempF: 44, date: JANUARY })[0], 'Suspending jerkbait');
-    assert.ok(names(['bass'], { waterTempF: 44, date: JANUARY }).includes('Jig with a low-action trailer'));
+    assert.ok(names(['bass'], { waterTempF: 44, date: JANUARY }).includes('Football jig with a low-action trailer'));
     assert.equal(names(['bass'], { waterTempF: 76, phase: 'dusk', windMph: 3, date: JUNE })[0], 'Topwater popper or prop bait');
-    assert.equal(names(['bass'], { waterTempF: 84, date: JULY })[0], 'Carolina- or Texas-rigged worm on offshore structure');
+    assert.equal(names(['bass'], { waterTempF: 84, date: JULY })[0], 'Big ribbon-tail worm, Carolina- or Texas-rigged');
     assert.ok(names(['bass'], { waterTempF: 84, phase: 'night', date: JULY }).includes('Black spinnerbait or a big dark worm'));
     assert.equal(names(['bass'], { waterTempF: 84, phase: 'night', windMph: 15, date: JULY })[0], 'Black spinnerbait or a big dark worm');
     // Topwater wants a calm surface, so it is not suggested in a wind even at dusk; nor in cold water.
     assert.ok(!names(['bass'], { waterTempF: 76, phase: 'dusk', windMph: 15, date: JUNE }).includes('Topwater popper or prop bait'));
     assert.ok(!names(['bass'], { waterTempF: 46, phase: 'dusk', windMph: 2, date: APRIL }).includes('Topwater popper or prop bait'));
     // Muddy water still calls for vibration in any season.
-    assert.ok(names(['bass'], { waterTempF: 80, flowPercentile: 95, date: JULY }).includes('Large-blade spinnerbait'));
+    assert.ok(names(['bass'], { waterTempF: 80, flowPercentile: 95, date: JULY }).includes('Colorado-blade spinnerbait'));
 });
 
 test('without a date the picks fall back on the conditions alone', () => {
     assert.equal(names(['bass'], { waterTempF: 46 })[0], 'Suspending jerkbait');
     assert.equal(names(['bass'], { waterTempF: 76, phase: 'dusk', windMph: 3 })[0], 'Topwater popper or prop bait');
-    assert.equal(names(['bass'], { waterTempF: 76, windMph: 15 })[0], 'Spinnerbait or crankbait');
-    assert.equal(names(['bass'], { waterTempF: 76 })[0], 'Plastic worm or jig');
+    assert.equal(names(['bass'], { waterTempF: 76, windMph: 15 })[0], 'Willow-leaf spinnerbait, 1/2 oz');
+    assert.equal(names(['bass'], { waterTempF: 76 })[0], 'Texas-rigged ribbon-tail worm, 7 inch');
     assert.ok(picks(['bass'], { waterTempF: 76 }).every((pick) => pick.season === null));
     const [plain] = lurePatterns(['bass'], conditions({}));
     assert.deepEqual({ ...plain, presentation: undefined }, { target: 'bass', season: null, situations: [], presentation: undefined });
@@ -104,7 +104,7 @@ test('a cold snap and a passing front push the picks slower and deeper, and say 
     const calm = names(['bass'], { waterTempF: 59, date: OCTOBER, trend: steady, phase: 'dawn', windMph: 2 }, { limit: 4 });
     const chilled = picks(['bass'], { waterTempF: 55, date: OCTOBER, trend: snap, front: 'passed' }, { limit: 4 });
     assert.notDeepEqual(calm, chilled.map((pick) => pick.name));
-    assert.ok(chilled.slice(0, 2).some((pick) => pick.name === 'Suspending jerkbait' || pick.name === 'Jig with a low-action trailer'));
+    assert.ok(chilled.slice(0, 2).some((pick) => pick.name === 'Suspending jerkbait' || pick.name === 'Football jig with a low-action trailer'));
     assert.ok(!chilled.some((pick) => pick.name === 'Walking topwater bait'));
     const notes = chilled.map((pick) => pick.note).filter(Boolean);
     assert.ok(notes.length >= 1);
@@ -162,7 +162,7 @@ test('salt water: season, tide, light and the style of fishing change the pick',
     assert.equal(names(['redfish'], { mode: 'inshore', waterTempF: 56, date: JANUARY })[0], 'Soft plastic or shrimp, sight-cast on sunny flats');
     assert.equal(names(['redfish'], { mode: 'surf', waterTempF: 76, tide: 'rising', date: OCTOBER })[0], 'Cut mullet or crab on a fish-finder rig');
     assert.equal(names(['seatrout'], { ...inshore, phase: 'dawn', date: JUNE })[0], 'Walk-the-dog topwater plug');
-    assert.equal(names(['seatrout'], { ...inshore, waterTempF: 50, date: JANUARY })[0], 'Slow-sinking, fish-shaped plug');
+    assert.equal(names(['seatrout'], { ...inshore, waterTempF: 50, date: JANUARY })[0], 'Slow-sinking twitchbait');
     assert.equal(names(['snook'], { ...inshore, phase: 'night', tide: 'falling', date: JUNE })[0], 'Live pinfish or shrimp on a circle hook');
     assert.equal(names(['snook'], { ...inshore, waterTempF: 78, date: OCTOBER })[0], 'Walk-the-dog topwater or mullet swimbait');
     assert.equal(names(['striper'], { mode: 'inshore', waterTempF: 68, phase: 'night', tide: 'falling', date: JULY })[0], 'Live or soft-plastic eel');
