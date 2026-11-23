@@ -66,7 +66,7 @@ test.describe('inshore', () => {
         await expect(app.factor('Light')).toContainText('Bright sun — try deeper edges');
 
         // The water section turns into tides; the freshwater parts step aside.
-        await expect(page.locator('#waterTitle')).toHaveText('Tides and water temperature');
+        await expect(page.locator('#waterTitle')).toHaveText('Galveston tides and water temperature');
         await expect(page.locator('#tideStats .level-stat')).toHaveText([
             /^Tide now1\.2 ftfalling$/, /^LowMon 1:00 PM0\.3 ft$/, /^HighMon 7:00 PM2\.0 ft$/, /^LowTue 1:00 AM0\.3 ft$/, /^HighTue 7:00 AM2\.0 ft$/,
         ]);

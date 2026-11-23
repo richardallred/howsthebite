@@ -328,8 +328,9 @@ Amazon turns out to be a poor fit.
   stays `/`.
 - **Place pages.** Every place has its own address, `/fishing/<lat>,<lon>/<name>`
   (`js/core/place-url.js`). `functions/fishing/[[path]].js` serves it as `index.html` with the
-  place written into the title ("Asheville, North Carolina Fishing Forecast"), the description,
-  the canonical address, the Open Graph tags and the `<h1>`, so search engines and link previews
+  place written into the title ("Asheville, North Carolina Fishing Forecast Today"), the
+  description, the canonical address, the Open Graph tags, the `<h1>` and the weather and water
+  headings ("Asheville 5-day weather"), so search engines and link previews
   (which mostly run no scripts) see the place. It streams the file through HTMLRewriter, so it
   costs about what serving the file does. The app sets the same title and canonical address when
   a visitor moves between places.
@@ -348,8 +349,8 @@ Amazon turns out to be a poor fit.
     as an empty page.
 - **Popular fishing spots.** Search engines find pages by following links, and place pages are
   otherwise reached only through the search box. The spots page (`spots/index.html`, served at
-  `/spots/` and linked from the footer) links to well-known lakes, rivers and coastal towns.
-  To add a water, add a link:
+  `/spots/` and linked from the footer) links to well-known lakes, rivers and coastal towns,
+  grouped by state. To add a water, add a link under its state:
   - the address is the canonical one, `/fishing/<lat>,<lon>/<slug>`, with coordinates rounded to
     2 decimals, and the link text is exactly the name the slug turns back into
     (`tests/places.test.js` checks both, and that no place is listed twice);
@@ -357,7 +358,32 @@ Amazon turns out to be a poor fit.
     `js/core/listed-places.js`, so the right gauges are used whether someone picks it from the
     list or arrives at its address from a search engine (the test checks the two agree);
   - river entries are named for the river and a town on it ("Kenai River at Soldotna, Alaska")
-    and use the town's coordinates.
+    and use the town's coordinates, or better the coordinates of the USGS sensor on that river
+    there;
+  - it needs a link-preview card, `og/<slug>.jpg` (`node art/share/render.mjs`, with `npm start`
+    running);
+  - if the place has a water-temperature sensor of its own, add it to `OWN_SENSOR` in
+    `js/core/listed-places.js` (see below).
+- **Titles and the summary are written for what people search, and promise only what the page
+  has.** Search Console showed place pages being found for "fishing report", "water temperature"
+  and "weather" searches, and the home page for "are the fish biting today".
+  - The home page's title asks that question. A place's title is "<place> Fishing Forecast Today".
+  - **Water temperature is promised only where it is that water's.** USGS has thermometers on
+    few lakes: for most places the reading is the nearest sensor's, often a river tens of miles
+    away (Kentucky Lake's was the Ohio River, 58 miles off). So only places in `OWN_SENSOR`
+    (a sensor on that lake, or on that river at that town; about 125 of the listed places) get
+    "& Water Temperature" in the title and a heading that calls the water theirs ("Lake Champlain
+    water temperature, level and flow"). Everywhere else the heading reads "Water temperature,
+    level and flow near <place>". `OWN_SENSOR` names each place's sensor, and only that sensor's
+    reading is called the place's water: choose another from the list, or let the place's own
+    stop reporting (some are pulled for the winter), and the sentence below speaks of "the
+    nearest water sensor" again. Check the page before adding a place to the list.
+  - **The conditions in a sentence** (`js/core/summary.js`) sit under the place's name:
+    "Excellent fishing today, best 3–5 PM. Water 57.7°F, down 6.5°F in 14 days." Where the sensor
+    is not the place's own and is 3 miles or more away it says so: "The nearest water sensor, 58
+    miles away, reads 57.4°F." The app also writes the sentence, with the place and the date,
+    into the page's meta description once the conditions have loaded, so a search result can
+    show the day's numbers. The date is there because a result may be shown days later.
 - **The sitemap is written by the build** (`scripts/sitemap.mjs`): the home page, the spots and
   questions pages, and every place they link to, so the pages and the sitemap cannot disagree. It has no `<lastmod>`, which Google uses
   only when it is verifiably accurate, and no `<priority>` or `<changefreq>`, which it ignores.
@@ -750,7 +776,9 @@ js/
     sky.js              NWS sky reports -> label, emoji, sky class
     util.js             Distance, formatting and other helpers
     day-score.js        A day's score (its best two hours) and the parts of the day
-    place-url.js        Place addresses (/fishing/<lat>,<lon>/<name>): build, read, page titles
+    place-url.js        Place addresses (/fishing/<lat>,<lon>/<name>): build, read, page titles and headings
+    listed-places.js    The listed spots: which are lakes or rivers, and which have a water sensor of their own
+    summary.js          The conditions in a sentence, for under the place's name and for search results
   ui/
     charts.js           SVG line chart with tooltip, keyboard support and data table
     map.js              Lazy-loaded Leaflet station map

@@ -140,15 +140,47 @@ const COVERAGE = [
 ];
 export const inCoverage = (lat, lon) => COVERAGE.some(([w, s, e, n]) => lon >= w && lon <= e && lat >= s && lat <= n);
 
-/** Title and descriptions for a place's page; the same words in the page and in link previews. */
-export function placeMeta(name) {
+/**
+ * Title and descriptions for a place's page; the same words in the page and in link previews.
+ * @param {string} name
+ * @param {{ ownSensor?: boolean }} [about]  the place has a water-temperature sensor of its own
+ *   (core/listed-places.js). Only then do the title and description promise a water
+ *   temperature: elsewhere the reading is the nearest sensor's, which may be on other water.
+ */
+export function placeMeta(name, { ownSensor = false } = {}) {
     return {
-        title: `${name} Fishing Forecast — How's the Bite?`,
-        // Search results show about 155 characters, so the place and the point come first.
-        description: `Fishing forecast for ${name}: the best times to fish today and the next two days, `
-            + 'scored 0–100 from live water temperature, weather, tides and river flow, with lure picks.',
+        // What people search for, in their words. Search results cut a long title short from
+        // the end, so the site's name goes last.
+        title: `${name} Fishing Forecast${ownSensor ? ' & Water Temperature' : ''} Today — How's the Bite?`,
+        // Search results show about 155 characters, so the place and the point come first. Once
+        // the conditions have loaded the app replaces this with the day's numbers (core/summary.js).
+        description: ownSensor
+            ? `${name} fishing forecast and water temperature today: a 0–100 score and the best `
+                + 'two hours to fish, from the sensor on the water, wind, weather and tides, with lure picks.'
+            : `${name} fishing forecast today: a 0–100 score and the best two hours to fish, `
+                + 'from live weather, wind, tides and the nearest water sensors, with lure picks.',
         ogTitle: `${name} fishing forecast — How's the Bite?`,
         ogDescription: `How's the bite at ${name}? A 0–100 fishing score with the best times to fish today and the next two days.`,
+    };
+}
+
+/**
+ * Headings of the weather and water sections. For a named place they carry its name without
+ * the state ("Lake Champlain 5-day weather"): that is how people search for them, and it says
+ * whose weather this is to someone who landed half-way down the page. The water is called the
+ * place's own only where it has a sensor of its own; elsewhere the readings are from nearby.
+ * The same words go into the page as it is served (functions/fishing/[[path]].js).
+ * @param {string|null} [name]  "Lake Champlain, Vermont", or null for no place in particular
+ * @param {{ ownSensor?: boolean }} [about]
+ */
+export function sectionHeadings(name = null, { ownSensor = false } = {}) {
+    const place = name ? name.split(',')[0].trim() : '';
+    const lead = (text) => (place ? `${place} ${text.charAt(0).toLowerCase()}${text.slice(1)}` : text);
+    const water = 'Water temperature, level and flow';
+    return {
+        weather: lead('5-day weather'),
+        water: !place ? water : ownSensor ? lead(water) : `${water} near ${place}`,
+        tides: lead('Tides and water temperature'),
     };
 }
 

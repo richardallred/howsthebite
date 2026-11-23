@@ -93,6 +93,7 @@ const SHELL = [
     'js/core/season.js',
     'js/core/sky.js',
     'js/core/species.js',
+    'js/core/summary.js',
     'js/core/sun.js',
     'js/core/target-zones.js',
     'js/core/tides.js',

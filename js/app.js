@@ -19,16 +19,17 @@ import { OutsideCoverageError, fetchAlerts, fetchWeather, reverseGeocode, search
 import { APP, US_STATES } from './config.js';
 import { hazardAt, summariseAlerts } from './core/alerts.js';
 import { colourAdvice, lureConditions, lurePatterns, recommendLures } from './core/lures.js';
-import { LISTED_WATER } from './core/listed-places.js';
+import { LISTED_WATER, OWN_SENSOR, isOwnSensor } from './core/listed-places.js';
 import { lakesNear, nearbyWater, riversFromStations, saltWaterNear } from './core/nearby-water.js';
 import { majorPeriods, moonInfo } from './core/moon.js';
-import { coordinateName, placeHref, placeMeta, placePath, readPlaceUrl, slugify } from './core/place-url.js';
+import { coordinateName, placeHref, placeMeta, placePath, readPlaceUrl, sectionHeadings, slugify } from './core/place-url.js';
 import { SPECIES_GROUPS, bandFor, bitePhrase, estimateWaterTemp, scoreConditions } from './core/scoring.js';
 import { bestStretch, dayParts, stretchOf } from './core/day-score.js';
 import { DEFAULT_LABELS, chooseSpecies, regionalSpecies, saltSpeciesOptions, speciesOptions } from './core/species.js';
 import { sunTimes } from './core/sun.js';
 import { upcomingTides } from './core/tides.js';
 import { changeOver, classifyTrend, frontState, lastHours } from './core/trend.js';
+import { conditionsSummary } from './core/summary.js';
 import { dailyMeans, describeWaterTrend, summariseWaterTrend } from './core/water-trend.js';
 import { HOUR_MS, debounce, distanceMiles, isNum, roundCoord, timeAgo } from './core/util.js';
 import { compassPoint } from './core/sky.js';
@@ -925,7 +926,7 @@ function renderTides(derived) {
     // The freshwater parts of the section have nothing to say about a bay or a beach.
     for (const id of ['levelCard', 'waterGrid', 'waterFilter', 'waterChartCard', 'levelChartCard', 'levelSource']) $(id).hidden = salt;
     $('tideSource').hidden = !salt;
-    setText('waterTitle', salt ? 'Tides and water temperature' : 'Water temperature, level and flow');
+    setText('waterTitle', salt ? headings().tides : headings().water);
     if (!salt) return;
 
     const coast = state.coast;
@@ -1425,6 +1426,7 @@ async function loadLake() {
 
 function renderForecast() {
     const list = $('forecastList');
+    setText('forecastTitle', headings().weather);
     const { weather } = state;
     if (!weather) {
         list.replaceChildren();
@@ -1590,6 +1592,44 @@ function coordinates({ lat, lon }) {
     return `${Math.abs(lat).toFixed(2)}° ${lat < 0 ? 'S' : 'N'} · ${Math.abs(lon).toFixed(2)}° ${lon < 0 ? 'W' : 'E'}`;
 }
 
+/** The place for a heading: none for the default city of a first visit, or a position with no name. */
+const headings = () => sectionHeadings(state.location && !state.location.fallback ? addressPlace(state.location).name || null : null, aboutPlace());
+
+/** What is known of the place beyond its name: whether it has a water-temperature sensor of its own (core/listed-places.js). */
+const aboutPlace = () => ({ ownSensor: Boolean(state.location) && OWN_SENSOR.has(placePath(addressPlace(state.location))) });
+
+// The home page's own description, kept so it can be put back (see renderSummary).
+let homeDescription = null;
+
+/**
+ * The conditions in a sentence under the place's name, and as the page's description for
+ * search results (core/summary.js). A first visit's default city keeps the site's own
+ * description, as it keeps the site's title.
+ */
+function renderSummary(derived) {
+    const location = state.location;
+    const named = Boolean(location) && !location.fallback;
+    const today = derived?.outlook.days[0] ?? null;
+    const summary = today && conditionsSummary({
+        name: named ? sharedName(location) : null,
+        dateText: inTimezone({ weekday: 'long', month: 'long', day: 'numeric' }).format(derived.clock),
+        score: today.result.score,
+        band: today.result.band.label,
+        bestHours: today.best ? hourRange(today.best.start, today.best.end) : null,
+        flat: Boolean(today.best) && today.flat,
+        waterTempF: derived.waterTempF,
+        measured: Boolean(derived.station || derived.seaTemp),
+        // The place's own sensor is its water however far the dot on the map is. Any other is said to
+        // be nearby: one chosen from the list, or the next nearest while the place's own is not reporting.
+        sensorMiles: derived.station && !isOwnSensor(placePath(addressPlace(location)), derived.station.id) ? derived.station.distanceMi : null,
+        trend: describeWaterTrend(derived.lures.trend)[0] ?? null,
+    });
+    setText('locationLede', summary ? summary.lede : '\u00a0');
+    const meta = document.querySelector('meta[name="description"]');
+    const wanted = named ? summary?.description ?? placeMeta(sharedName(location), aboutPlace()).description : homeDescription;
+    if (meta && wanted && meta.getAttribute('content') !== wanted) meta.setAttribute('content', wanted);
+}
+
 function renderLocation() {
     setText('locationName', state.location?.name ?? 'Choose a location');
     setText('headerPlaceName', state.location?.name ?? '');
@@ -1597,7 +1637,7 @@ function renderLocation() {
     // The page's own title stays while a first visit shows the default city, so search engines
     // (which have no saved place) index the site for what it is, not for Chicago. A place's
     // title matches the one its page is served with (functions/fishing/[[path]].js).
-    if (state.location && !state.location.fallback) document.title = placeMeta(state.location.name).title;
+    if (state.location && !state.location.fallback) document.title = placeMeta(state.location.name, aboutPlace()).title;
     setCanonical(state.location && !state.location.fallback ? placePath(addressPlace(state.location)) : '/');
     renderUpdatedAt();
     renderNearbyWater();
@@ -1699,6 +1739,7 @@ function render() {
     renderLocation();
     renderAlerts(derived);
     lastDerived = derived;
+    renderSummary(derived);
     renderScoreCard(derived);
     renderModeGroup();
     renderSpeciesGroup();
@@ -2721,6 +2762,7 @@ function init() {
     // A place in the address (a shared link, a bookmark, a reload) wins over the saved one.
     const section = window.location.hash.slice(1) || new URLSearchParams(window.location.search).get('section');
     const linked = readPlaceUrl(window.location);
+    if (!linked.place) homeDescription = document.querySelector('meta[name="description"]')?.getAttribute('content') ?? null;
     applyAddressChoices(linked);
     const saved = storage.getLocation();
     if (linked.place) {
