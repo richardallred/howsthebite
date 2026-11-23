@@ -1303,6 +1303,31 @@ const lurePlaceholder = () => el('li', { class: 'lure is-placeholder', 'aria-hid
     el('p', { class: 'lure-why' }, '\u00a0', el('br'), '\u00a0'),
     el('span', { class: 'lure-shop' }, '\u00a0'));
 
+/**
+ * The Amazon links under a suggestion. A single lure gets one link, "Amazon". A rig built from
+ * several pieces of tackle gets a link for each, named for the piece: "Amazon: Jig + Craw trailer".
+ */
+function shopLinks(pick, tag) {
+    if (!pick.shop.length) return null; // advice, not a product
+    const link = (part, className, ...text) => el('a', {
+        class: className,
+        href: shopUrl(part.query, tag),
+        target: '_blank',
+        // "sponsored" is how search engines ask for paid links to be marked.
+        rel: tag ? 'sponsored nofollow noopener' : 'nofollow noopener',
+        // Several links all reading "Amazon", or "Jig heads", need a fuller name for screen readers.
+        'aria-label': `Find ${(part.label ?? pick.name).toLowerCase()} on Amazon${tag ? ' (paid link)' : ''}`,
+    }, ...text);
+    // Amazon and the FTC both want the disclosure next to the links themselves, not only on the page.
+    const paid = (text) => tag && el('span', { class: 'lure-paid' }, text);
+    const [first] = pick.shop;
+    if (pick.shop.length === 1 && !first.label) return link(first, 'lure-shop', 'Amazon', paid(' · paid link'));
+    return el('p', { class: 'lure-kit' },
+        el('span', { class: 'lure-kit-lead' }, 'Amazon: '),
+        pick.shop.flatMap((part, index) => [index > 0 && el('span', { class: 'lure-kit-plus', 'aria-hidden': 'true' }, ' + '), link(part, 'lure-part', part.label)]),
+        paid(pick.shop.length > 1 ? ' · paid links' : ' · paid link'));
+}
+
 function renderLures(derived) {
     const list = $('lureList');
     const tag = affiliateTag();
@@ -1327,16 +1352,7 @@ function renderLures(derived) {
             tip('How to fish it', el('span', { class: 'lure-how' }, pick.how))),
         el('p', { class: 'lure-why' }, `${pick.why}.`),
         pick.note && el('p', { class: 'lure-adjust' }, `${pick.note}.`),
-        pick.query && el('a', {
-            class: 'lure-shop',
-            href: shopUrl(pick.query, tag),
-            target: '_blank',
-            // "sponsored" is how search engines ask for paid links to be marked.
-            rel: tag ? 'sponsored nofollow noopener' : 'nofollow noopener',
-            // Four links all reading "Amazon" need a fuller name for screen readers.
-            'aria-label': `Find ${pick.name.toLowerCase()} on Amazon${tag ? ' (paid link)' : ''}`,
-            // Amazon and the FTC both want the disclosure next to the link itself, not only on the page.
-        }, 'Amazon', tag && el('span', { class: 'lure-paid' }, ' · paid link')))));
+        shopLinks(pick, tag))));
     setText('lureColour', colour);
 }
 

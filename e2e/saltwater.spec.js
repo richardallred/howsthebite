@@ -244,14 +244,23 @@ test.describe('lure suggestions', () => {
         await expect(page.locator('.lure-target')).toHaveText(['For bass · Spawn', 'For bass · Spawn', 'For walleye · Summer', /^For trout/]);
         await expect(page.locator('.lure h3').first()).toHaveText('Soft-plastic lizard or creature bait');
 
-        // In a browser tab the links carry the Associates tag, and say so beside the link and on the page.
-        const link = page.locator('.lure-shop').first();
-        await expect(link).toHaveText('Amazon · paid link');
-        await expect(link).toHaveAttribute('href', 'https://www.amazon.com/s?k=soft+plastic+lizard+bass&tag=howsthebite-20');
-        await expect(link).toHaveAttribute('rel', 'sponsored nofollow noopener');
-        await expect(link).toHaveAttribute('target', '_blank');
+        // A soft plastic is sold bare, so the card links each thing it takes to fish it, named for the piece.
+        // In a browser tab the links carry the Associates tag, and say so beside the links and on the page.
+        const rig = page.locator('.lure').first().locator('.lure-kit');
+        await expect(rig).toHaveText('Amazon: Lizards + Worm hooks + Bullet weights · paid links');
+        await expect(rig.locator('a')).toHaveText(['Lizards', 'Worm hooks', 'Bullet weights']);
+        await expect(rig.locator('a').first()).toHaveAttribute('href', 'https://www.amazon.com/s?k=soft+plastic+lizard+bass&tag=howsthebite-20');
+        await expect(rig.locator('a').nth(1)).toHaveAttribute('href', 'https://www.amazon.com/s?k=offset+worm+hooks+3%2F0&tag=howsthebite-20');
+        await expect(rig.locator('a').nth(1)).toHaveAttribute('rel', 'sponsored nofollow noopener');
+        await expect(rig.locator('a').nth(1)).toHaveAttribute('target', '_blank');
+        await expect(rig.locator('a').nth(1)).toHaveAccessibleName('Find worm hooks on Amazon (paid link)');
+        // A wacky rig has a hook and no weight.
+        await expect(page.locator('.lure', { hasText: 'Wacky-rigged stick worm' }).locator('.lure-kit')).toHaveText('Amazon: Stick worms + Wacky hooks · paid links');
         await expect(page.locator('#affiliateDisclosure')).toHaveText('As an Amazon Associate I earn from qualifying purchases.');
-        for (const href of await page.locator('.lure-shop').evaluateAll((links) => links.map((a) => a.href))) {
+
+        const hrefs = await page.locator('.lure-shop, .lure-part').evaluateAll((links) => links.map((a) => a.href));
+        expect(hrefs.length).toBeGreaterThan(4); // four cards, some with more than one link
+        for (const href of hrefs) {
             expect(href).toMatch(/^https:\/\/www\.amazon\.com\/s\?k=[^&]+&tag=howsthebite-20$/); // plain amazon.com address, nothing else
         }
         await expect(page.locator('#lureColour')).toContainText('found no effect on catch rate');
@@ -267,11 +276,19 @@ test.describe('lure suggestions', () => {
                 : real(query));
         });
         await app.open();
-        const link = page.locator('.lure-shop').first();
-        await expect(link).toHaveText('Amazon');
-        await expect(link).toHaveAttribute('href', 'https://www.amazon.com/s?k=soft+plastic+lizard+bass');
-        await expect(link).toHaveAttribute('rel', 'nofollow noopener');
+        const rig = page.locator('.lure-kit').first();
+        await expect(rig).toHaveText('Amazon: Lizards + Worm hooks + Bullet weights');
+        await expect(rig.locator('a').first()).toHaveAttribute('href', 'https://www.amazon.com/s?k=soft+plastic+lizard+bass');
+        await expect(rig.locator('a').first()).toHaveAttribute('rel', 'nofollow noopener');
+        await expect(rig.locator('a').first()).toHaveAccessibleName('Find lizards on Amazon');
         await expect(page.locator('#affiliateDisclosure')).toBeHidden();
+
+        // A lure that comes ready to tie on has one link.
+        await page.getByRole('button', { name: 'Walleye & pike' }).click();
+        const link = page.locator('.lure', { hasText: 'Trolled crankbait' }).locator('.lure-shop');
+        await expect(link).toHaveText('Amazon');
+        await expect(link).toHaveAttribute('href', 'https://www.amazon.com/s?k=walleye+crankbait');
+        await expect(link).toHaveAttribute('rel', 'nofollow noopener');
     });
 
     test('follow the species choice and the water', async ({ page, api, app }) => {
@@ -281,12 +298,19 @@ test.describe('lure suggestions', () => {
         await app.open();
         await page.getByRole('button', { name: 'Bass & panfish' }).click();
         await expect(page.locator('.lure h3').first()).toHaveText('Colorado-blade spinnerbait'); // vibration for muddy water
+        // A lure that comes ready to tie on has one link, with the disclosure beside it.
+        const link = page.locator('.lure').first().locator('.lure-shop');
+        await expect(link).toHaveText('Amazon · paid link');
+        await expect(link).toHaveAttribute('href', 'https://www.amazon.com/s?k=colorado+blade+spinnerbait+chartreuse&tag=howsthebite-20');
+        await expect(link).toHaveAttribute('rel', 'sponsored nofollow noopener');
+        await expect(link).toHaveAttribute('target', '_blank');
+        await expect(link).toHaveAccessibleName('Find colorado-blade spinnerbait on Amazon (paid link)');
         await expect(page.locator('#lureColour')).toContainText('bright, vivid colours');
 
         await page.getByRole('button', { name: 'Trout' }).click();
         await expect(page.locator('.lure')).toHaveCount(1);
         await expect(page.locator('.lure h3')).toHaveText('Give the trout a rest');
-        await expect(page.locator('.lure-shop')).toHaveCount(0); // advice, not a product
+        await expect(page.locator('.lure-shop, .lure-kit')).toHaveCount(0); // advice, not a product
     });
 
     test('salt water: suggestions follow the tide and the kind of fishing', async ({ page, app }) => {
