@@ -1011,4 +1011,7 @@ CSS `color-mix()` and `:has()`, `ResizeObserver` and `IntersectionObserver`.
 
 ## License
 
-MIT. Leaflet is © Volodymyr Agafonkin and contributors, BSD-2-Clause (see `vendor/leaflet/LICENSE`).
+MIT. See [LICENSE](LICENSE). Bundled third-party code and fonts keep their own licences:
+
+- Leaflet is © Volodymyr Agafonkin and contributors, BSD-2-Clause (see `vendor/leaflet/LICENSE`).
+- Young Serif and Atkinson Hyperlegible Next are under the SIL Open Font License 1.1 (see `fonts/LICENSE.md`).
