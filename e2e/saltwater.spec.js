@@ -280,7 +280,7 @@ test.describe('lure suggestions', () => {
             : station));
         await app.open();
         await page.getByRole('button', { name: 'Bass & panfish' }).click();
-        await expect(page.locator('.lure h3').first()).toHaveText('Large-blade spinnerbait'); // vibration for muddy water
+        await expect(page.locator('.lure h3').first()).toHaveText('Colorado-blade spinnerbait'); // vibration for muddy water
         await expect(page.locator('#lureColour')).toContainText('bright, vivid colours');
 
         await page.getByRole('button', { name: 'Trout' }).click();
