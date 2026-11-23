@@ -5,7 +5,8 @@
 // How the NWS API fits together:
 //   /points/{lat},{lon}                    -> forecast office + grid cell, nearby place name, time zone
 //   /gridpoints/{office}/{x},{y}/forecast  -> 7-day forecast in 12-hour periods
-//   /gridpoints/{office}/{x},{y}/forecast/hourly -> the same, hour by hour (sky and wind for the score outlook)
+//   /gridpoints/{office}/{x},{y}/forecast/hourly -> the same, hour by hour (sky, wind, air temperature and chance of rain
+//                                                   for the score outlook and for fronts on the way)
 //   /gridpoints/{office}/{x},{y}/stations  -> observation stations, nearest first
 //   /stations/{id}/observations            -> what that station actually measured (current + history)
 //   /alerts/active?point={lat},{lon}       -> warnings and advisories in effect for the spot
@@ -200,7 +201,9 @@ const typicalWind = (text) => {
     return numbers.length ? numbers.reduce((sum, n) => sum + n, 0) / numbers.length : null;
 };
 
-const OUTLOOK_HOURS = 84; // through the end of the day after tomorrow, with room to spare
+// Through the end of the day after tomorrow, and a day beyond it: a front due just after the
+// last hour scored still shows in the hours before it (core/fronts.js).
+const OUTLOOK_HOURS = 108;
 const STORM_LIKELY_PERCENT = 55;
 
 /**
@@ -218,18 +221,26 @@ export function forecastSkyClass(period) {
 }
 
 /**
- * Forecast periods reduced to what the score can use for the hours ahead: sky and wind.
- * The hour-by-hour forecast is used when it loaded; otherwise the 12-hour periods.
+ * Forecast periods reduced to what the score can use for the hours ahead: sky and wind, and
+ * from the hour-by-hour forecast the air temperature and chance of rain, which show a front
+ * or rain on its way (core/fronts.js). The hour-by-hour forecast is used when it loaded;
+ * otherwise the 12-hour periods, which are too coarse to find a front in.
  */
-function outlookFrom(hourlyPeriods, halfDayPeriods) {
+export function outlookFrom(hourlyPeriods, halfDayPeriods) {
     const hourly = (hourlyPeriods ?? []).length >= 12;
     return (hourly ? hourlyPeriods.slice(0, OUTLOOK_HOURS) : (halfDayPeriods ?? []).slice(0, 7))
-        .map((period) => ({
-            start: Date.parse(period.startTime),
-            end: Date.parse(period.endTime),
-            sky: forecastSkyClass(period),
-            windMph: typicalWind(period.windSpeed),
-        }))
+        .map((period) => {
+            const hour = {
+                start: Date.parse(period.startTime),
+                end: Date.parse(period.endTime),
+                sky: forecastSkyClass(period),
+                windMph: typicalWind(period.windSpeed),
+            };
+            if (hourly && isNum(period.temperature)) hour.tempF = period.temperatureUnit === 'C' ? cToF(period.temperature) : period.temperature;
+            if (hourly && isNum(period.probabilityOfPrecipitation?.value)) hour.pop = period.probabilityOfPrecipitation.value;
+            if (hourly && /snow|sleet|flurr|wintry|freezing|ice/i.test(period.shortForecast ?? '')) hour.snow = true;
+            return hour;
+        })
         .filter((period) => isNum(period.start) && isNum(period.end));
 }
 
@@ -291,7 +302,7 @@ export async function fetchWeather(lat, lon, { signal } = {}) {
             if (error instanceof HttpError && error.status === 404) return { properties: { periods: [] } };
             throw error;
         }),
-        // Hour-by-hour sky and wind for the score outlook. Optional: no retry, short timeout,
+        // Hour-by-hour sky, wind and air temperature for the score outlook. Optional: no retry, short timeout,
         // and the 12-hour periods stand in if it does not arrive.
         nwsFetch(`${point.hourlyUrl}?units=us`, { signal, timeoutMs: 8000 })
             .catch((error) => {

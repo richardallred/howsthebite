@@ -1275,6 +1275,8 @@ body.page { padding-bottom: 0; }
     overflow-x: auto;
     scroll-snap-type: x proximity;
 }
+/* Fronts and rain on the way, in a sentence each. */
+.forecast-ahead { display: grid; gap: 4px; margin: 10px 0 0; padding: 0 20px; list-style: none; font-size: 0.875rem; line-height: 1.45; color: var(--ink-2); }
 .forecast-empty { grid-column: 1 / -1; padding: 16px 20px; font-size: 0.875rem; }
 .forecast-day {
     display: grid;
@@ -1665,6 +1667,7 @@ body.page { padding-bottom: 0; }
     .lure-shop { grid-column: 1; grid-row: auto; margin-top: 2px; }
     .lure-disclosure { padding-inline: 16px; }
     .forecast-day:first-child { padding-left: 16px; }
+    .forecast-ahead { padding-inline: 16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

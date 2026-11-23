@@ -36,6 +36,46 @@ test.describe('score outlook', () => {
         await expect(page.locator('#scoreBest')).toHaveText(/^Best two hours/);
     });
 
+    test('a cold front in the forecast is said in the forecast panel and scored in the hours either side of it', async ({ page, api, app }) => {
+        // 15°F colder from 4 PM on Tuesday, 30 hours from now.
+        api.weather = { front: { inHours: 30, changeF: -15 } };
+        await app.open();
+        await expect(page.locator('#forecastAhead li')).toHaveText([
+            /^Cold front due Tue afternoon, with air about 15°F colder behind it\. Fish often feed ahead of a front/,
+        ]);
+        // The card opens on today's best two hours, this evening: inside the day before the front.
+        const pressure = app.factor('Barometric pressure');
+        await expect(pressure).toContainText('Cold front on its way');
+        await expect(pressure).toContainText('Falling · −0.04 inHg in 3 hr · Cold front due Tue afternoon');
+        // Right now, 30 hours ahead of it, the barometer's own trend is all there is to go on.
+        await app.now();
+        await expect(pressure.locator('.factor-points')).toHaveText(/^5\/5/);
+        await expect(pressure).not.toContainText('Cold front');
+
+        // Tuesday's best two hours are the evening, behind the front and under a clear sky.
+        await days(page).nth(1).click();
+        await expect(pressure).toContainText('Cold front due Tue afternoon');
+        await expect(pressure).not.toContainText('Falling');
+        await expect(pressure).toContainText('Bluebird sky behind a cold front');
+        await expect(pressure.locator('.factor-points')).toHaveText(/^0\/5/);
+        // Tuesday morning is ahead of it.
+        await page.locator('.strip-part', { hasText: 'Morning' }).click();
+        await expect(pressure).toContainText('Cold front on its way');
+        await expect(pressure.locator('.factor-points')).toHaveText(/^5\/5/);
+    });
+
+    test('settled weather says nothing about what is on the way', async ({ page, app }) => {
+        await app.open();
+        await expect(page.locator('#forecastList .forecast-day').first()).toBeVisible();
+        await expect(page.locator('#forecastAhead')).toBeHidden();
+    });
+
+    test('rain on the way is said, and costs the score nothing of its own', async ({ page, api, app }) => {
+        api.weather = { rain: { fromHours: 6, hours: 5 } }; // 4 PM to 9 PM today
+        await app.open();
+        await expect(page.locator('#forecastAhead li')).toHaveText([/^Rain likely from this afternoon\. It costs the score nothing on its own/]);
+    });
+
     test('dragging along the strip shows the score hour by hour; a part of the day shows its own', async ({ page, app }) => {
         await app.open();
         const today = await page.locator('#scoreValue').textContent();

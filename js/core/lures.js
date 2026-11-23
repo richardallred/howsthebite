@@ -699,7 +699,7 @@ const SITUATIONS = [
         id: 'front-approaching',
         applies: (c) => c.front === 'approaching',
         shift: { reaction: 1 },
-        pattern: 'The barometer is falling ahead of a front, which often brings a burst of feeding',
+        pattern: 'A front is on its way, which often brings a burst of feeding',
         note: 'A fast, loud choice for the feeding spell ahead of a front',
     },
     {

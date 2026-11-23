@@ -43,6 +43,10 @@ No framework and nothing to compile: plain HTML, CSS and ES modules. The app its
 - **Current conditions** observed at the nearest weather station: air temperature, pressure with
   its 3-hour trend, wind and gusts, sky
 - **5-day forecast** with highs/lows, precipitation chance and wind
+- **Weather on the way**: a cold or warm front in the hour-by-hour forecast, and the next spell of
+  rain or thunderstorms, are named above the forecast with when they are due. A front counts in
+  the score for the hours either side of it, as far as the evidence supports (not far: see
+  [Fronts and weather on the way](#fronts-and-weather-on-the-way))
 - **48-hour charts** for pressure, air temperature, water temperature and water level, with
   hover/touch/keyboard read-outs and a data table for each
 - **Place search** for towns ("Asheville, NC") and for lakes, reservoirs and rivers by name
@@ -422,7 +426,7 @@ The logic lives in `js/core/scoring.js` and is covered by `tests/scoring.test.js
 | River flow | 9 | Normal for the date | Current discharge against that gauge's own record for today's date (USGS day-of-year percentiles, at least 10 years). Normal flow scores full marks, low water a little less, very high water almost nothing. For catfish, flow up to the 85th percentile still scores full marks. Left out for lakes and for gauges without a long record. |
 | Season | 8 | The pre-spawn and fall feeds | Where the fish are in their year (`js/core/season.js`: pre-spawn, spawn, summer, the fall feed, winter), from the date, the water temperature and its recent trend. Each phase has a rating: the year's best feeds near 100%, a spawn when fish stop feeding or a closed season around 25–55%, winter around 30%. With several fish (all species) it is the average of their ratings and the best one, so it leans toward whatever is in season. An estimated water temperature is pulled toward the middle. Rules of thumb, not catch data, so worth less than the measured factors. |
 | Moon | 7 | New or full moon, overhead or underfoot | 35% always, up to 30% more near new/full moon, and 35% more within about an hour of the moon crossing overhead or underfoot. |
-| Barometric pressure | 5 | Steady or slowly falling, or a front on its way | Trend only: slowly falling 5, steady or falling fast 4, rising 3, rising fast 1. A front overrides the 3-hour trend: one approaching earns 5, one just through earns 1, or nothing under a clear "bluebird" sky. The level itself earns nothing. |
+| Barometric pressure | 5 | Steady or slowly falling, or a front on its way | Trend only: slowly falling 5, steady or falling fast 4, rising 3, rising fast 1. A front overrides the 3-hour trend: one on its way (within 18 hours) earns 5; a cold front just through (within 36 hours) earns 1, or nothing under a clear "bluebird" sky; a warm front just through earns 4. The level itself earns nothing. See [Fronts and weather on the way](#fronts-and-weather-on-the-way). |
 
 **Catfish.** Catfish are scored on their own rather than with bass, because three things differ:
 
@@ -490,18 +494,57 @@ hours it is in effect, not the whole day.
   moon crossing overhead or underfoot. Minor periods (moonrise and moonset) are left out, because
   no catch data supports them.
 - **From forecasts:** sky and wind from the Weather Service's hour-by-hour forecast (the 12-hour
-  forecast if that fails to load), and off a beach the wave-height forecast.
+  forecast if that fails to load), and off a beach the wave-height forecast. A front found in the
+  hour-by-hour forecast is scored in the hours either side of it, in the pressure factor.
 - **Assumed to hold:** water temperature and river flow stay as they are now. That is the main
   reason the later days are only a rough guide: a cold front or a rise in the river will change
   them.
-- **Not carried forward:** the pressure trend (unknown ahead, scored as neutral), and weather
-  alerts beyond the hours they are in effect.
+- **Not carried forward:** the pressure trend (unknown ahead, scored as neutral where no front
+  is forecast), and weather alerts beyond the hours they are in effect.
 - **Thunderstorms:** a forecast hour counts as a storm, and is capped at 15, only when storms are
   likely (55% or more). A mere chance of thunderstorms, which is in the forecast most summer
   afternoons in the South, is scored as a showery, low-light spell.
 
 When something holds the score flat all day (frozen water, a river in flood), the card says so
 instead of naming a best time.
+
+### Fronts and weather on the way
+
+`js/core/fronts.js` reads what is coming from the Weather Service's hour-by-hour forecast, which
+the page already loads. The forecast has no barometer and no "front" field, but a front is a
+change of air mass, and that shows in the temperatures: behind a cold front the air is colder at
+every hour of the day than it was ahead of it.
+
+- **Finding a front.** The last three days of observed air temperature are joined to the forecast
+  (shifted to meet the station's reading, since an airport and a lake up the hill rarely agree).
+  Each hour is compared with the same hour a day earlier, which takes out the daily warm-up and
+  cool-down. Where the 24 hours that follow average **8°F or more colder** than the 24 before, that
+  is a cold front; 8°F or more warmer, a warm front. It is timed to where the air changes fastest,
+  and given as a part of the day ("Tuesday evening"), because that is as well as it is known.
+- **Either side of it.** A time counts as *ahead* of a front for the 18 hours before it, and
+  *behind* a cold front for 36 hours after (24 for a warm one).
+- **The barometer** still has the last word on what has just gone through: a sharp rise in
+  pressure with colder air is a front just passed (`frontState` in `trend.js`), whatever the
+  forecast says. A steady fall with no front in the forecast is a front of unknown kind on its way.
+- **Rain.** The next spell in the coming 48 hours where the forecast pictures rain or snow and
+  puts the chance at 50% or more is named, with the time thunderstorms first become likely in it.
+- **Not found:** a summer front that dries the air without cooling it by 8°F, and anything at all
+  when the hour-by-hour forecast fails to load (the 12-hour periods are too coarse).
+
+What that changes:
+
+| | Score | Elsewhere |
+|---|---|---|
+| Front on its way (18 hours) | Pressure factor 5 of 5 | Lure picks lean fast and loud (a cold front, or one known only from the barometer) |
+| Cold front just through (36 hours) | Pressure factor 1 of 5, or 0 under a clear or partly cloudy sky | Lure picks lean small, slow and tight to cover |
+| Warm front just through (24 hours) | Pressure factor 4 of 5 | — |
+| Rain on the way | Nothing of its own; its cloud is in the light factor for those hours | Named above the forecast |
+| Thunderstorms likely (55% or more) | Those hours are capped at 15, as before | Named above the forecast |
+
+So a front moves the fresh-water score by at most 5 points in 100 of its own (3 in salt water),
+now and for each hour of the days ahead. The thresholds (8°F, 18 and 36 hours) are judgement, not
+measurement; each is a constant at the top of `fronts.js`. Why so few points is under
+[Why these weights](#why-these-weights).
 
 ### Salt water
 
@@ -584,7 +627,8 @@ from a line fitted to the last ten days), the 7- and 14-day changes, a cold snap
 (4°F or more in three days of daily means; daily means, because a shallow river swings several
 degrees between dawn and afternoon), and whether the water is warm or cold for the date. With the
 barometer and air temperature (`frontState` in `trend.js`: a front just through, or one on its
-way) and a lake rising or falling 0.15 ft or more in a day, these become *situations*. A situation
+way), a cold front found in the forecast (`fronts.js`), and a lake rising or falling 0.15 ft or
+more in a day, these become *situations*. A situation
 adds no rules; it shifts presentations up or down through tags on each rule: a cold snap favours
 slow, bottom and finesse presentations and marks down topwater; a rising lake favours the
 shallows; off-colour water favours vibration and scent over finesse. Fronts shift the least,
@@ -655,6 +699,48 @@ judgement on top of it, not a fitted model.
   datasets found that tested it (walleye and muskie in Wisconsin; largemouth bass in Michigan and
   Illinois). The slow bite behind a cold front is near-universal testimony but has barely been
   measured, so the trend keeps five points and the level none.
+- **Fronts and weather on the way: five points, and why not more.** Anglers rank fronts near the
+  top; the measurements do not.
+  - *The largest dataset found nothing.* On Escanaba Lake the day's change in barometric
+    pressure (08:00 to 18:00, size and direction) was not a significant predictor of walleye or
+    muskellunge trip success or catch rate (p = 0.12 to 0.91), and neither was rain (p = 0.26 to
+    0.86). No weather variable there had an effect size above 0.15, against 0.38 for fishing with
+    a guide. That study tested the change within a day, not a front or the days after one; its
+    authors note that no published information supports the idea that fronts change the bite.
+  - *The one angling test of a front found something.* Lang (2023, an undergraduate thesis at the
+    University of Nebraska–Lincoln) fished before and just after forecast cold fronts and reports
+    that largemouth bass "feed significantly less immediately after the passage of a cold front".
+    Only its abstract could be read for this review, so its size and sample are not known here.
+  - *Tracked bass lean the same way, weakly.* In Manns' tracking of largemouth and Guadalupe bass
+    in Lake Travis, Texas (In-Fisherman; not peer-reviewed), 65% of bass shown a lure struck on a
+    slowly falling barometer and 30% on a slowly rising one, in a sample he calls small and
+    confounded by other factors; as many bass held tight to cover before a front as after it, and
+    his own conclusion is that there was "no obvious relationship".
+  - *Pressure alone does little that has been measured.* In a laboratory, rising or falling
+    pressure made no significant difference to how much yellow perch ate (VanderWeyst 2014,
+    12 trials, p = 0.55). Black crappie in a South Dakota
+    lake moved *more* at high pressure (Guy, Neumann & Willis 1992), the opposite of the lore.
+  - *Fish do respond to big storms*, by leaving: blacktip sharks left a Florida bay ahead of a
+    tropical storm as the pressure fell (Heupel, Simpfendorfer & Hueter 2003), and gray triggerfish
+    left a reef a day or two ahead of two hurricanes, moving with the swell on the bottom rather
+    than with the pressure (Bacheler et al. 2019). That is movement ahead of a hurricane, not
+    feeding ahead of an ordinary front.
+  - *What a front brings that is measured is already scored where it is measured:* its cloud in
+    the light factor, its wind in the wind, the colder water behind it in the water trend,
+    lightning and floods as ceilings. Rain in particular acts through the river: storm-driven
+    turbidity and rising water cut catch rates of two Mongolian salmonids, while rain itself did
+    nothing on Escanaba Lake. So rain on the way is named and earns or costs nothing of its own.
+
+  That leaves the front itself with an effect somewhere between nothing (the best data) and a
+  real but unsized drop just behind a cold one (one small study, and nearly every angler). The
+  score's other small factors set the scale: the moon keeps 7 points for a measured effect of
+  about 5%, 10–19% where it showed at all. A front has less measurement behind it than the moon,
+  so it gets no more: the 5 points the pressure factor already had (3 in salt water, where nothing
+  has been measured), all of them at stake between the hours ahead of a front and the bluebird
+  day behind it. What is new is that a front is now known from the forecast, with its kind, so
+  those points apply to the days ahead and not only to the moment. If the Lang thesis's numbers,
+  or a creel dataset with a days-since-front variable, show a larger effect, the place to change
+  it is `FACTOR_WEIGHTS` and `scorePressure` in `scoring.js`.
 - **Water temperature trend and fronts.** Rating apps such as Bass Forecast lean hardest on which
   way the water temperature is heading and on fronts, and every guide says the same: fish turn on
   as water warms toward their range, slow down as it cools away from it, and shut down for a few
@@ -673,6 +759,12 @@ Sources: [Shaw, Renik & Sass 2021](https://pmc.ncbi.nlm.nih.gov/articles/PMC8483
 [Idaho Fish and Game on trout and warm water](https://idfg.idaho.gov/blog/2022/06/some-perspective-trout-fishing-during-low-water-and-high-temperatures) ·
 [Manns, largemouth log](https://in-fisherman.com/editorial/moon-magic-largemouth-bass/154779) ·
 [Mell 1962, bass and weather](https://d.lib.msu.edu/etd/8317/FULL_TEXT/view) ·
+[Lang 2023, bass and cold fronts](https://digitalcommons.unl.edu/envstudtheses/347) ·
+[Manns, barometric pressure and bass](https://www.in-fisherman.com/editorial/barometric-pressure-and-bass/153689) ·
+[VanderWeyst 2014, perch and pressure](https://faculty.bemidjistate.edu/ahafs/wp-content/uploads/sites/2/2024/10/2014-VanderWeyst-D.-The-effect-of-barometric-pressure-on-feeding-activity-of-yellow-perch.pdf) ·
+[Guy, Neumann & Willis 1992, crappie movement](https://doi.org/10.1080/02705060.1992.9664679) ·
+[Bacheler et al. 2019, triggerfish and hurricanes](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6365635/) ·
+[thunderstorms and Mongolian salmonids](https://par.nsf.gov/biblio/10284689) ·
 [Wisconsin DNR guide reports](https://dnr.wisconsin.gov/sites/default/files/topic/Fishing/Pubs_2014GuidetotheFuture.pdf) ·
 [EPA temperature criteria](https://archive.epa.gov/water/archive/web/html/vms53.html)
 
@@ -774,6 +866,7 @@ js/
     species.js          Which groups of fish live in a region, and what to call them
     alerts.js           Which NWS alerts matter on the water
     trend.js            Time-based trend analysis, and weather fronts from the barometer
+    fronts.js           Fronts and rain on the way, from the hour-by-hour forecast
     season.js           Where each fish is in its year: pre-spawn, spawn, the fall feed…
     water-trend.js      The last month of water temperature: direction, cold snaps, against normal
     sun.js              Sun position, sunrise and sunset
