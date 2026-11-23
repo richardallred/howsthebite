@@ -10,6 +10,36 @@ catch rates have actually measured (see [How the score works](#how-the-score-wor
 No framework and nothing to compile: plain HTML, CSS and ES modules. The app itself needs
 **no API keys**.
 
+## Contents
+
+- [Features](#features)
+- [Run it locally](#run-it-locally)
+- [Tests](#tests)
+- [Deploying to Cloudflare Pages](#deploying-to-cloudflare-pages)
+  - [Automatic deploys (GitHub Actions)](#automatic-deploys-github-actions)
+  - [The USGS proxy](#the-usgs-proxy)
+  - [The sea-temperature proxy](#the-sea-temperature-proxy)
+  - [The depth-contour proxy](#the-depth-contour-proxy)
+  - [The weather stand-in](#the-weather-stand-in)
+  - [Amazon links](#amazon-links)
+  - [Search engines and link previews](#search-engines-and-link-previews)
+- [How the score works](#how-the-score-works)
+  - [The outlook](#the-outlook)
+  - [Fronts and weather on the way](#fronts-and-weather-on-the-way)
+  - [Salt water](#salt-water)
+  - [Lure suggestions](#lure-suggestions)
+  - [Why these weights](#why-these-weights)
+- [Data sources](#data-sources)
+  - [Where the weather readings come from](#where-the-weather-readings-come-from)
+  - [About "depth"](#about-depth)
+  - [Depth contours](#depth-contours)
+  - [Licences, if the site ever earns money](#licences-if-the-site-ever-earns-money)
+  - [Privacy](#privacy)
+- [Project structure](#project-structure)
+- [Browser support](#browser-support)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
+
 ![Desktop screenshot](screenshots/desktop.png)
 
 ## Features
