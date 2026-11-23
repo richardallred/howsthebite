@@ -506,6 +506,41 @@ test('fronts: feed ahead of one, bluebird sky behind one is the low point', () =
     assert.match(scorePressure(30.4, { front: 'passed', sky: 'clear' }).note, /Bluebird/);
 });
 
+test('fronts from the forecast: the kind is named, a warm front costs nothing behind it, and no barometer is needed', () => {
+    const ahead = scorePressure(30.1, { change3h: 0, front: 'approaching', frontKind: 'cold' });
+    assert.equal(ahead.points, FACTOR_MAX.pressure);
+    assert.match(ahead.note, /^Cold front on its way/);
+    assert.deepEqual(ahead.front, { state: 'approaching', kind: 'cold' });
+    assert.match(scorePressure(30.1, { front: 'approaching', frontKind: 'warm' }).note, /^Warm front on its way/);
+    assert.match(scorePressure(30.1, { front: 'approaching' }).note, /^Front on its way/);
+    // Behind a warm front there is no slump; behind a cold one (or one of unknown kind) there is.
+    assert.equal(scorePressure(30.1, { front: 'passed', frontKind: 'warm', sky: 'clear' }).points, 4);
+    assert.equal(scorePressure(30.4, { front: 'passed', frontKind: 'cold', sky: 'clear' }).points, 0);
+    // The forecast needs no barometer; with neither, the factor stays neutral.
+    assert.equal(scorePressure(null, { front: 'passed', frontKind: 'cold', sky: 'overcast' }).points, 1);
+    assert.equal(scorePressure(null).points, 3);
+    assert.equal(scorePressure(null).front, undefined);
+});
+
+test('a front is worth five points in a hundred of its own: full marks ahead of it, none under the bluebird sky behind', () => {
+    const lake = { ...ideal, flow: null, sky: 'clear', pressureChange3h: null };
+    const before = scoreConditions({ ...lake, front: 'approaching', frontKind: 'cold' });
+    const after = scoreConditions({ ...lake, front: 'passed', frontKind: 'cold' });
+    assert.equal(points(before, 'pressure') - points(after, 'pressure'), FACTOR_MAX.pressure);
+    assert.ok(before.score - after.score >= 5 && before.score - after.score <= 6); // 5 of the 91 points a lake has
+});
+
+test('scoreSeries scores a front in the hours ahead when the forecast gives one, and not otherwise', () => {
+    const start = ideal.date.getTime();
+    const base = { ...ideal, front: 'approaching', frontKind: 'cold' };
+    const at = (t) => (t >= start + 2 * HOUR ? { front: 'passed', frontKind: 'cold', sky: 'clear' } : { front: 'approaching', frontKind: 'cold' });
+    const hours = [start, start + HOUR, start + 3 * HOUR].map((t) => scoreConditions({ ...base, pressureChange3h: null, ...at(t), date: new Date(t) }));
+    assert.deepEqual(hours.map((result) => points(result, 'pressure')), [5, 5, 0]);
+    const blind = scoreSeries(base, { start, end: start + HOUR });
+    const told = scoreSeries(base, { start, end: start + HOUR, at: () => ({ front: 'passed', frontKind: 'cold' }) });
+    assert.ok(told[told.length - 1].score < blind[blind.length - 1].score); // neutral 3 against 0 or 1
+});
+
 test('scoreConditions passes the water trend and front through, and drops the front ahead', () => {
     const cold = { ...ideal, waterTempF: 58, targets: [], speciesGroup: 'warm' };
     const flat = scoreConditions(cold);

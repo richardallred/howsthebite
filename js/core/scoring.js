@@ -13,7 +13,8 @@
 //   Season               8   where the fish are in their year (pre-spawn, spawn, fall feed…);
 //                             rules of thumb rather than catch data, so kept below the measured factors
 //   Moon                 7   real but small and inconsistent
-//   Barometric pressure  5   no measured effect on catch rates; kept small, trend and fronts only
+//   Barometric pressure  5   no measured effect on catch rates; kept small, for the trend and for
+//                             fronts on the way or just through (see scorePressure for the evidence)
 //
 // Salt water is scored on different factors (see FACTOR_WEIGHTS and the README): there is
 // no river flow, the tide matters, and for surf fishing so does the height of the waves.
@@ -622,22 +623,41 @@ export function scoreSeason({ targets = [], date, waterTempF, trend = null, esti
 // ---------------------------------------------------------------------------
 
 // Every angling dataset that tested pressure found no effect on catch rates, so the level
-// earns nothing. The trend keeps a few points as a marker of weather on the move: the
-// slow bite behind a cold front is near-universal testimony, though barely measured.
-// A front (trend.js frontState, from a day or two of pressure and air temperature) says more
-// than three hours of barometer: fish feed ahead of one, and the clear, high-pressure
-// "bluebird" sky that follows one is the classic tough day.
-export function scorePressure(inHg, { change3h = null, front = null, sky = 'unknown' } = {}) {
-    const result = (points, note, trend) => graded(points / FACTOR_MAX.pressure, FACTOR_MAX.pressure, { note, trend });
-    if (!isNum(inHg)) return result(3, 'No barometer reporting nearby', null);
-    const trend = classifyTrend(change3h, { steadyBelow: 0.02, rapidAbove: 0.06 });
+// earns nothing. The few points here are for weather on the move, and the evidence sets how few:
+//
+//   * In 13 years of compulsory creel records on Escanaba Lake (Shaw, Renik & Sass 2021) neither
+//     the day's change in barometric pressure nor rain was a significant predictor of walleye or
+//     muskellunge catch, and no weather variable had more than a very small effect.
+//   * The one angling test of a cold front itself (Lang 2023, an undergraduate thesis) found
+//     largemouth bass fed significantly less just after one. Tracked bass in Lake Travis struck
+//     lures more often on a falling barometer than a rising one (Manns), in a small sample the
+//     author calls confounded with cloud.
+//   * What a front brings that is measured is scored where it is measured: cloud in the light,
+//     wind in the wind, colder water in the water trend, lightning and floods as ceilings.
+//
+// What is left for the front itself is, at most, about what the moon is worth, so it keeps
+// five points in a hundred: full marks ahead of a front, none under the clear "bluebird" sky
+// behind a cold one. A front comes from the barometer and air temperature of the last two
+// days (trend.js frontState) or from the hour-by-hour forecast (fronts.js), which also says
+// what kind it is and so is known for the hours ahead. A warm front costs nothing once it is
+// through: nobody reports a slump behind one.
+export function scorePressure(inHg, { change3h = null, front = null, frontKind = null, sky = 'unknown' } = {}) {
+    const result = (points, note, trend, rest = {}) => graded(points / FACTOR_MAX.pressure, FACTOR_MAX.pressure, { note, trend, ...rest });
+    const known = isNum(inHg);
+    const trend = classifyTrend(known ? change3h : null, { steadyBelow: 0.02, rapidAbove: 0.06 });
     const trendLine = trendText(trend, { unit: ' inHg', digits: 2, period: '3 hr' });
+    const moving = { front: front ? { state: front, kind: frontKind } : null };
+    if (front === 'passed' && frontKind === 'warm') return result(4, 'Warmer air has moved in behind a warm front — no slump to wait out', trendLine, moving);
     if (front === 'passed') {
         return sky === 'clear' || sky === 'partly'
-            ? result(0, 'Bluebird sky behind a cold front — usually a tough bite', trendLine)
-            : result(1, 'Just behind a cold front — fish often slow for a day or two', trendLine);
+            ? result(0, 'Bluebird sky behind a cold front — usually a tough bite', trendLine, moving)
+            : result(1, 'Just behind a cold front — fish often slow for a day or two', trendLine, moving);
     }
-    if (front === 'approaching') return result(5, 'Front on its way — fish often feed ahead of it', trendLine);
+    if (front === 'approaching') {
+        const name = frontKind === 'cold' ? 'Cold front' : frontKind === 'warm' ? 'Warm front' : 'Front';
+        return result(5, `${name} on its way — fish often feed ahead of it`, trendLine, moving);
+    }
+    if (!known) return result(3, 'No barometer reporting nearby', null);
     let points;
     let note;
     if (trend.direction === 'unknown') [points, note] = [3, 'Trend not known yet'];
@@ -647,7 +667,7 @@ export function scorePressure(inHg, { change3h = null, front = null, sky = 'unkn
     } else {
         [points, note] = trend.rapid ? [1, 'Rising fast — just behind a front, often slow'] : [3, 'Rising — weather clearing'];
     }
-    return result(points, note, trendText(trend, { unit: ' inHg', digits: 2, period: '3 hr' }));
+    return result(points, note, trendLine);
 }
 
 // ---------------------------------------------------------------------------
@@ -704,7 +724,8 @@ const limitFor = (share) => Math.round(100 * clamp(0.1 + 1.8 * share, 0, 1));
  * @param {Date} [c.date]
  * @param {string[]} [c.targets]  the fish being fished for, for the Season factor
  * @param {object|null} [c.waterTrend]  the last weeks of water temperature (water-trend.js)
- * @param {'approaching'|'passed'|null} [c.front]  a weather front (trend.js frontState)
+ * @param {'approaching'|'passed'|null} [c.front]  a weather front on its way or just through (trend.js frontState, fronts.js frontAt)
+ * @param {'cold'|'warm'|null} [c.frontKind]  which kind, when the forecast says; a front of unknown kind is taken for a cold one
  */
 export function scoreConditions(c) {
     const date = c.date ?? new Date();
@@ -726,7 +747,7 @@ export function scoreConditions(c) {
         season: () => (c.targets?.length ? scoreSeason({
             targets: c.targets, date, waterTempF: c.waterTempF, trend: c.waterTrend ?? null, estimated: c.waterEstimated,
         }) : null),
-        pressure: () => scorePressure(c.pressureInHg, { change3h: c.pressureChange3h, front: c.front ?? null, sky: c.sky }),
+        pressure: () => scorePressure(c.pressureInHg, { change3h: c.pressureChange3h, front: c.front ?? null, frontKind: c.frontKind ?? null, sky: c.sky }),
     };
 
     // Each factor is worked out as a share of full marks, then worth what this style of fishing gives it.
@@ -778,10 +799,11 @@ const MIN_SPREAD_FOR_WINDOWS = 5;
  * The score at regular steps from `start` to `end`: [{ t, score, band, cap }].
  *
  * `base` is the same object scoreConditions takes; `at(time)` returns whatever is forecast
- * to differ at that time ({ sky, windMph, waveFt }) or null. The first sample is the score
- * right now, exactly as shown. Ahead of now the water temperature, river flow and moon
- * phase are assumed to hold, the pressure trend is unknown, and current alerts are not
- * carried forward. Sun, moon and tide are worked out for each time.
+ * to differ at that time ({ sky, windMph, waveFt, front, frontKind }) or null. The first
+ * sample is the score right now, exactly as shown. Ahead of now the water temperature, river
+ * flow and moon phase are assumed to hold, the pressure trend is unknown (a front is known
+ * only where `at` gives one), and current alerts are not carried forward. Sun, moon and tide
+ * are worked out for each time.
  * Samples after the first fall on the clock's own grid (:00, :20, :40).
  */
 export function scoreSeries(base, { start, end, stepMinutes = 20, at = () => null } = {}) {
@@ -791,7 +813,7 @@ export function scoreSeries(base, { start, end, stepMinutes = 20, at = () => nul
     return times.map((t) => {
         const conditions = t === start
             ? { ...base, date: new Date(t) }
-            : { ...base, pressureChange3h: null, front: null, gustMph: null, hazard: null, ...(at(t) ?? {}), date: new Date(t) };
+            : { ...base, pressureChange3h: null, front: null, frontKind: null, gustMph: null, hazard: null, ...(at(t) ?? {}), date: new Date(t) };
         const result = scoreConditions(conditions);
         return { t, score: result.score, band: result.band, cap: result.cap?.reason ?? null };
     });

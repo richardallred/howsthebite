@@ -38,6 +38,8 @@ export const DEFAULT_WEATHER = {
     timezone: 'America/Chicago',
     place: { city: 'Madison', state: 'WI' }, // what "use my location" resolves to; null = unnamed
     outsideCoverage: false,
+    front: null, // a front in the hour-by-hour forecast: { inHours, changeF } (−15 is a cold front, 15°F colder behind it)
+    rain: null, // a spell of likely rain in it: { fromHours, hours }
     // Nearest first. A station can lack a barometer and a sky sensor, as rural ones do.
     stations: [{ id: 'KTST', name: 'Testville, Test Regional Airport', pressure: true, sky: true }],
 };
@@ -139,26 +141,35 @@ export function forecastResponse(overrides) {
     return { properties: { periods } };
 }
 
-/** The same forecast hour by hour, for 84 hours from the top of the current hour, as NWS sends it. */
+/**
+ * The same forecast hour by hour, for 156 hours from the top of the current hour, as NWS sends it.
+ * The air temperature carries on the daily cycle of the observations (observationsResponse), so
+ * the default scenario has no front in it; `front` and `rain` put one in.
+ */
 export function hourlyForecastResponse(overrides) {
+    const w = weatherOf(overrides);
     const { periods: halfDays } = forecastResponse(overrides).properties;
     const first = Math.floor(NOW / HOUR) * HOUR;
     const periods = [];
-    for (let i = 0; i < 84; i++) {
+    for (let i = 0; i < 156; i++) {
         const start = first + i * HOUR;
         const within = halfDays.find((period) => Date.parse(period.startTime) <= start && start < Date.parse(period.endTime)) ?? halfDays[0];
+        const hoursFromNow = (start - w.now) / HOUR;
+        const behindFront = w.front && hoursFromNow >= w.front.inHours ? w.front.changeF : 0;
+        const raining = w.rain && hoursFromNow >= w.rain.fromHours && hoursFromNow < w.rain.fromHours + w.rain.hours;
         periods.push({
             number: i + 1,
             startTime: new Date(start).toISOString(),
             endTime: new Date(start + HOUR).toISOString(),
             isDaytime: within.isDaytime,
-            temperature: within.temperature,
+            temperature: Math.round(w.tempF + 8 * Math.sin((2 * Math.PI * hoursFromNow) / 24) + behindFront),
             temperatureUnit: 'F',
-            probabilityOfPrecipitation: within.probabilityOfPrecipitation,
+            probabilityOfPrecipitation: raining ? { unitCode: 'wmoUnit:percent', value: 80 } : within.probabilityOfPrecipitation,
+            dewpoint: { unitCode: 'wmoUnit:degC', value: 12 },
             windSpeed: within.windSpeed,
             windDirection: within.windDirection,
-            icon: within.icon,
-            shortForecast: within.shortForecast,
+            icon: raining ? icon('rain,80', within.isDaytime ? 'day' : 'night') : within.icon,
+            shortForecast: raining ? 'Rain' : within.shortForecast,
         });
     }
     return { properties: { periods } };

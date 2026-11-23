@@ -202,7 +202,7 @@ test.describe('lure suggestions', () => {
         await expect(pattern.locator('.lure-trend-facts')).toHaveText('Steady over 14 days');
         await expect(pattern.locator('.lure-trend-source')).toHaveText('Daily means from the USGS sensor');
         // The default barometer is falling 0.16 inHg in 12 hours.
-        await expect(pattern.locator('.lure-situation')).toHaveText('The barometer is falling ahead of a front, which often brings a burst of feeding.');
+        await expect(pattern.locator('.lure-situation')).toHaveText('A front is on its way, which often brings a burst of feeding.');
     });
 
     test('a cold snap, against a warmer normal, slows the picks down and says why', async ({ page, api, app }) => {

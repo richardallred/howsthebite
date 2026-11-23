@@ -25,6 +25,7 @@ import { majorPeriods, moonInfo } from './core/moon.js';
 import { coordinateName, placeHref, placeMeta, placePath, readPlaceUrl, sectionHeadings, slugify } from './core/place-url.js';
 import { SPECIES_GROUPS, bandFor, bitePhrase, estimateWaterTemp, scoreConditions } from './core/scoring.js';
 import { bestStretch, dayParts, stretchOf } from './core/day-score.js';
+import { airSeries, detectFronts, frontAt, rainAhead } from './core/fronts.js';
 import { DEFAULT_LABELS, chooseSpecies, regionalSpecies, saltSpeciesOptions, speciesOptions } from './core/species.js';
 import { sunTimes } from './core/sun.js';
 import { upcomingTides } from './core/tides.js';
@@ -229,7 +230,7 @@ function nextLocalMidnight(time) {
 /**
  * Each hour of today and the days ahead, scored at its middle with the forecast for then (the
  * hour under way is the score now, as observed; hours gone by are marked past). `at(time)` gives
- * what differs then (forecast sky and wind, a warning in effect). Grouped by
+ * what differs then (forecast sky and wind, a front due or just through, a warning in effect). Grouped by
  * local day: Map of day key → [{ t, past } | { t, at, live, ahead, result, score, band }].
  */
 function hourlyScores(inputs, clock, live, end, dayKey, at) {
@@ -247,7 +248,7 @@ function hourlyScores(inputs, clock, live, end, dayKey, at) {
             const middle = t + HOUR_MS / 2;
             const ahead = at(middle);
             const result = scoreConditions({
-                ...inputs, pressureChange3h: null, front: null, gustMph: null, hazard: null, ...(ahead ?? {}), date: new Date(middle),
+                ...inputs, pressureChange3h: null, front: null, frontKind: null, gustMph: null, hazard: null, ...(ahead ?? {}), date: new Date(middle),
             });
             hour = { t, at: middle, live: false, ahead, result };
         }
@@ -328,6 +329,14 @@ function derive() {
     }
     const species = speciesChoice().chosen;
     const waterTrend = waterMeasured ? currentWaterTrend(clock) : null;
+    // Fronts: the forecast's air temperatures say what is coming and what kind it is; the
+    // barometer says what has just gone through, and has the last word on that.
+    const fronts = detectFronts(airSeries(hourly.temp, weather.outlook, now));
+    const forecastFront = frontAt(fronts, clock);
+    const barometer = frontState(pressure, air);
+    const front = barometer === 'passed'
+        ? (forecastFront?.state === 'passed' && forecastFront.kind === 'cold' ? forecastFront : { state: 'passed', kind: 'cold', t: null })
+        : forecastFront ?? (barometer ? { state: barometer, kind: null, t: null } : null);
     const inputs = {
         mode,
         lat: state.location.lat,
@@ -340,7 +349,8 @@ function derive() {
         oxygenMgL: (station?.oxygen ?? gauge?.oxygen)?.mgL ?? null,
         pressureInHg: current.pressureInHg,
         pressureChange3h: changeOver(pressure, APP.PRESSURE_TREND_HOURS),
-        front: frontState(pressure, air),
+        front: front?.state ?? null,
+        frontKind: front?.kind ?? null,
         windMph: current.windMph,
         gustMph: current.gustMph,
         sky: current.sky.class,
@@ -352,11 +362,13 @@ function derive() {
         waterTrend,
     };
     const result = scoreConditions({ ...inputs, date: new Date(clock) });
-    // Ahead of now: the forecast sky and wind, and any warning in effect at the time.
+    // Ahead of now: the forecast sky and wind, a front due or just through, and any warning in effect at the time.
     const at = (time) => {
         const ahead = forecastAt(time, clock);
         const hazard = hazardAt(alerts.items, time, clock);
-        return hazard ? { ...ahead, hazard } : ahead;
+        const due = frontAt(fronts, time);
+        if (!hazard && !due) return ahead;
+        return { ...ahead, ...(due ? { front: due.state, frontKind: due.kind } : {}), ...(hazard ? { hazard } : {}) };
     };
     const outlook = deriveOutlook(inputs, clock, result, at);
 
@@ -383,7 +395,7 @@ function derive() {
         waveFt: surf?.heightFt ?? null,
         date: new Date(clock),
         trend: waterTrend,
-        front: inputs.front,
+        front: front?.kind === 'warm' ? null : inputs.front, // the feed ahead and the slump behind are a cold front's
         level: levelShift(level),
     });
     const patterns = lurePatterns(species.targets, lureInput);
@@ -396,7 +408,60 @@ function derive() {
         trendLoading: waterMeasured && !waterTrend && Boolean(trendSource()) && state.waterTrend?.key !== trendSource()?.key,
     };
 
-    return { result, outlook, lures, alerts, clock, pressure, air, station, waterTempF, level, mode, salt, seaTemp, surf, tide };
+    const incoming = incomingWeather({ fronts, front, rain: rainAhead(weather.outlook, clock), clock });
+    return { result, outlook, lures, alerts, clock, pressure, air, station, waterTempF, level, mode, salt, seaTemp, surf, tide, fronts, incoming };
+}
+
+/**
+ * "this evening", "Tue morning", "early Wed": when a front is due or went through. A front's
+ * hour is known only roughly, so it is given as a part of the day.
+ */
+function roughTime(time, clock) {
+    const hour = Number(inTimezone({ hour: 'numeric', hourCycle: 'h23' }).formatToParts(time).find((part) => part.type === 'hour')?.value ?? 12) % 24;
+    const part = hour < 5 ? 'early' : hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : hour < 21 ? 'evening' : 'night';
+    const dayKey = inTimezone({ year: 'numeric', month: '2-digit', day: '2-digit' });
+    if (dayKey.format(time) === dayKey.format(clock)) {
+        return { early: 'early this morning', night: 'tonight' }[part] ?? `this ${part}`;
+    }
+    const day = inTimezone({ weekday: 'short' }).format(time);
+    return part === 'early' ? `early ${day}` : `${day} ${part}`;
+}
+
+const FRONT_NAMES = { cold: 'Cold front', warm: 'Warm front' };
+
+/** "Cold front due Tue evening" or "Cold front went through this morning", for a time on the score card. */
+function frontLine(fronts, time, clock) {
+    const front = frontAt(fronts, time);
+    if (!front) return null;
+    const name = FRONT_NAMES[front.kind];
+    // Seen from now: a front that is behind the hour being looked at may still be ahead of the clock.
+    return front.t > clock ? `${name} due ${roughTime(front.t, clock)}` : `${name} went through ${roughTime(front.t, clock)}`;
+}
+
+/**
+ * The weather on its way, in a sentence each, for the forecast panel: a front just through, the
+ * next ones due, and the next spell of rain. Each says what it is taken to mean for the fishing.
+ */
+function incomingWeather({ fronts, front, rain, clock }) {
+    const lines = [];
+    const degrees = (changeF) => `${Math.round(Math.abs(changeF))}°F`;
+    if (front?.state === 'passed' && front.kind === 'cold') {
+        lines.push(`A cold front went through${front.t ? ` ${roughTime(front.t, clock)}` : ''}. Fish often slow down for a day or two behind one.`);
+    }
+    for (const due of fronts.filter((entry) => entry.t > clock).slice(0, 2)) {
+        lines.push(due.kind === 'cold'
+            ? `Cold front due ${roughTime(due.t, clock)}, with air about ${degrees(due.changeF)} colder behind it. Fish often feed ahead of a front and slow down for a day or two after.`
+            : `Warm front due ${roughTime(due.t, clock)}, with air about ${degrees(due.changeF)} warmer behind it.`);
+    }
+    if (rain) {
+        const stormsFirst = isNum(rain.storm) && rain.storm - rain.start < 3 * HOUR_MS;
+        const from = `${stormsFirst ? 'Thunderstorms' : rain.snow ? 'Snow' : 'Rain'} likely from ${roughTime(rain.start, clock)}`;
+        const later = isNum(rain.storm) && !stormsFirst ? `, with thunderstorms from ${roughTime(rain.storm, clock)}` : '';
+        lines.push(`${from}${later}.${isNum(rain.storm)
+            ? ' The score is held at 15 for the hours storms are likely.'
+            : ' It costs the score nothing on its own: the cloud that comes with it is counted in the light.'}`);
+    }
+    return lines;
 }
 
 // ---------------------------------------------------------------------------
@@ -516,13 +581,18 @@ function factorDisplay(factor, derived, view = { now: true, time: derived.clock,
                     : phase.half === 'warming' ? 'Water warming toward summer' : 'Water cooling toward winter',
             };
         }
-        case 'pressure':
+        case 'pressure': {
+            // A front the forecast shows is said with its time; one known only from the barometer is in the note.
+            const due = factor.front ? frontLine(derived.fronts, view.time, derived.clock) : null;
             return {
                 label: 'Barometric pressure',
                 iconName: 'gauge',
                 value: isNum(current.pressureInHg) ? `${current.pressureInHg.toFixed(2)} inHg` : '—',
-                extra: today ? liveFactor('pressure')?.trend ?? factor.trend : 'Trend not known that far ahead',
+                extra: today
+                    ? [liveFactor('pressure')?.trend ?? factor.trend, due].filter(Boolean).join(' · ') || null
+                    : due ?? 'Trend not known that far ahead',
             };
+        }
         default: {
             const moon = moonInfo(new Date(view.time));
             const extra = [nextMajorPeriod(view.time), factor.trend].filter(Boolean).join(' · ');
@@ -1424,10 +1494,15 @@ async function loadLake() {
     renderWhere(derive());
 }
 
-function renderForecast() {
+function renderForecast(derived) {
     const list = $('forecastList');
     setText('forecastTitle', headings().weather);
     const { weather } = state;
+    // Fronts and rain on the way, above the days they fall on.
+    const ahead = $('forecastAhead');
+    const incoming = weather ? derived?.incoming ?? [] : [];
+    ahead.hidden = incoming.length === 0;
+    ahead.replaceChildren(...incoming.map((line) => el('li', null, line)));
     if (!weather) {
         list.replaceChildren();
         return;
@@ -1745,7 +1820,7 @@ function render() {
     renderSpeciesGroup();
     renderLures(derived);
     renderWhere(derived);
-    renderForecast();
+    renderForecast(derived);
     renderStations(derived);
     renderLevel(derived);
     renderTides(derived);
