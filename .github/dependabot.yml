@@ -1,0 +1,48 @@
+# Keeps dependencies current. Dependabot opens PRs against main; CI tests them like any other PR.
+#
+# - npm: the dev tooling in package.json (Playwright, Wrangler). The site itself ships no npm
+#   packages; Leaflet is vendored in vendor/leaflet and has to be updated by hand.
+# - github-actions: the actions used in .github/workflows.
+#
+# Minor and patch bumps are grouped into one PR per ecosystem per week. Major bumps get their
+# own PR. A new release waits a few days before it is proposed, so a bad or hijacked publish
+# is usually caught and pulled before it reaches us. Security fixes skip that wait.
+#
+# Dependabot PRs get no Actions secrets, so they are tested but not deployed to a preview
+# (see the deploy job in .github/workflows/deploy.yml).
+
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/New_York
+    cooldown:
+      default-days: 5
+      semver-major-days: 14
+    groups:
+      dev-tooling:
+        update-types: [minor, patch]
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    labels: [dependencies]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/New_York
+    cooldown:
+      default-days: 5
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci"
+    labels: [dependencies]
